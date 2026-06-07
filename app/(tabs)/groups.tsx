@@ -1,147 +1,239 @@
+// GROUPS - Tontines, Associations, Cooperatives, Funds
 import { useCallback, useState } from "react";
-import { ActivityIndicator, FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View, RefreshControl } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import { Users, Plus, ChevronRight, Wallet, Building2, Coins } from "lucide-react-native";
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Plus, Users, Building2, Network, Wallet, ChevronRight } from "lucide-react-native";
 
-import { useAuth } from "@/src/auth-context";
 import { api, formatXAF } from "@/src/api";
+import { Card, EmptyState, Button } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 
-interface Group { id: string; name: string; type: "tontine" | "association" | "cooperative"; total_pot?: number; members_count?: number; my_balance?: number; status?: string }
+type Tab = "tontines" | "associations" | "cooperatives" | "funds";
 
-const TYPE_LABELS: Record<string, string> = { tontine: "Tontine", association: "Association", cooperative: "Coopérative" };
-const TYPE_COLORS: Record<string, string> = { tontine: Colors.primary, association: Colors.secondary, cooperative: Colors.accent };
-const TYPE_ICONS: Record<string, any> = { tontine: Coins, association: Users, cooperative: Building2 };
+interface Item {
+  id: string;
+  name: string;
+  description?: string | null;
+  invite_code?: string;
+  members_count?: number;
+  contribution_amount?: number;
+  total_collected?: number;
+  current_balance?: number;
+  target_amount?: number | null;
+  currency?: string;
+}
 
-export default function GroupsTab() {
+export default function Groups() {
   const router = useRouter();
-  const { user } = useAuth();
-  const [groups, setGroups] = useState<Group[]>([]);
+  const [tab, setTab] = useState<Tab>("tontines");
+  const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<"all" | "tontine" | "association" | "cooperative">("all");
 
   const load = useCallback(async () => {
+    setLoading(true);
     try {
-      const [t, a, c] = await Promise.all([
-        api.get<{ items: any[] }>("/tontines?member=true").catch(() => ({ items: [] })),
-        api.get<{ items: any[] }>("/associations?member=true").catch(() => ({ items: [] })),
-        api.get<{ items: any[] }>("/cooperatives?member=true").catch(() => ({ items: [] })),
-      ]);
-      const all: Group[] = [
-        ...(t.items ?? []).map((x: any) => ({ ...x, type: "tontine" as const })),
-        ...(a.items ?? []).map((x: any) => ({ ...x, type: "association" as const })),
-        ...(c.items ?? []).map((x: any) => ({ ...x, type: "cooperative" as const })),
-      ];
-      setGroups(all);
-    } catch { setGroups([]); }
+      const ep =
+        tab === "tontines" ? "/tontines"
+        : tab === "associations" ? "/associations"
+        : tab === "cooperatives" ? "/cooperatives"
+        : "/funds";
+      const data = await api.get<Item[]>(ep);
+      setItems(data);
+    } catch {}
     setLoading(false);
-  }, []);
+  }, [tab]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
-  const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
-  const isManager = user?.role === "tontine_manager" || user?.role === "super_admin";
-  const filtered = filter === "all" ? groups : groups.filter(g => g.type === filter);
+  const tabs: { key: Tab; label: string; icon: any; color: string }[] = [
+    { key: "tontines", label: "Tontines", icon: Users, color: Colors.accent },
+    { key: "associations", label: "Associations", icon: Building2, color: Colors.secondary },
+    { key: "cooperatives", label: "Coopératives", icon: Network, color: Colors.primary },
+    { key: "funds", label: "Fonds", icon: Wallet, color: Colors.accentDark },
+  ];
+
+  const createRoute = `/${tab === "funds" ? "funds" : tab}/create` as const;
+  const joinRoute = (tab === "tontines" || tab === "associations" || tab === "cooperatives")
+    ? (`/${tab}/join` as const) : null;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      {/* Header */}
-      <LinearGradient colors={[Colors.primary, Colors.secondary]} style={styles.header}>
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.headerTitle}>Mes Groupes</Text>
-            <Text style={styles.headerSub}>{groups.length} groupe{groups.length !== 1 ? "s" : ""}</Text>
-          </View>
-          {isManager && (
-            <View style={styles.headerActions}>
-              <TouchableOpacity style={styles.createBtn} onPress={() => router.push("/tontines/create")}>
-                <Plus size={16} color="#fff" />
-                <Text style={styles.createBtnText}>Tontine</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.h1}>Communauté</Text>
+          <Text style={styles.subtitle}>Tontines, associations & fonds</Text>
         </View>
-      </LinearGradient>
+        <TouchableOpacity
+          testID={`groups-create-${tab}`}
+          onPress={() => router.push(createRoute as any)}
+          style={styles.fab}
+        >
+          <Plus color="#fff" size={22} />
+        </TouchableOpacity>
+      </View>
 
-      {/* Filters */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersBar} contentContainerStyle={{ gap: 8, paddingHorizontal: Spacing.xl }}>
-        {(["all", "tontine", "association", "cooperative"] as const).map(f => (
-          <TouchableOpacity key={f} style={[styles.filterChip, filter === f && styles.filterChipActive]} onPress={() => setFilter(f)}>
-            <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>
-              {f === "all" ? "Tous" : TYPE_LABELS[f]}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      {/* Tabs */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.tabsRow}
+      >
+        {tabs.map((t) => {
+          const active = t.key === tab;
+          const Icon = t.icon;
+          return (
+            <TouchableOpacity
+              testID={`tab-${t.key}`}
+              key={t.key}
+              onPress={() => setTab(t.key)}
+              style={[
+                styles.tabBtn,
+                active ? { backgroundColor: Colors.primary } : { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
+              ]}
+            >
+              <Icon color={active ? "#fff" : t.color} size={16} />
+              <Text style={[styles.tabLabel, { color: active ? "#fff" : Colors.text }]}>{t.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
 
-      {loading ? (
-        <View style={styles.center}><ActivityIndicator color={Colors.primary} size="large" /></View>
-      ) : filtered.length === 0 ? (
-        <View style={styles.empty}>
-          <Users size={48} color={Colors.border} />
-          <Text style={styles.emptyTitle}>Aucun groupe</Text>
-          <Text style={styles.emptyText}>Rejoignez ou créez un groupe pour commencer.</Text>
-          <TouchableOpacity style={styles.joinBtn} onPress={() => router.push("/join")}>
-            <Text style={styles.joinBtnText}>Rejoindre un groupe</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={item => item.id}
-          contentContainerStyle={{ padding: Spacing.xl, gap: 12 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
-          renderItem={({ item }) => {
-            const Icon = TYPE_ICONS[item.type];
-            const color = TYPE_COLORS[item.type];
-            return (
-              <TouchableOpacity style={styles.card} onPress={() => router.push(`/${item.id}`)}>
-                <View style={[styles.cardIcon, { backgroundColor: color + "18" }]}>
-                  <Icon size={22} color={color} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardName}>{item.name}</Text>
-                  <Text style={styles.cardType}>{TYPE_LABELS[item.type]}</Text>
-                  {item.total_pot != null && (
-                    <Text style={styles.cardStat}>{formatXAF(item.total_pot)} · {item.members_count ?? 0} membres</Text>
-                  )}
-                </View>
-                <ChevronRight size={18} color={Colors.textMuted} />
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        {joinRoute ? (
+          <View style={{ paddingHorizontal: Spacing.xl, marginBottom: 12 }}>
+            <TouchableOpacity
+              testID={`groups-join-${tab}`}
+              activeOpacity={0.85}
+              onPress={() => router.push(joinRoute as any)}
+              style={[styles.joinCta, Shadow.card]}
+            >
+              <View style={styles.joinIcon}>
+                <Users color={Colors.secondary} size={18} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.joinTitle}>Rejoindre via code d'invitation</Text>
+                <Text style={styles.joinSub}>Entrez le code partagé par l'admin</Text>
+              </View>
+              <ChevronRight color={Colors.textMuted} size={18} />
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {loading ? (
+          <ActivityIndicator color={Colors.secondary} style={{ marginTop: 40 }} />
+        ) : items.length === 0 ? (
+          <View style={{ paddingHorizontal: Spacing.xl, marginTop: 20 }}>
+            <Card>
+              <EmptyState
+                title={`Aucune ${tabs.find(t => t.key === tab)?.label.toLowerCase()} pour l'instant`}
+                description="Créez-en une nouvelle ou rejoignez-en une avec un code d'invitation."
+                cta={<Button label="Créer maintenant" onPress={() => router.push(createRoute as any)} />}
+              />
+            </Card>
+          </View>
+        ) : (
+          <View style={{ paddingHorizontal: Spacing.xl, gap: 12 }}>
+            {items.map((it) => (
+              <TouchableOpacity
+                testID={`group-item-${it.id}`}
+                key={it.id}
+                activeOpacity={0.85}
+                onPress={() => router.push(`/${tab}/${it.id}` as any)}
+              >
+                <Card style={{ padding: 18 }}>
+                  <View style={styles.itemRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.itemName}>{it.name}</Text>
+                      {it.description ? (
+                        <Text style={styles.itemDesc} numberOfLines={2}>{it.description}</Text>
+                      ) : null}
+                      <View style={styles.itemMeta}>
+                        {it.members_count !== undefined ? (
+                          <Text style={styles.metaPill}>{it.members_count} membre(s)</Text>
+                        ) : null}
+                        {it.invite_code ? (
+                          <Text style={[styles.metaPill, { backgroundColor: Colors.primary, color: "#fff" }]}>
+                            {it.invite_code}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+                    <ChevronRight color={Colors.textSubtle} size={20} />
+                  </View>
+                  {it.contribution_amount !== undefined ? (
+                    <View style={styles.itemFooter}>
+                      <Text style={styles.itemSub}>Contribution</Text>
+                      <Text style={styles.itemValue}>{formatXAF(it.contribution_amount, it.currency)}</Text>
+                    </View>
+                  ) : it.current_balance !== undefined ? (
+                    <View style={styles.itemFooter}>
+                      <Text style={styles.itemSub}>Solde</Text>
+                      <Text style={styles.itemValue}>{formatXAF(it.current_balance, it.currency)}</Text>
+                    </View>
+                  ) : it.total_collected !== undefined ? (
+                    <View style={styles.itemFooter}>
+                      <Text style={styles.itemSub}>Total collecté</Text>
+                      <Text style={styles.itemValue}>{formatXAF(it.total_collected, it.currency)}</Text>
+                    </View>
+                  ) : null}
+                </Card>
               </TouchableOpacity>
-            );
-          }}
-        />
-      )}
+            ))}
+          </View>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bg },
-  header: { padding: Spacing.xl, paddingTop: Spacing.xxl, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  headerTitle: { fontSize: 22, fontWeight: "800", color: "#fff" },
-  headerSub: { fontSize: 13, color: "rgba(255,255,255,0.75)", marginTop: 2 },
-  headerActions: { flexDirection: "row", gap: 8 },
-  createBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.2)", paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.full },
-  createBtnText: { fontSize: 13, fontWeight: "700", color: "#fff" },
-  filtersBar: { marginTop: Spacing.md, maxHeight: 52 },
-  filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: Radius.full, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
-  filterChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  filterText: { fontSize: 13, fontWeight: "600", color: Colors.textMuted },
-  filterTextActive: { color: "#fff" },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: Spacing.xxxl },
-  emptyTitle: { fontSize: 18, fontWeight: "700", color: Colors.text },
-  emptyText: { fontSize: 14, color: Colors.textMuted, textAlign: "center" },
-  joinBtn: { backgroundColor: Colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: Radius.full, marginTop: 8 },
-  joinBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
-  card: { flexDirection: "row", alignItems: "center", backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: Spacing.lg, gap: 14, ...(Shadow.card as object) },
-  cardIcon: { width: 48, height: 48, borderRadius: Radius.md, alignItems: "center", justifyContent: "center" },
-  cardName: { fontSize: 15, fontWeight: "700", color: Colors.text },
-  cardType: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
-  cardStat: { fontSize: 12, color: Colors.primary, marginTop: 4, fontWeight: "600" },
+  header: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    paddingHorizontal: Spacing.xl, paddingVertical: Spacing.lg,
+  },
+  h1: { color: Colors.primary, fontSize: 28, fontWeight: "900", letterSpacing: -0.5 },
+  subtitle: { color: Colors.textMuted, fontSize: 13, marginTop: 2 },
+  fab: {
+    width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.secondary,
+    alignItems: "center", justifyContent: "center", ...Shadow.card,
+  },
+  tabsRow: { paddingHorizontal: Spacing.xl, gap: 8, paddingBottom: 16 },
+  tabBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: Radius.full,
+  },
+  tabLabel: { fontWeight: "700", fontSize: 13 },
+  joinCta: {
+    backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: 14,
+    flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderColor: Colors.border,
+  },
+  joinIcon: {
+    width: 36, height: 36, borderRadius: 10, backgroundColor: Colors.surfaceAlt,
+    alignItems: "center", justifyContent: "center",
+  },
+  joinTitle: { color: Colors.text, fontWeight: "800", fontSize: 14 },
+  joinSub: { color: Colors.textMuted, fontSize: 12, marginTop: 2 },
+  itemRow: { flexDirection: "row", alignItems: "center" },
+  itemName: { color: Colors.text, fontSize: 16, fontWeight: "800" },
+  itemDesc: { color: Colors.textMuted, fontSize: 13, marginTop: 4, lineHeight: 18 },
+  itemMeta: { flexDirection: "row", gap: 6, marginTop: 10, flexWrap: "wrap" },
+  metaPill: {
+    fontSize: 11, fontWeight: "700", backgroundColor: Colors.surfaceAlt,
+    color: Colors.text, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, letterSpacing: 0.3,
+  },
+  itemFooter: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: Colors.border,
+  },
+  itemSub: { color: Colors.textMuted, fontSize: 12, fontWeight: "600" },
+  itemValue: { color: Colors.primary, fontSize: 16, fontWeight: "800" },
 });

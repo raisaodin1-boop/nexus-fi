@@ -1,6 +1,6 @@
 import { Tabs } from "expo-router";
 import { Platform, View } from "react-native";
-import { Home, Users, ShieldCheck, User } from "lucide-react-native";
+import { Home, Users, ShieldCheck, User, PiggyBank } from "lucide-react-native";
 import { Colors } from "@/src/theme";
 
 function TabIcon({ Icon, focused }: { Icon: any; focused: boolean }) {
@@ -50,6 +50,13 @@ export default function TabLayout() {
         options={{
           title: "Groupes",
           tabBarIcon: ({ focused }) => <TabIcon Icon={Users} focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="savings"
+        options={{
+          title: "Épargne",
+          tabBarIcon: ({ focused }) => <TabIcon Icon={PiggyBank} focused={focused} />,
         }}
       />
       <Tabs.Screen
