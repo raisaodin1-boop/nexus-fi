@@ -36,8 +36,6 @@
       ]
     }
   ],
-  "env": {
-    "EXPO_PUBLIC_BACKEND_URL": "@backend_url",
-    "EXPO_PUBLIC_SENTRY_DSN": "@sentry_dsn"
-  }
+  "cleanUrls": true,
+  "trailingSlash": false
 }
