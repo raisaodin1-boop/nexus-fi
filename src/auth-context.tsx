@@ -1,16 +1,21 @@
-// AuthContext for HODIX
+// AuthContext — Supabase Auth
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import {
-  User,
-  clearTokens,
-  fetchMe,
-  getAccessToken,
-  getStoredUser,
-  login as apiLogin,
-  logout as apiLogout,
-  register as apiRegister,
-  refreshTokens,
-} from "@/src/api";
+import { supabase } from "@/src/supabase";
+
+export interface User {
+  id: string;
+  email: string;
+  full_name: string;
+  role: string;
+  is_email_verified: boolean;
+  phone?: string | null;
+  gender?: string | null;
+  country?: string | null;
+  city?: string | null;
+  occupation?: string | null;
+  photo_base64?: string | null;
+  created_at: string;
+}
 
 interface AuthState {
   user: User | null;
@@ -27,6 +32,18 @@ interface AuthCtx extends AuthState {
 
 const Ctx = createContext<AuthCtx | undefined>(undefined);
 
+function supabaseUserToUser(sbUser: any, metadata?: any): User {
+  return {
+    id: sbUser.id,
+    email: sbUser.email ?? "",
+    full_name: sbUser.user_metadata?.full_name ?? metadata?.full_name ?? "",
+    role: sbUser.user_metadata?.role ?? "member",
+    is_email_verified: !!sbUser.email_confirmed_at,
+    phone: sbUser.phone ?? null,
+    created_at: sbUser.created_at ?? new Date().toISOString(),
+  };
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({
     user: null,
@@ -35,57 +52,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    (async () => {
-      try {
-        const token = await getAccessToken();
-        if (!token) {
-          setState({ user: null, loading: false, isAuthed: false });
-          return;
-        }
-        const cached = await getStoredUser();
-        if (cached) {
-          setState({ user: cached, loading: false, isAuthed: true });
-        }
-        try {
-          const fresh = await fetchMe();
-          setState({ user: fresh, loading: false, isAuthed: true });
-        } catch {
-          // Access token expired — try refresh before giving up
-          const refreshed = await refreshTokens();
-          if (refreshed) {
-            setState({ user: refreshed, loading: false, isAuthed: true });
-          } else {
-            await clearTokens();
-            setState({ user: null, loading: false, isAuthed: false });
-          }
-        }
-      } catch {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setState({ user: supabaseUserToUser(session.user), loading: false, isAuthed: true });
+      } else {
         setState({ user: null, loading: false, isAuthed: false });
       }
-    })();
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setState({ user: supabaseUserToUser(session.user), loading: false, isAuthed: true });
+      } else {
+        setState({ user: null, loading: false, isAuthed: false });
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const u = await apiLogin(email, password);
-    setState({ user: u, loading: false, isAuthed: true });
-    return u;
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw { detail: error.message };
+    if (data.user) {
+      setState({ user: supabaseUserToUser(data.user), loading: false, isAuthed: true });
+    }
   }, []);
 
   const register = useCallback(async (email: string, password: string, full_name: string) => {
-    const u = await apiRegister(email, password, full_name);
-    setState({ user: u, loading: false, isAuthed: true });
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name } },
+    });
+    if (error) throw { detail: error.message };
+    if (data.user) {
+      setState({ user: supabaseUserToUser(data.user, { full_name }), loading: false, isAuthed: true });
+    }
   }, []);
 
   const logout = useCallback(async () => {
-    try { await apiLogout(); } catch {}
+    await supabase.auth.signOut();
     setState({ user: null, loading: false, isAuthed: false });
   }, []);
 
   const refresh = useCallback(async () => {
-    try {
-      const u = await fetchMe();
-      setState((p) => ({ ...p, user: u, isAuthed: true, loading: false }));
-    } catch {}
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      setState({ user: supabaseUserToUser(session.user), loading: false, isAuthed: true });
+    }
   }, []);
 
   return (
