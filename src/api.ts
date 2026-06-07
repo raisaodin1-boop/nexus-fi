@@ -81,9 +81,15 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
 
     // ── Savings
     if (method === "GET"  && s[0] === "savings" && !s[1])                              return (await db.listSavings()) as T;
+    if (method === "GET"  && s[0] === "savings" && s[1] === "summary")                 return (await db.getSavingsSummary()) as T;
     if (method === "POST" && s[0] === "savings" && !s[1])                              return (await db.createSaving(body)) as T;
     if (method === "GET"  && s[0] === "savings" && s[1] && !s[2])                      return (await db.getSaving(s[1])) as T;
     if (method === "POST" && s[0] === "savings" && s[1] && s[2] === "deposit")         return (await db.depositSaving(s[1], Number(body?.amount), body?.note)) as T;
+
+    // ── Trust score / Insights / Analytics
+    if (method === "GET" && s[0] === "trust-score")                                    return (await db.getTrustScore()) as T;
+    if (method === "GET" && s[0] === "insights")                                       return (await db.getInsights()) as T;
+    if (method === "GET" && s[0] === "analytics")                                      return (await db.getSavingsSeries(Number(new URLSearchParams(s[2]?.split("?")[1]).get("days")) || 14)) as T;
 
     // ── Identity
     if (method === "GET" && s[0] === "identity" && !s[1])                              return (await db.getIdentity()) as T;

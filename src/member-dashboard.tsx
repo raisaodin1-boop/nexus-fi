@@ -44,13 +44,17 @@ export function MemberDashboard() {
   const [savingsSeries, setSavingsSeries] = useState<Series | null>(null);
 
   const load = useCallback(async () => {
+    const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000));
     try {
-      const [s, t, i, n, ss] = await Promise.all([
-        api.get<Summary>("/savings/summary"),
-        api.get<TrustScore>("/trust-score"),
-        api.get<{ items: Insight[] }>("/insights"),
-        api.get<{ unread_count: number }>("/notifications"),
-        api.get<Series>("/analytics/me/savings?days=14"),
+      const [s, t, i, n, ss] = await Promise.race([
+        Promise.all([
+          api.get<Summary>("/savings/summary"),
+          api.get<TrustScore>("/trust-score"),
+          api.get<{ items: Insight[] }>("/insights"),
+          api.get<{ unread_count: number }>("/notifications"),
+          api.get<Series>("/analytics/me/savings?days=14"),
+        ]),
+        timeout,
       ]);
       setSummary(s); setTrust(t); setInsights(i.items); setUnread(n.unread_count);
       setSavingsSeries(ss);

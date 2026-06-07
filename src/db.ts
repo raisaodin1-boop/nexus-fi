@@ -316,6 +316,53 @@ export async function contributeFund(id: string, amount: number) {
   return { detail: "Contribution enregistrée" };
 }
 
+/* ── SAVINGS SUMMARY / ANALYTICS ────────────────────────── */
+
+export async function getSavingsSummary() {
+  const me = await uid();
+  const { data } = await getSupabase()
+    .from("savings_goals")
+    .select("current_amount, target_amount, is_active")
+    .eq("user_id", me)
+    .eq("is_active", true);
+  const goals = data ?? [];
+  const total_saved = goals.reduce((s: number, g: any) => s + Number(g.current_amount), 0);
+  const total_target = goals.reduce((s: number, g: any) => s + Number(g.target_amount), 0);
+  const progress_pct = total_target > 0 ? Math.round((total_saved / total_target) * 100) : 0;
+  return { total_saved, total_target, active_goals: goals.length, progress_pct, currency: "XAF" };
+}
+
+export async function getTrustScore() {
+  const identity = await getIdentity();
+  return identity.trust_score;
+}
+
+export async function getInsights() {
+  // AI insights stub — returns tips from trust score
+  const identity = await getIdentity();
+  const tips = identity.trust_score.tips ?? [];
+  return { items: tips.map((text: string) => ({ text, kind: "tip" })) };
+}
+
+export async function getSavingsSeries(days = 14) {
+  const me = await uid();
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+  const { data } = await getSupabase()
+    .from("savings_transactions")
+    .select("amount, created_at")
+    .eq("user_id", me)
+    .gte("created_at", since)
+    .order("created_at", { ascending: true });
+  // Group by date
+  const byDate: Record<string, number> = {};
+  for (const tx of data ?? []) {
+    const d = (tx.created_at as string).slice(0, 10);
+    byDate[d] = (byDate[d] ?? 0) + Number(tx.amount);
+  }
+  const series = Object.entries(byDate).map(([date, value]) => ({ date, value }));
+  return { days, series };
+}
+
 /* ── SAVINGS ─────────────────────────────────────────────── */
 
 export async function listSavings() {
