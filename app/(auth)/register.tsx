@@ -9,15 +9,15 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   Eye, EyeOff, Users, User, CheckSquare, Square,
-  Phone, ShieldCheck, CheckCircle2,
+  Phone, ShieldCheck, CheckCircle2, Gift,
 } from "lucide-react-native";
 
 import { Button, Field } from "@/src/ui";
 import { Colors, Radius, Spacing, Shadow } from "@/src/theme";
 import { ApiError } from "@/src/api";
-// api.post calls removed — registration now handled directly by Supabase Auth
 import { HodixLogo } from "@/src/logo";
 import { getSupabase } from "@/src/supabase";
+import { sendWelcomeMessage, applyReferralBonus } from "@/src/db";
 
 type RoleChoice = "member" | "tontine_manager";
 type Step = "form" | "otp" | "done";
@@ -142,6 +142,14 @@ export default function RegisterScreen() {
           role,
           phone: phone.trim() || null,
         }, { onConflict: "id" });
+
+        // Send welcome message + apply referral bonus (non-blocking, after profile exists)
+        setTimeout(async () => {
+          try { await sendWelcomeMessage(data.user!.id, fullName.trim()); } catch {}
+          if (referralCode.trim()) {
+            try { await applyReferralBonus(data.user!.id, referralCode.trim().toUpperCase()); } catch {}
+          }
+        }, 2000);
       }
 
       router.replace("/(tabs)");

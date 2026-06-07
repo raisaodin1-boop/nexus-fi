@@ -120,6 +120,19 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"   && s[0] === "admin" && s[1] === "promotion-requests")                return (await db.adminListPromotionRequests()) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "promotion" && s[2] === "approve")   return (await db.adminHandlePromotion(body?.user_id, true)) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "promotion" && s[2] === "reject")    return (await db.adminHandlePromotion(body?.user_id, false)) as T;
+    if (method === "POST"  && s[0] === "admin" && s[1] === "broadcast")                         return (await db.adminBroadcast(body?.title, body?.body)) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "messages")                          return (await db.adminListAllMessages()) as T;
+    if (method === "POST"  && s[0] === "admin" && s[1] === "messages")                          return (await db.adminSendMessageToUser(body?.user_id, body?.content)) as T;
+
+    // ── Messages
+    if (method === "GET"  && s[0] === "messages" && s[1] === "conversations")                   return (await db.listConversations()) as T;
+    if (method === "GET"  && s[0] === "messages" && s[1] === "admin")                           return (await db.listMessages("admin")) as T;
+    if (method === "GET"  && s[0] === "messages" && s[1] === "tontine" && s[2])                 return (await db.listMessages("tontine", s[2])) as T;
+    if (method === "POST" && s[0] === "messages")                                               return (await db.sendMessage(body)) as T;
+    if (method === "PATCH"&& s[0] === "messages" && s[1] && s[2] === "read")                   return (await db.markMessageRead(s[1])) as T;
+
+    // ── Referral
+    if (method === "GET"  && s[0] === "users" && s[1] === "me" && s[2] === "referral")         return (await db.getReferralInfo()) as T;
 
     // ── Forgot / Reset password (delegated to Supabase Auth)
     if (method === "POST" && s[0] === "auth" && s[1] === "forgot-password") {

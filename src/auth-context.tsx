@@ -1,6 +1,7 @@
 // AuthContext — Supabase Auth, stable, no loop
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { supabase } from "@/src/supabase";
+import { sendWelcomeMessage, applyReferralBonus } from "@/src/db";
 
 export interface User {
   id: string;
@@ -22,7 +23,7 @@ interface AuthCtx {
   loading: boolean;
   isAuthed: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, full_name: string) => Promise<void>;
+  register: (email: string, password: string, full_name: string, referralCode?: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -103,14 +104,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // onAuthStateChange handles state update
   }, []);
 
-  const register = useCallback(async (email: string, password: string, full_name: string) => {
-    const { error } = await supabase.auth.signUp({
+  const register = useCallback(async (email: string, password: string, full_name: string, referralCode?: string) => {
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { full_name, role: "member" } },
     });
     if (error) throw { detail: error.message };
-    // onAuthStateChange handles state update
+
+    // Post-signup side effects (non-blocking)
+    const newUserId = data.user?.id;
+    if (newUserId) {
+      setTimeout(async () => {
+        try { await sendWelcomeMessage(newUserId, full_name); } catch {}
+        if (referralCode?.trim()) {
+          try { await applyReferralBonus(newUserId, referralCode.trim().toUpperCase()); } catch {}
+        }
+      }, 2000); // wait 2s for profile row to be created via trigger
+    }
   }, []);
 
   const logout = useCallback(async () => {

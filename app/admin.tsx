@@ -11,7 +11,7 @@ import {
   Shield, Users, Database, CheckCircle, XCircle, ChevronRight,
   Search, RefreshCw, TrendingUp, Activity, AlertTriangle,
   UserCheck, Lock, Unlock, Trash2, ArrowLeft, Crown,
-  Clock, BarChart3, Star,
+  Clock, BarChart3, Star, MessageCircle, Send, Megaphone,
 } from "lucide-react-native";
 
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
@@ -20,7 +20,7 @@ import { api, formatXAF } from "@/src/api";
 import { useAuth } from "@/src/auth-context";
 import { LineChart } from "@/src/charts";
 
-type Tab = "overview" | "users" | "tontines" | "kyc" | "promotions";
+type Tab = "overview" | "users" | "tontines" | "kyc" | "promotions" | "messages";
 
 interface Analytics {
   users: { total: number; new_7d: number; new_30d: number; managers: number; admins: number };
@@ -42,6 +42,7 @@ export default function AdminScreen() {
   const [tontines, setTontines] = useState<any[]>([]);
   const [kyc, setKyc] = useState<any[]>([]);
   const [promotions, setPromotions] = useState<any[]>([]);
+  const [adminMessages, setAdminMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -53,13 +54,14 @@ export default function AdminScreen() {
     setLoading(true);
     try {
       const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 15000));
-      const [a, u, t, k, p] = await Promise.race([
+      const [a, u, t, k, p, m] = await Promise.race([
         Promise.all([
           api.get<Analytics>("/admin/analytics"),
           api.get<any[]>("/admin/users"),
           api.get<any[]>("/admin/tontines"),
           api.get<any[]>("/admin/kyc"),
           api.get<any[]>("/admin/promotion-requests"),
+          api.get<any[]>("/admin/messages"),
         ]),
         timeout,
       ]);
@@ -68,6 +70,7 @@ export default function AdminScreen() {
       setTontines(t);
       setKyc(k);
       setPromotions(p);
+      setAdminMessages(m);
     } catch (e) {
       console.warn("admin load", e);
     }
@@ -145,12 +148,15 @@ export default function AdminScreen() {
   const pendingPromos = promotions.filter(p => p.status === "pending").length;
   const pendingKyc = kyc.filter(k => k.status === "pending").length;
 
+  const unreadMessages = adminMessages.filter((m: any) => !m.is_read && m.sender_name !== "Admin").length;
+
   const TABS: { id: Tab; label: string; badge?: number }[] = [
     { id: "overview", label: "Aperçu" },
     { id: "users", label: "Membres", badge: analytics?.users.total },
     { id: "tontines", label: "Tontines", badge: analytics?.tontines.total },
     { id: "kyc", label: "KYC", badge: pendingKyc || undefined },
     { id: "promotions", label: "Promotions", badge: pendingPromos || undefined },
+    { id: "messages", label: "Messages", badge: unreadMessages || undefined },
   ];
 
   const filteredUsers = users.filter(u => !search || (u.full_name ?? "").toLowerCase().includes(search.toLowerCase()));
@@ -231,6 +237,16 @@ export default function AdminScreen() {
               promotions={promotions}
               onApprove={(p) => doAction(`prom-a-${p.user_id}`, () => api.post("/admin/promotion/approve", { user_id: p.user_id }))}
               onReject={(p) => confirm("Refuser", `Refuser la promotion de ${p.full_name} ?`, () => doAction(`prom-r-${p.user_id}`, () => api.post("/admin/promotion/reject", { user_id: p.user_id })))}
+              onBroadcast={(title, body) => doAction("broadcast", () => api.post("/admin/broadcast", { title, body }))}
+              actionLoading={actionLoading}
+            />
+          )}
+          {activeTab === "messages" && (
+            <AdminMessagesTab
+              messages={adminMessages}
+              currentUserId={user?.id ?? ""}
+              onSend={(userId, content) => doAction(`msg-${userId}`, () => api.post("/admin/messages", { user_id: userId, content }))}
+              onRefresh={load}
               actionLoading={actionLoading}
             />
           )}
@@ -467,13 +483,58 @@ function KycTab({ kyc, onApprove, onReject, actionLoading }: {
 }
 
 /* ── Promotions Tab ────────────────────────────────────────────── */
-function PromotionsTab({ promotions, onApprove, onReject, actionLoading }: {
-  promotions: any[]; onApprove: (p: any) => void; onReject: (p: any) => void; actionLoading: string | null;
+function PromotionsTab({ promotions, onApprove, onReject, onBroadcast, actionLoading }: {
+  promotions: any[]; onApprove: (p: any) => void; onReject: (p: any) => void;
+  onBroadcast: (title: string, body: string) => void; actionLoading: string | null;
 }) {
+  const [bcTitle, setBcTitle] = useState("");
+  const [bcBody, setBcBody] = useState("");
+  const [showBc, setShowBc] = useState(false);
   const pending = promotions.filter(p => p.status === "pending");
   const done = promotions.filter(p => p.status !== "pending");
   return (
     <View style={{ paddingHorizontal: Spacing.xl }}>
+      {/* Broadcast section */}
+      <TouchableOpacity
+        style={styles.broadcastHeader}
+        onPress={() => setShowBc(v => !v)}
+      >
+        <Megaphone color={Colors.accent} size={18} />
+        <Text style={styles.broadcastHeaderTxt}>Envoyer une annonce à tous les membres</Text>
+        <Text style={{ color: Colors.textMuted, fontSize: 18 }}>{showBc ? "▲" : "▼"}</Text>
+      </TouchableOpacity>
+      {showBc && (
+        <Card style={{ marginBottom: 16, gap: 10 }}>
+          <Text style={styles.listCount}>Titre de l'annonce</Text>
+          <TextInput
+            style={styles.broadcastInput}
+            value={bcTitle}
+            onChangeText={setBcTitle}
+            placeholder="Ex: Mise à jour importante, Offre spéciale…"
+            placeholderTextColor={Colors.textSubtle}
+            maxLength={80}
+          />
+          <Text style={styles.listCount}>Message</Text>
+          <TextInput
+            style={[styles.broadcastInput, { height: 90, textAlignVertical: "top" }]}
+            value={bcBody}
+            onChangeText={setBcBody}
+            placeholder="Rédigez votre message ici…"
+            placeholderTextColor={Colors.textSubtle}
+            multiline
+            maxLength={500}
+          />
+          <TouchableOpacity
+            style={[styles.kycBtn, { backgroundColor: Colors.accent, opacity: (!bcTitle.trim() || !bcBody.trim() || actionLoading === "broadcast") ? 0.5 : 1 }]}
+            disabled={!bcTitle.trim() || !bcBody.trim() || actionLoading === "broadcast"}
+            onPress={() => { onBroadcast(bcTitle.trim(), bcBody.trim()); setBcTitle(""); setBcBody(""); setShowBc(false); }}
+          >
+            <Send color="#fff" size={14} />
+            <Text style={styles.kycBtnTxt}>Envoyer à tous les membres</Text>
+          </TouchableOpacity>
+        </Card>
+      )}
+
       <Text style={[styles.listCount, { marginVertical: 12 }]}>{pending.length} demande{pending.length !== 1 ? "s" : ""} en attente</Text>
       {pending.length === 0 && (
         <Card><Text style={{ color: Colors.textMuted, textAlign: "center", padding: 20 }}>✅ Aucune demande en attente</Text></Card>
@@ -521,6 +582,91 @@ function PromotionsTab({ promotions, onApprove, onReject, actionLoading }: {
           ))}
         </>
       )}
+    </View>
+  );
+}
+
+/* ── Admin Messages Tab ────────────────────────────────────────── */
+function AdminMessagesTab({ messages, currentUserId, onSend, onRefresh, actionLoading }: {
+  messages: any[]; currentUserId: string;
+  onSend: (userId: string, content: string) => void;
+  onRefresh: () => void; actionLoading: string | null;
+}) {
+  const [selected, setSelected] = useState<{ id: string; name: string } | null>(null);
+  const [reply, setReply] = useState("");
+
+  // Group by sender
+  const threads: Record<string, { id: string; name: string; msgs: any[] }> = {};
+  for (const m of messages) {
+    const otherId = m.sender_id !== currentUserId ? m.sender_id : m.recipient_id;
+    const otherName = m.sender_id !== currentUserId ? m.sender_name : m.recipient_name;
+    if (!otherId) continue;
+    if (!threads[otherId]) threads[otherId] = { id: otherId, name: otherName ?? "—", msgs: [] };
+    threads[otherId].msgs.push(m);
+  }
+  const threadList = Object.values(threads);
+
+  if (selected) {
+    const thread = threads[selected.id];
+    return (
+      <View style={{ paddingHorizontal: Spacing.xl }}>
+        <TouchableOpacity onPress={() => setSelected(null)} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginVertical: 12 }}>
+          <Text style={{ color: Colors.primary, fontWeight: "700", fontSize: 13 }}>← Retour</Text>
+        </TouchableOpacity>
+        <Text style={styles.userName}>{selected.name}</Text>
+        <View style={{ marginTop: 12, gap: 8, marginBottom: 12 }}>
+          {(thread?.msgs ?? []).map((m: any, i: number) => {
+            const mine = m.sender_id === currentUserId;
+            return (
+              <View key={m.id ?? i} style={[{ padding: 10, borderRadius: 12, maxWidth: "80%" }, mine ? { alignSelf: "flex-end", backgroundColor: Colors.primary } : { alignSelf: "flex-start", backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border }]}>
+                <Text style={{ color: mine ? "#fff" : Colors.text, fontSize: 13 }}>{m.content}</Text>
+                <Text style={{ color: mine ? "rgba(255,255,255,0.6)" : Colors.textSubtle, fontSize: 10, marginTop: 4 }}>{m.created_at?.slice(0, 16).replace("T", " ")}</Text>
+              </View>
+            );
+          })}
+        </View>
+        <View style={{ flexDirection: "row", gap: 8, alignItems: "flex-end" }}>
+          <TextInput
+            style={[styles.broadcastInput, { flex: 1, height: 44 }]}
+            value={reply}
+            onChangeText={setReply}
+            placeholder="Répondre…"
+            placeholderTextColor={Colors.textSubtle}
+          />
+          <TouchableOpacity
+            style={[styles.kycBtn, { backgroundColor: Colors.primary, flex: 0, paddingHorizontal: 16 }]}
+            disabled={!reply.trim()}
+            onPress={() => { onSend(selected.id, reply.trim()); setReply(""); }}
+          >
+            <Send color="#fff" size={14} />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ paddingHorizontal: Spacing.xl }}>
+      <Text style={[styles.listCount, { marginVertical: 12 }]}>{threadList.length} conversation{threadList.length !== 1 ? "s" : ""}</Text>
+      {threadList.length === 0 && (
+        <Card><Text style={{ color: Colors.textMuted, textAlign: "center", padding: 20 }}>✅ Aucun message membre pour l'instant</Text></Card>
+      )}
+      {threadList.map(t => (
+        <TouchableOpacity key={t.id} onPress={() => setSelected({ id: t.id, name: t.name })}>
+          <Card style={{ marginBottom: 8, gap: 0 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <View style={[styles.avatarCircle, { backgroundColor: Colors.secondaryLight }]}>
+                <MessageCircle color={Colors.secondary} size={18} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.userName}>{t.name}</Text>
+                <Text style={styles.userMeta} numberOfLines={1}>{t.msgs[t.msgs.length - 1]?.content ?? ""}</Text>
+              </View>
+              <Text style={styles.userMeta}>{t.msgs.length} msg</Text>
+            </View>
+          </Card>
+        </TouchableOpacity>
+      ))}
     </View>
   );
 }
@@ -646,4 +792,8 @@ const styles = StyleSheet.create({
 
   kycBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10 },
   kycBtnTxt: { color: "#fff", fontSize: 13, fontWeight: "800" },
+
+  broadcastHeader: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.accent + "15", borderRadius: Radius.xl, padding: 14, marginVertical: 12, borderWidth: 1, borderColor: Colors.accent + "40" },
+  broadcastHeaderTxt: { flex: 1, color: Colors.text, fontWeight: "800", fontSize: 13 },
+  broadcastInput: { backgroundColor: Colors.bg, borderRadius: Radius.lg, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, color: Colors.text, borderWidth: 1, borderColor: Colors.border, outlineStyle: "none" } as any,
 });

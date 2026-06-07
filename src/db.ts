@@ -828,9 +828,19 @@ export async function adminHandlePromotion(userId: string, approve: boolean) {
   } else {
     await getSupabase().from("notifications").insert({ user_id: userId, title: "Promotion refusée", body: "Votre demande de promotion Manager a été examinée et refusée.", type: "promotion" });
   }
-  // Mark promotion request as read
   await getSupabase().from("notifications").update({ is_read: true }).eq("user_id", userId).eq("type", "promotion_request");
   return { detail: `Promotion ${approve ? "accordée" : "refusée"}` };
+}
+
+export async function adminBroadcast(title: string, body: string) {
+  const { data: profiles } = await getSupabase().from("profiles").select("id");
+  if (!profiles?.length) return { detail: "Aucun membre trouvé" };
+  const rows = profiles.map((p: any) => ({ user_id: p.id, title, body, type: "broadcast", is_read: false }));
+  // Insert in batches of 100
+  for (let i = 0; i < rows.length; i += 100) {
+    await getSupabase().from("notifications").insert(rows.slice(i, i + 100));
+  }
+  return { detail: `Message envoyé à ${profiles.length} membres` };
 }
 
 export async function getAdminStats() {
@@ -844,4 +854,187 @@ export async function getAdminStats() {
     total_tontines: tontines.count ?? 0,
     pending_kyc: kyc.count ?? 0,
   };
+}
+
+/* ── MESSAGING ───────────────────────────────────────────── */
+
+export async function listMessages(conversationType: "admin" | "tontine", tontineId?: string) {
+  const me = await uid();
+  const sb = getSupabase();
+
+  if (conversationType === "admin") {
+    // Messages between this user and any admin, or broadcast from admin
+    const { data } = await sb
+      .from("messages")
+      .select("*")
+      .or(`sender_id.eq.${me},recipient_id.eq.${me}`)
+      .is("tontine_id", null)
+      .order("created_at", { ascending: true })
+      .limit(100);
+    return data ?? [];
+  }
+
+  if (conversationType === "tontine" && tontineId) {
+    const { data } = await sb
+      .from("messages")
+      .select("*")
+      .eq("tontine_id", tontineId)
+      .order("created_at", { ascending: true })
+      .limit(100);
+    return data ?? [];
+  }
+
+  return [];
+}
+
+export async function sendMessage(body: { recipient_id?: string; tontine_id?: string; content: string }) {
+  const me = await uid();
+  const { data, error } = await getSupabase()
+    .from("messages")
+    .insert({
+      sender_id: me,
+      recipient_id: body.recipient_id ?? null,
+      tontine_id: body.tontine_id ?? null,
+      content: body.content,
+      is_read: false,
+    })
+    .select()
+    .single();
+  throwSb(error);
+  return data;
+}
+
+export async function markMessageRead(id: string) {
+  await getSupabase().from("messages").update({ is_read: true }).eq("id", id);
+}
+
+export async function listConversations() {
+  const me = await uid();
+
+  // My tontines (as member or owner)
+  const { data: memberOf } = await getSupabase()
+    .from("tontine_members")
+    .select("tontine_id, tontines(id, name)")
+    .eq("user_id", me);
+  const { data: ownerOf } = await getSupabase()
+    .from("tontines")
+    .select("id, name")
+    .eq("owner_id", me);
+
+  const tontineMap: Record<string, string> = {};
+  for (const m of memberOf ?? []) {
+    const t = (m as any).tontines;
+    if (t) tontineMap[t.id] = t.name;
+  }
+  for (const t of ownerOf ?? []) tontineMap[t.id] = t.name;
+
+  return {
+    admin_thread: true,
+    tontines: Object.entries(tontineMap).map(([id, name]) => ({ id, name })),
+  };
+}
+
+export async function adminListAllMessages() {
+  const { data } = await getSupabase()
+    .from("messages")
+    .select("*")
+    .is("tontine_id", null)
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  const userIds = [...new Set([
+    ...(data ?? []).map((m: any) => m.sender_id),
+    ...(data ?? []).map((m: any) => m.recipient_id).filter(Boolean),
+  ])];
+  const profileMap: Record<string, string> = {};
+  try {
+    const { data: profiles } = await getSupabase().from("profiles").select("id, full_name").in("id", userIds);
+    for (const p of profiles ?? []) profileMap[p.id] = p.full_name ?? "—";
+  } catch {}
+
+  return (data ?? []).map((m: any) => ({
+    ...m,
+    sender_name: profileMap[m.sender_id] ?? "—",
+    recipient_name: m.recipient_id ? (profileMap[m.recipient_id] ?? "—") : "Admin",
+  }));
+}
+
+export async function adminSendMessageToUser(userId: string, content: string) {
+  const me = await uid();
+  const { error } = await getSupabase().from("messages").insert({
+    sender_id: me,
+    recipient_id: userId,
+    tontine_id: null,
+    content,
+    is_read: false,
+  });
+  throwSb(error);
+  return { detail: "Message envoyé" };
+}
+
+/* ── REFERRAL ────────────────────────────────────────────── */
+
+function genReferralCode(): string {
+  return Math.random().toString(36).toUpperCase().slice(2, 9);
+}
+
+export async function getReferralInfo() {
+  const me = await uid();
+  const { data: profile } = await getSupabase().from("profiles").select("referral_code, referral_bonus").eq("id", me).single();
+
+  let referralCode = profile?.referral_code;
+  if (!referralCode) {
+    referralCode = genReferralCode();
+    await getSupabase().from("profiles").update({ referral_code: referralCode }).eq("id", me);
+  }
+
+  const { data: referrals } = await getSupabase()
+    .from("profiles")
+    .select("full_name, created_at")
+    .eq("referred_by", referralCode);
+
+  return {
+    invite_code: referralCode,
+    referral_count: referrals?.length ?? 0,
+    bonus_fcfa: profile?.referral_bonus ?? 0,
+    bonus_points: referrals?.length ?? 0,
+    referrals: (referrals ?? []).map((r: any) => ({ full_name: r.full_name, joined_at: r.created_at })),
+  };
+}
+
+export async function applyReferralBonus(newUserId: string, referralCode: string) {
+  // Find referrer
+  const { data: referrer } = await getSupabase()
+    .from("profiles")
+    .select("id, referral_bonus")
+    .eq("referral_code", referralCode)
+    .single();
+  if (!referrer) return;
+
+  // Mark new user as referred
+  await getSupabase().from("profiles").update({ referred_by: referralCode }).eq("id", newUserId);
+  // Give referrer 500 FCFA bonus
+  const current = Number(referrer.referral_bonus ?? 0);
+  await getSupabase().from("profiles").update({ referral_bonus: current + 500 }).eq("id", referrer.id);
+  // Notify referrer
+  await getSupabase().from("notifications").insert({
+    user_id: referrer.id,
+    title: "Bonus de parrainage 🎁",
+    body: "Un nouveau membre a rejoint HODIX avec votre code ! +500 FCFA bonus ajoutés à votre compte.",
+    type: "referral",
+  });
+}
+
+export async function sendWelcomeMessage(userId: string, fullName: string) {
+  // Generate referral code for new user
+  const code = genReferralCode();
+  await getSupabase().from("profiles").update({ referral_code: code }).eq("id", userId);
+
+  await getSupabase().from("notifications").insert({
+    user_id: userId,
+    title: `Bienvenue sur HODIX, ${fullName} ! 🎉`,
+    body: `Votre compte est créé. Votre code de parrainage personnel est : ${code}\n\nPartagez-le à vos proches et gagnez 500 FCFA de bonus par inscription ! Ce bonus est utilisable directement en cotisation dans vos tontines.`,
+    type: "welcome",
+    is_read: false,
+  });
 }
