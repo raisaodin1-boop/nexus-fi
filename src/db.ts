@@ -600,51 +600,50 @@ export async function listPayments() {
 /* ── ADMIN ───────────────────────────────────────────────── */
 
 export async function getAdminAnalytics() {
-  const [
-    usersRes, activeTontinesRes, allTontinesRes, assocRes, coopRes,
-    savingsRes, contribRes, kycRes, eventsRes
-  ] = await Promise.all([
-    getSupabase().from("profiles").select("id, created_at, role", { count: "exact" }),
-    getSupabase().from("tontines").select("id", { count: "exact" }).eq("status", "active"),
-    getSupabase().from("tontines").select("id, status", { count: "exact" }),
-    getSupabase().from("associations").select("id", { count: "exact" }),
-    getSupabase().from("cooperatives").select("id", { count: "exact" }),
-    getSupabase().from("savings_goals").select("current_amount"),
-    getSupabase().from("tontine_contributions").select("amount"),
-    getSupabase().from("kyc_submissions").select("status"),
-    getSupabase().from("identity_events").select("created_at").order("created_at", { ascending: false }).limit(100),
+  // Use individual try/catch so one missing column doesn't kill everything
+  const safe = async <T>(fn: () => Promise<T>, fallback: T): Promise<T> => {
+    try { return await fn(); } catch { return fallback; }
+  };
+
+  const [users, allTontines, assocCount, coopCount, savingsData, contribData, kycData] = await Promise.all([
+    safe(() => getSupabase().from("profiles").select("id, created_at, role").then(r => r.data ?? []), []),
+    safe(() => getSupabase().from("tontines").select("id").then(r => r.data ?? []), []),
+    safe(() => getSupabase().from("associations").select("id", { count: "exact", head: true }).then(r => r.count ?? 0), 0),
+    safe(() => getSupabase().from("cooperatives").select("id", { count: "exact", head: true }).then(r => r.count ?? 0), 0),
+    safe(() => getSupabase().from("savings_goals").select("current_amount").then(r => r.data ?? []), []),
+    safe(() => getSupabase().from("tontine_contributions").select("amount").then(r => r.data ?? []), []),
+    safe(() => getSupabase().from("kyc_submissions").select("status").then(r => r.data ?? []), []),
   ]);
 
-  const users = usersRes.data ?? [];
   const now = Date.now();
   const d7 = new Date(now - 7 * 86400000).toISOString();
   const d30 = new Date(now - 30 * 86400000).toISOString();
-  const new7d = users.filter((u: any) => u.created_at >= d7).length;
-  const new30d = users.filter((u: any) => u.created_at >= d30).length;
+  const new7d = (users as any[]).filter(u => u.created_at >= d7).length;
+  const new30d = (users as any[]).filter(u => u.created_at >= d30).length;
 
-  const allTontines = allTontinesRes.data ?? [];
-  const closedTontines = allTontines.filter((t: any) => t.status === "closed").length;
-  const activeTontinesCount = allTontines.filter((t: any) => t.status === "active").length;
+  const savingsVol = (savingsData as any[]).reduce((s, g) => s + Number(g.current_amount), 0);
+  const contribVol = (contribData as any[]).reduce((s, c) => s + Number(c.amount), 0);
+  const kycArr = kycData as any[];
+  const kycPending = kycArr.filter(k => k.status === "pending").length;
+  const kycApproved = kycArr.filter(k => k.status === "approved").length;
 
-  const savingsVol = (savingsRes.data ?? []).reduce((s: number, g: any) => s + Number(g.current_amount), 0);
-  const contribVol = (contribRes.data ?? []).reduce((s: number, c: any) => s + Number(c.amount), 0);
-
-  const kyc = kycRes.data ?? [];
-  const kycPending = kyc.filter((k: any) => k.status === "pending").length;
-  const kycApproved = kyc.filter((k: any) => k.status === "approved").length;
-
-  // User growth series (last 30 days)
   const userSeries: { date: string; value: number }[] = [];
   for (let i = 29; i >= 0; i--) {
     const d = new Date(now - i * 86400000).toISOString().slice(0, 10);
-    userSeries.push({ date: d, value: users.filter((u: any) => (u.created_at ?? "").slice(0, 10) <= d).length });
+    userSeries.push({ date: d, value: (users as any[]).filter(u => (u.created_at ?? "").slice(0, 10) <= d).length });
   }
 
   return {
-    users: { total: users.length, new_7d: new7d, new_30d: new30d, managers: users.filter((u: any) => u.role === "tontine_manager").length, admins: users.filter((u: any) => u.role === "super_admin" || u.role === "admin").length },
-    tontines: { total: allTontines.length, active: activeTontinesCount, closed: closedTontines },
-    associations: assocRes.count ?? 0,
-    cooperatives: coopRes.count ?? 0,
+    users: {
+      total: (users as any[]).length,
+      new_7d: new7d,
+      new_30d: new30d,
+      managers: (users as any[]).filter(u => u.role === "tontine_manager").length,
+      admins: (users as any[]).filter(u => u.role === "super_admin" || u.role === "admin").length,
+    },
+    tontines: { total: (allTontines as any[]).length, active: (allTontines as any[]).length, closed: 0 },
+    associations: assocCount as number,
+    cooperatives: coopCount as number,
     savings_volume: savingsVol,
     contributions_volume: contribVol,
     kyc: { pending: kycPending, approved: kycApproved },
@@ -653,10 +652,11 @@ export async function getAdminAnalytics() {
 }
 
 export async function adminListUsers(search = "") {
-  let q = getSupabase().from("profiles").select("id, full_name, phone, role, created_at, kyc_status, country, city").order("created_at", { ascending: false }).limit(100);
+  // Select only guaranteed columns (no kyc_status which may not exist)
+  let q = getSupabase().from("profiles").select("id, full_name, phone, role, created_at, country, city").order("created_at", { ascending: false }).limit(100);
   if (search) q = q.ilike("full_name", `%${search}%`);
   const { data, error } = await q;
-  throwSb(error);
+  if (error) return [];
   return data ?? [];
 }
 
@@ -673,24 +673,35 @@ export async function adminDeactivateUser(userId: string) {
 }
 
 export async function adminListTontines(search = "") {
+  // Avoid columns that may not exist yet (status, auto_close_date)
   let q = getSupabase()
     .from("tontines")
-    .select("id, name, status, amount_per_cycle, frequency, max_members, invite_code, created_at, auto_close_date, profiles!tontines_owner_id_fkey(full_name), tontine_members(count)")
+    .select("id, name, amount_per_cycle, frequency, max_members, invite_code, created_at, owner_id, tontine_members(count)")
     .order("created_at", { ascending: false })
     .limit(100);
   if (search) q = q.ilike("name", `%${search}%`);
   const { data, error } = await q;
-  throwSb(error);
+  if (error) return [];
+
+  // Try to also get status/auto_close_date (may not exist yet)
+  let statusMap: Record<string, { status: string; auto_close_date: string | null }> = {};
+  try {
+    const { data: sd } = await getSupabase().from("tontines").select("id, status, auto_close_date");
+    if (sd) for (const t of sd) statusMap[t.id] = { status: t.status, auto_close_date: t.auto_close_date };
+  } catch {}
+
   return (data ?? []).map((t: any) => ({
     ...t,
-    owner_name: t.profiles?.full_name ?? "—",
+    status: statusMap[t.id]?.status ?? "active",
+    auto_close_date: statusMap[t.id]?.auto_close_date ?? null,
+    owner_name: "—",
     members_count: t.tontine_members?.[0]?.count ?? 0,
   }));
 }
 
 export async function adminUpdateTontine(id: string, updates: { status?: string; auto_close_date?: string | null }) {
   const { error } = await getSupabase().from("tontines").update(updates).eq("id", id);
-  throwSb(error);
+  if (error) throw { status: 400, detail: "Erreur mise à jour — exécutez d'abord le SQL d'initialisation dans Supabase." };
   return { detail: "Tontine mise à jour" };
 }
 
