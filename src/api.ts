@@ -121,7 +121,7 @@ export async function login(email: string, password: string): Promise<User> {
 export async function register(email: string, password: string, full_name: string): Promise<User> {
   const data = await api.post<TokenResponse>(
     "/auth/register",
-    { email, password, full_name },
+    { email, password, full_name, consent_cgu: true, consent_data: true, consent_fees: true, consent_date: new Date().toISOString() },
     false,
   );
   await setTokens(data.access_token, data.refresh_token, data.user);
