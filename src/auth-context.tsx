@@ -31,12 +31,15 @@ const Ctx = createContext<AuthCtx | undefined>(undefined);
 
 async function fetchProfile(userId: string): Promise<Partial<User>> {
   try {
-    const { data } = await supabase
+    const timeout = new Promise<null>((res) => setTimeout(() => res(null), 8000));
+    const query = supabase
       .from("profiles")
       .select("full_name,role,phone,gender,country,city,occupation")
       .eq("id", userId)
       .single();
-    return data ?? {};
+    const result = await Promise.race([query, timeout]);
+    if (!result || !("data" in result)) return {};
+    return (result as any).data ?? {};
   } catch {
     return {};
   }
