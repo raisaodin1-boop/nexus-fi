@@ -11,6 +11,7 @@ module.exports = function (api) {
             "@": ".",
             "@/src": "./src",
           },
+          extensions: [".ios.js", ".android.js", ".js", ".jsx", ".ts", ".tsx", ".json"],
         },
       ],
     ],
