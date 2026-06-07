@@ -1,0 +1,81 @@
+{
+  "expo": {
+    "name": "HODIX",
+    "slug": "hodix",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "hodix",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B1F3A"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "app.hodix.mobile",
+      "buildNumber": "1"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#0B1F3A"
+      },
+      "package": "app.hodix.mobile",
+      "versionCode": 1,
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png",
+      "name": "HODIX – Épargne & Tontines",
+      "shortName": "HODIX",
+      "description": "Plateforme africaine de finance participative. Gérez vos tontines, épargnez en groupe et payez en toute sécurité.",
+      "themeColor": "#0B1F3A",
+      "backgroundColor": "#F8FAFC",
+      "lang": "fr",
+      "scope": "/",
+      "startUrl": "/"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "HODIX a besoin d'accéder à vos photos pour le KYC.",
+          "cameraPermission": "HODIX a besoin d'accéder à votre caméra pour le selfie KYC."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#0B1F3A",
+          "sounds": []
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "hodix-app"
+      },
+      "router": {
+        "origin": false
+      }
+    }
+  }
+}
