@@ -111,6 +111,7 @@ else:
         "https://hodixemergent-production.up.railway.app",
         "https://web-production-7d726.up.railway.app",
         "https://nexus-fi.vercel.app",
+        "https://nexus-fi-eta.vercel.app",
         "https://nexus-fi-git-claude-blissful-s-179986-raisaodin1-boops-projects.vercel.app",
     ]
 
