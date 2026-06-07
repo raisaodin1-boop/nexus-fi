@@ -36,21 +36,29 @@ export function AdminDashboard() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000));
-    try {
-      const [a, s, u, p] = await Promise.race([
-        Promise.all([
-          api.get<Analytics>("/admin/analytics"),
-          api.get<Series>("/analytics/platform/savings?days=14"),
-          api.get<Series>("/analytics/platform/users?days=14"),
-          api.get<any[]>("/admin/promotion-requests"),
-        ]),
-        timeout,
-      ]);
-      setAnalytics(a); setSavings(s); setUsersSeries(u);
-      setPendingReqs(p.filter((r: any) => r.status === "pending").length);
-    } catch {}
+    setLoading(true);
+    const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
+      try { return await fn(); } catch { return null; }
+    };
+    const timeout12 = <T,>(p: Promise<T>) =>
+      Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000))]);
+
+    // Load analytics + promos in parallel, independently — one failure doesn't kill the other
+    const [a, p] = await Promise.all([
+      safe(() => timeout12(api.get<Analytics>("/admin/analytics"))),
+      safe(() => api.get<any[]>("/admin/promotion-requests")),
+    ]);
+    if (a) setAnalytics(a);
+    if (p) setPendingReqs((p as any[]).filter((r: any) => r.status === "pending").length);
     setLoading(false);
+
+    // Charts are non-critical — load after initial render
+    const [s, u] = await Promise.all([
+      safe(() => api.get<Series>("/analytics/savings-series")),
+      safe(() => api.get<Series>("/analytics/users-series")),
+    ]);
+    if (s) setSavings(s);
+    if (u) setUsersSeries(u);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -75,12 +83,14 @@ export function AdminDashboard() {
     );
   }
 
-  const dist = analytics.score_distribution;
+  const dist = analytics.score_distribution ?? { excellent: 0, very_good: 0, good: 0, emerging: 0, new: 0 };
   const totalDist = Object.values(dist).reduce((a, b) => a + b, 0) || 1;
-  const tier = analytics.tier_distribution;
+  const tier = analytics.tier_distribution ?? { bronze: 0, silver: 0, gold: 0, platinum: 0 };
   const totalTier = Object.values(tier).reduce((a, b) => a + b, 0) || 1;
-  const totalGroups = analytics.active_groups.tontines + analytics.active_groups.associations + analytics.active_groups.cooperatives;
-  const commission = analytics.payments.commission_minor / 100;
+  const activeGroups = analytics.active_groups ?? { tontines: 0, tontines_active: 0, associations: 0, cooperatives: 0 };
+  const totalGroups = activeGroups.tontines + activeGroups.associations + activeGroups.cooperatives;
+  const payments = analytics.payments ?? { count: 0, amount_minor: 0, commission_minor: 0, currency: "XAF" };
+  const commission = payments.commission_minor / 100;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -138,12 +148,12 @@ export function AdminDashboard() {
         {/* === SECTION 2: COMMUNAUTÉS === */}
         <SectionTitle>🤝 Communautés</SectionTitle>
         <View style={styles.statsRow}>
-          <StatCard label="Tontines actives" value={`${analytics.active_groups.tontines_active}/${analytics.active_groups.tontines}`} accent={Colors.secondary} />
-          <StatCard label="Associations" value={`${analytics.active_groups.associations}`} accent={Colors.accent} />
+          <StatCard label="Tontines actives" value={`${activeGroups.tontines_active}/${activeGroups.tontines}`} accent={Colors.secondary} />
+          <StatCard label="Associations" value={`${activeGroups.associations}`} accent={Colors.accent} />
         </View>
         <View style={styles.statsRow}>
-          <StatCard label="Coopératives" value={`${analytics.active_groups.cooperatives}`} accent={Colors.primary} />
-          <StatCard label="Fonds communaut." value={`${analytics.funds.count}`} accent={Colors.warning} hint={`Solde : ${formatXAF(analytics.funds.balance)}`} />
+          <StatCard label="Coopératives" value={`${activeGroups.cooperatives}`} accent={Colors.primary} />
+          <StatCard label="Fonds communaut." value={`${analytics.funds?.count ?? 0}`} accent={Colors.warning} hint={`Solde : ${formatXAF(analytics.funds?.balance ?? 0)}`} />
         </View>
 
         {/* === SECTION 3: FINANCES === */}
@@ -153,15 +163,15 @@ export function AdminDashboard() {
           <StatCard label="Contributions" value={formatXAF(analytics.tontine_contributions_volume)} accent={Colors.secondary} hint={`${analytics.tontine_contributions_count} ops`} />
         </View>
         <View style={styles.statsRow}>
-          <StatCard label="Paiements Stripe" value={`${analytics.payments.count}`} accent={Colors.primary} hint={`${(analytics.payments.amount_minor / 100).toFixed(2)} ${analytics.payments.currency.toUpperCase()}`} />
-          <StatCard label="Commission Hodix (1%)" value={`${commission.toFixed(2)} ${analytics.payments.currency.toUpperCase()}`} accent={Colors.accentDark} />
+          <StatCard label="Paiements Stripe" value={`${payments.count}`} accent={Colors.primary} hint={`${(payments.amount_minor / 100).toFixed(2)} ${payments.currency.toUpperCase()}`} />
+          <StatCard label="Commission Hodix (1%)" value={`${commission.toFixed(2)} ${payments.currency.toUpperCase()}`} accent={Colors.accentDark} />
         </View>
 
         {/* === SECTION 4: IDENTITÉ FINANCIÈRE === */}
         <SectionTitle>🪪 Identité financière</SectionTitle>
         <View style={styles.statsRow}>
-          <StatCard label="Trust Score moyen" value={`${analytics.avg_trust_score.toFixed(1)}/100`} accent={Colors.accent} />
-          <StatCard label="KYC niveau 2" value={`${analytics.kyc.level2_approved}`} accent={Colors.secondary} hint={`${analytics.kyc.pending_review} en attente`} />
+          <StatCard label="Trust Score moyen" value={`${(analytics.avg_trust_score ?? 0).toFixed(1)}/100`} accent={Colors.accent} />
+          <StatCard label="KYC niveau 2" value={`${analytics.kyc?.level2_approved ?? 0}`} accent={Colors.secondary} hint={`${analytics.kyc?.pending_review ?? 0} en attente`} />
         </View>
 
         {/* Tier distribution */}

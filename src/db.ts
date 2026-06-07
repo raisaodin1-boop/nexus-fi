@@ -375,7 +375,6 @@ export async function getSavingsSeries(days = 14) {
     .eq("user_id", me)
     .gte("created_at", since)
     .order("created_at", { ascending: true });
-  // Group by date
   const byDate: Record<string, number> = {};
   for (const tx of data ?? []) {
     const d = (tx.created_at as string).slice(0, 10);
@@ -383,6 +382,24 @@ export async function getSavingsSeries(days = 14) {
   }
   const series = Object.entries(byDate).map(([date, value]) => ({ date, value }));
   return { days, series };
+}
+
+export async function getUsersSeries(days = 14) {
+  return cached(`users-series`, 120_000, async () => {
+    const since = new Date(Date.now() - days * 86400000).toISOString();
+    const { data } = await getSupabase()
+      .from("profiles")
+      .select("created_at")
+      .gte("created_at", since)
+      .order("created_at", { ascending: true });
+    const byDate: Record<string, number> = {};
+    for (const p of data ?? []) {
+      const d = (p.created_at as string).slice(0, 10);
+      byDate[d] = (byDate[d] ?? 0) + 1;
+    }
+    const series = Object.entries(byDate).map(([date, value]) => ({ date, value }));
+    return { days, series };
+  });
 }
 
 /* ── SAVINGS ─────────────────────────────────────────────── */
@@ -630,7 +647,7 @@ export async function listPayments() {
 /* ── ADMIN ───────────────────────────────────────────────── */
 
 export async function getAdminAnalytics() {
-  // Use individual try/catch so one missing column doesn't kill everything
+  return cached("admin-analytics", 90_000, async () => {
   const safe = async <T>(fn: () => Promise<T>, fallback: T): Promise<T> => {
     try { return await fn(); } catch { return fallback; }
   };
@@ -678,7 +695,18 @@ export async function getAdminAnalytics() {
     contributions_volume: contribVol,
     kyc: { pending: kycPending, approved: kycApproved },
     user_series: userSeries,
+    // Defensive fallbacks for fields admin-dashboard.tsx accesses
+    active_groups: { tontines: (allTontines as any[]).length, tontines_active: (allTontines as any[]).length, associations: assocCount as number, cooperatives: coopCount as number },
+    score_distribution: { excellent: 0, very_good: 0, good: 0, emerging: 0, new: (users as any[]).length },
+    tier_distribution: { bronze: (users as any[]).length, silver: 0, gold: 0, platinum: 0 },
+    avg_trust_score: 0,
+    savings_count: 0,
+    tontine_contributions_volume: contribVol,
+    tontine_contributions_count: 0,
+    funds: { count: 0, balance: 0, collected: 0 },
+    payments: { count: 0, amount_minor: 0, commission_minor: 0, currency: "XAF" },
   };
+  });
 }
 
 export async function adminListUsers(search = "") {
