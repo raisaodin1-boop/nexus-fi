@@ -45,42 +45,9 @@ export default function LoginScreen() {
     setError(null);
     setLoading(true);
     try {
-      const user = await login(email.trim(), password);
-
-      // After successful login: offer to enable biometric
-      try {
-        const hasHw = await LocalAuthentication.hasHardwareAsync();
-        const enrolled = await LocalAuthentication.isEnrolledAsync();
-        if (hasHw && enrolled) {
-          const alreadyEnabled = await SecureStore.getItemAsync("bio_enabled");
-          if (alreadyEnabled !== "1") {
-            Alert.alert(
-              "Connexion biométrique",
-              "Activer la connexion avec Face ID / Empreinte digitale ?",
-              [
-                { text: "Non", style: "cancel" },
-                {
-                  text: "Activer",
-                  onPress: async () => {
-                    try {
-                      await SecureStore.setItemAsync("bio_email", email.trim());
-                      await SecureStore.deleteItemAsync("bio_password"); // remove old plaintext format
-                      await SecureStore.setItemAsync("bio_enabled", "1");
-                      // Refresh token is already stored securely by login()
-                    } catch {}
-                  },
-                },
-              ],
-            );
-          }
-        }
-      } catch {}
-
-      if (user.role === "super_admin" || user.role === "tontine_manager") {
-        router.replace("/(tabs)");
-      } else {
-        router.replace("/(tabs)");
-      }
+      await login(email.trim(), password);
+      // login() updates auth state via onAuthStateChange — navigate immediately
+      router.replace("/(tabs)");
     } catch (e: any) {
       const msg = e instanceof ApiError ? e.detail : (e?.detail ?? e?.message ?? "Connexion impossible.");
       setError(msg);
