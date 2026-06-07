@@ -109,8 +109,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    await supabase.auth.signOut();
-    // onAuthStateChange handles state update
+    // Clear local state immediately — no waiting for network
+    setUser(null);
+    setLoading(false);
+    // Sign out from Supabase in background
+    supabase.auth.signOut().catch(() => {});
   }, []);
 
   const refresh = useCallback(async () => {

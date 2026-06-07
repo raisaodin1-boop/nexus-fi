@@ -64,9 +64,10 @@ export default function ProfileScreen() {
   };
 
   const confirmLogout = () => {
-    const doLogout = async () => {
-      try { await logout(); } catch {}
-      try { router.replace("/(auth)/login"); } catch {}
+    const doLogout = () => {
+      // Logout is instant — state cleared locally first
+      logout();
+      router.replace("/(auth)/login");
     };
     if (Platform.OS === "web") {
       if (window.confirm("Voulez-vous vraiment vous déconnecter ?")) doLogout();
@@ -117,10 +118,12 @@ export default function ProfileScreen() {
               {user?.photo_base64 ? (
                 <Image source={{ uri: `data:image/png;base64,${user.photo_base64}` }} style={styles.avatarImg} />
               ) : (
-                <Text style={styles.avatarLetter}>{user?.full_name?.[0]?.toUpperCase() ?? "?"}</Text>
+                <Text style={styles.avatarLetter}>
+                {(user?.full_name?.[0] || user?.email?.[0] || "?").toUpperCase()}
+              </Text>
               )}
             </View>
-            <Text style={styles.fullName}>{user?.full_name}</Text>
+            <Text style={styles.fullName}>{user?.full_name || user?.email?.split("@")[0] || "—"}</Text>
             <Text style={styles.email}>{user?.email}</Text>
             <View style={styles.rolePill}>
               <Text style={styles.roleText}>{roleLabel(user?.role)}</Text>
