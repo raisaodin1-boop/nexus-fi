@@ -1,6 +1,8 @@
 // HOME — role-aware dashboard router (Member / Manager / Super Admin)
+import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 
 import { useAuth } from "@/src/auth-context";
 import { Colors } from "@/src/theme";
@@ -10,6 +12,14 @@ import { AdminDashboard } from "@/src/admin-dashboard";
 
 export default function HomeRouter() {
   const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace("/onboarding");
+    }
+  }, [loading, user, router]);
+
   if (loading || !user) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: Colors.bg }}>
@@ -19,6 +29,7 @@ export default function HomeRouter() {
       </SafeAreaView>
     );
   }
+
   if (user.role === "super_admin") return <AdminDashboard />;
   if (user.role === "tontine_manager") return <ManagerDashboard />;
   return <MemberDashboard />;
