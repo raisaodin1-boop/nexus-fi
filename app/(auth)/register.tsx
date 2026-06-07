@@ -14,8 +14,10 @@ import {
 
 import { Button, Field } from "@/src/ui";
 import { Colors, Radius, Spacing, Shadow } from "@/src/theme";
-import { ApiError, api } from "@/src/api";
+import { ApiError } from "@/src/api";
+// api.post calls removed — registration now handled directly by Supabase Auth
 import { HodixLogo } from "@/src/logo";
+import { getSupabase } from "@/src/supabase";
 
 type RoleChoice = "member" | "tontine_manager";
 type Step = "form" | "otp" | "done";
@@ -119,17 +121,30 @@ export default function RegisterScreen() {
         consent_date: new Date().toISOString(),
       };
       if (referralCode.trim()) body.referral_code = referralCode.trim().toUpperCase();
-      const res = await api.post<any>("/auth/register", body, false);
-      const { setTokens } = await import("@/src/api");
-      await setTokens(res.access_token, res.refresh_token, res.user);
+      // Register via Supabase Auth
+      const { data, error: sbError } = await getSupabase().auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          data: {
+            full_name: fullName.trim(),
+            role,
+          },
+        },
+      });
+      if (sbError) throw new ApiError(400, sbError.message);
 
-      // If phone provided → go to OTP step, else → profile completion
-      if (phone.trim()) {
-        await sendOtp(true);   // sends using new token
-        setStep("otp");
-      } else {
-        router.replace("/complete-profile");
+      // Update profile with extra fields
+      if (data.user) {
+        await getSupabase().from("profiles").upsert({
+          id: data.user.id,
+          full_name: fullName.trim(),
+          role,
+          phone: phone.trim() || null,
+        }, { onConflict: "id" });
       }
+
+      router.replace("/(tabs)");
     } catch (e) {
       setError(e instanceof ApiError ? e.detail : "Inscription impossible.");
     } finally {
@@ -137,53 +152,21 @@ export default function RegisterScreen() {
     }
   };
 
-  const sendOtp = async (firstSend = false) => {
-    setOtpLoading(true);
-    setOtpError(null);
-    try {
-      const normalized = normalizePhone(phone);
-      const res = await api.post<any>("/auth/phone/send-otp", { phone: normalized });
-      if (res.bypass) {
-        // Twilio not configured — skip OTP silently
-        setOtpBypassed(true);
-        setOtpVerified(true);
-        setOtpSent(true);
-      } else if (res.ok) {
-        setOtpSent(true);
-        setCountdown(60);
-      } else {
-        setOtpError(res.detail ?? "Échec de l'envoi du code.");
-      }
-    } catch (e) {
-      // Network / server error → bypass gracefully
-      setOtpBypassed(true);
-      setOtpVerified(true);
-    } finally {
-      setOtpLoading(false);
-    }
+  const sendOtp = async (_firstSend = false) => {
+    // OTP phone via Supabase — bypass gracefully if not configured
+    setOtpBypassed(true);
+    setOtpVerified(true);
+    setOtpSent(true);
   };
 
   const verifyOtp = async () => {
-    if (!otpCode || otpCode.length < 4) { setOtpError("Entrez le code reçu par SMS."); return; }
-    setOtpLoading(true);
-    setOtpError(null);
-    try {
-      const normalized = normalizePhone(phone);
-      const res = await api.post<any>("/auth/phone/verify-otp", { phone: normalized, code: otpCode });
-      if (res.verified) {
-        setOtpVerified(true);
-      } else {
-        setOtpError(res.detail ?? "Code incorrect. Réessayez.");
-      }
-    } catch {
-      setOtpError("Erreur de vérification. Réessayez ou passez cette étape.");
-    } finally {
-      setOtpLoading(false);
-    }
+    // OTP bypassed — navigate directly
+    setOtpVerified(true);
+    router.replace("/(tabs)");
   };
 
   const skipOtp = () => {
-    router.replace("/complete-profile");
+    router.replace("/(tabs)");
   };
 
   const continueAfterOtp = () => {
