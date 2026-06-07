@@ -14,7 +14,7 @@ import * as SecureStore from "expo-secure-store";
 import { Button, Field } from "@/src/ui";
 import { Colors, Spacing } from "@/src/theme";
 import { useAuth } from "@/src/auth-context";
-import { ApiError, refreshTokens } from "@/src/api";
+import { ApiError } from "@/src/api";
 import { HodixLogo } from "@/src/logo";
 
 export default function LoginScreen() {
@@ -101,9 +101,9 @@ export default function LoginScreen() {
         setBioLoading(false);
         return;
       }
-      // Use stored refresh token — no password ever stored
-      const user = await refreshTokens();
-      if (!user) {
+      // Biometric confirmed — check Supabase session is still active
+      const { data } = await (await import("@/src/supabase")).getSupabase().auth.getSession();
+      if (!data.session) {
         setError("Session expirée. Reconnectez-vous avec votre mot de passe.");
         setBioLoading(false);
         return;

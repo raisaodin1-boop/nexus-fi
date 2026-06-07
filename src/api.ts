@@ -1,17 +1,14 @@
-// HTTP client and Auth helpers for HODIX.
-import { storage } from "@/src/utils/storage";
+/**
+ * HODIX API — Supabase-powered data layer.
+ * Routes all api.get/post/patch/del calls to src/db.ts (Supabase).
+ * No more FastAPI/Railway/MongoDB.
+ */
+import * as db from "@/src/db";
 import { getSupabase } from "@/src/supabase";
 
-const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+/* ── Types ─────────────────────────────────────────────────── */
 
-const ACCESS_KEY = "hodix_access_token";
-const REFRESH_KEY = "hodix_refresh_token";
-const USER_KEY = "hodix_user";
-
-export type Role =
-  | "member"
-  | "tontine_manager"
-  | "super_admin";
+export type Role = "member" | "tontine_manager" | "super_admin";
 
 export interface User {
   id: string;
@@ -28,32 +25,6 @@ export interface User {
   created_at: string;
 }
 
-export async function getAccessToken(): Promise<string | null> {
-  return storage.secureGet(ACCESS_KEY, "" as string);
-}
-
-export async function setTokens(access: string, refresh: string, user: User) {
-  await storage.secureSet(ACCESS_KEY, access);
-  await storage.secureSet(REFRESH_KEY, refresh);
-  await storage.setItem(USER_KEY, JSON.stringify(user));
-}
-
-export async function clearTokens() {
-  await storage.secureRemove(ACCESS_KEY);
-  await storage.secureRemove(REFRESH_KEY);
-  await storage.removeItem(USER_KEY);
-}
-
-export async function getStoredUser(): Promise<User | null> {
-  const raw = await storage.getItem(USER_KEY, "" as string);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw as string) as User;
-  } catch {
-    return null;
-  }
-}
-
 export class ApiError extends Error {
   status: number;
   detail: string;
@@ -64,113 +35,121 @@ export class ApiError extends Error {
   }
 }
 
-async function getBestToken(): Promise<string | null> {
-  // Prefer stored Hodix JWT; fall back to live Supabase session token
-  const stored = await getAccessToken();
-  if (stored) return stored;
+/* ── Path router — maps api.get/post/patch paths to db calls ─ */
+
+type Seg = string[];
+
+function seg(path: string): Seg {
+  return path.split("/").filter(Boolean);
+}
+
+async function route<T>(method: string, path: string, body?: any): Promise<T> {
+  const s = seg(path);
+
   try {
-    const { data } = await getSupabase().auth.getSession();
-    return data.session?.access_token ?? null;
-  } catch {
-    return null;
+    // ── Users
+    if (method === "GET"   && s[0] === "users" && s[1] === "me" && !s[2])              return (await db.getMe()) as T;
+    if (method === "PATCH" && s[0] === "users" && s[1] === "me")                        return (await db.updateMe(body)) as T;
+    if (method === "GET"   && s[0] === "users" && s[1] === "me" && s[2] === "kyc")      return (await db.getKycStatus()) as T;
+
+    // ── Tontines
+    if (method === "GET"  && s[0] === "tontines" && !s[1])                              return (await db.listTontines()) as T;
+    if (method === "POST" && s[0] === "tontines" && !s[1])                              return (await db.createTontine(body)) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] === "join")                   return (await db.joinTontine(body?.invite_code)) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] && !s[2])                     return (await db.getTontine(s[1])) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "contribute")     return (await db.contributeTontine(s[1], Number(body?.amount))) as T;
+
+    // ── Associations
+    if (method === "GET"  && s[0] === "associations" && !s[1])                         return (await db.listAssociations()) as T;
+    if (method === "POST" && s[0] === "associations" && !s[1])                         return (await db.createAssociation(body)) as T;
+    if (method === "POST" && s[0] === "associations" && s[1] === "join")               return (await db.joinAssociation(body?.invite_code)) as T;
+    if (method === "GET"  && s[0] === "associations" && s[1] && !s[2])                 return (await db.getAssociation(s[1])) as T;
+    if (method === "POST" && s[0] === "associations" && s[1] && s[2] === "contribute") return (await db.contributeAssociation(s[1], Number(body?.amount))) as T;
+
+    // ── Cooperatives
+    if (method === "GET"  && s[0] === "cooperatives" && !s[1])                         return (await db.listCooperatives()) as T;
+    if (method === "POST" && s[0] === "cooperatives" && !s[1])                         return (await db.createCooperative(body)) as T;
+    if (method === "POST" && s[0] === "cooperatives" && s[1] === "join")               return (await db.joinCooperative(body?.invite_code)) as T;
+    if (method === "GET"  && s[0] === "cooperatives" && s[1] && !s[2])                 return (await db.getCooperative(s[1])) as T;
+    if (method === "POST" && s[0] === "cooperatives" && s[1] && s[2] === "contribute") return (await db.contributeCooperative(s[1], Number(body?.amount))) as T;
+
+    // ── Funds
+    if (method === "GET"  && s[0] === "funds" && !s[1])                                return (await db.listFunds()) as T;
+    if (method === "POST" && s[0] === "funds" && !s[1])                                return (await db.createFund(body)) as T;
+    if (method === "GET"  && s[0] === "funds" && s[1] && !s[2])                        return (await db.getFund(s[1])) as T;
+    if (method === "POST" && s[0] === "funds" && s[1] && s[2] === "contribute")        return (await db.contributeFund(s[1], Number(body?.amount))) as T;
+
+    // ── Savings
+    if (method === "GET"  && s[0] === "savings" && !s[1])                              return (await db.listSavings()) as T;
+    if (method === "POST" && s[0] === "savings" && !s[1])                              return (await db.createSaving(body)) as T;
+    if (method === "GET"  && s[0] === "savings" && s[1] && !s[2])                      return (await db.getSaving(s[1])) as T;
+    if (method === "POST" && s[0] === "savings" && s[1] && s[2] === "deposit")         return (await db.depositSaving(s[1], Number(body?.amount), body?.note)) as T;
+
+    // ── Identity
+    if (method === "GET" && s[0] === "identity" && !s[1])                              return (await db.getIdentity()) as T;
+    if (method === "GET" && s[0] === "identity-profile" && s[1] === "me")              return (await db.getIdentityProfile()) as T;
+
+    // ── Notifications
+    if (method === "GET"  && s[0] === "notifications")                                 return (await db.listNotifications()) as T;
+    if (method === "POST" && s[0] === "notifications" && s[1] === "push-token")        return (await db.savePushToken(body?.token)) as T;
+
+    // ── KYC
+    if (method === "POST" && s[0] === "kyc" && s[1] === "submit")                      return (await db.submitKyc()) as T;
+
+    // ── Payments
+    if (method === "GET" && s[0] === "payments" && s[1] === "history")                 return (await db.listPayments()) as T;
+
+    // ── Admin
+    if (method === "GET" && s[0] === "admin" && s[1] === "stats")                      return (await db.getAdminStats()) as T;
+
+    // ── Forgot / Reset password (delegated to Supabase Auth)
+    if (method === "POST" && s[0] === "auth" && s[1] === "forgot-password") {
+      const { error } = await getSupabase().auth.resetPasswordForEmail(body?.email);
+      if (error) throw { status: 400, detail: error.message };
+      return { detail: "Email de réinitialisation envoyé" } as T;
+    }
+    if (method === "POST" && s[0] === "auth" && s[1] === "reset-password") {
+      const { error } = await getSupabase().auth.updateUser({ password: body?.new_password });
+      if (error) throw { status: 400, detail: error.message };
+      return { detail: "Mot de passe mis à jour" } as T;
+    }
+
+    // ── Reports (stub — not yet implemented)
+    if (s[0] === "reports") return { detail: "Certificats disponibles dans la version premium" } as T;
+
+    throw { status: 404, detail: `Route introuvable: ${method} /${s.join("/")}` };
+
+  } catch (e: any) {
+    if (e instanceof ApiError) throw e;
+    throw new ApiError(e?.status ?? 500, e?.detail ?? e?.message ?? "Erreur inattendue");
   }
 }
 
-async function request<T>(
-  path: string,
-  options: RequestInit = {},
-  withAuth = true,
-): Promise<T> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...((options.headers as Record<string, string>) || {}),
-  };
-  if (withAuth) {
-    const token = await getBestToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
-  }
-  const url = `${BASE}/api${path}`;
-  let resp: Response;
-  try {
-    resp = await fetch(url, { ...options, headers });
-  } catch (e) {
-    throw new ApiError(0, "Connexion impossible. Vérifiez votre Internet.");
-  }
-  if (!resp.ok) {
-    let detail = `Erreur ${resp.status}`;
-    try {
-      const json = await resp.json();
-      detail = typeof json.detail === "string" ? json.detail : JSON.stringify(json.detail);
-    } catch {}
-    throw new ApiError(resp.status, detail);
-  }
-  if (resp.status === 204) return {} as T;
-  return (await resp.json()) as T;
-}
+/* ── Public api object (same interface as before) ─────────── */
 
 export const api = {
-  get: <T>(path: string) => request<T>(path, { method: "GET" }),
-  post: <T>(path: string, body?: any, withAuth = true) =>
-    request<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }, withAuth),
-  patch: <T>(path: string, body?: any) =>
-    request<T>(path, { method: "PATCH", body: body ? JSON.stringify(body) : undefined }),
-  del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
-  rawUrl: (path: string) => `${BASE}/api${path}`,
+  get:   <T>(path: string)                    => route<T>("GET", path),
+  post:  <T>(path: string, body?: any)        => route<T>("POST", path, body),
+  patch: <T>(path: string, body?: any)        => route<T>("PATCH", path, body),
+  del:   <T>(path: string)                    => route<T>("DELETE", path),
+  rawUrl: (_path: string) => "",
 };
 
-export interface TokenResponse {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-  user: User;
+/* ── Auth helpers (still used by auth screens via import) ──── */
+
+export async function forgotPassword(email: string) {
+  return route<{ detail: string }>("POST", "/auth/forgot-password", { email });
 }
 
-export async function login(email: string, password: string): Promise<User> {
-  const data = await api.post<TokenResponse>("/auth/login", { email, password }, false);
-  await setTokens(data.access_token, data.refresh_token, data.user);
-  return data.user;
-}
-
-export async function register(email: string, password: string, full_name: string): Promise<User> {
-  const data = await api.post<TokenResponse>(
-    "/auth/register",
-    { email, password, full_name, consent_cgu: true, consent_data: true, consent_fees: true, consent_date: new Date().toISOString() },
-    false,
-  );
-  await setTokens(data.access_token, data.refresh_token, data.user);
-  return data.user;
-}
-
-export async function refreshTokens(): Promise<User | null> {
-  const refresh = await storage.secureGet(REFRESH_KEY, "" as string);
-  if (!refresh) return null;
-  try {
-    const data = await api.post<TokenResponse>("/auth/refresh", { refresh_token: refresh }, false);
-    await setTokens(data.access_token, data.refresh_token, data.user);
-    return data.user;
-  } catch {
-    return null;
-  }
-}
-
-export async function logout() {
-  try {
-    await api.post("/auth/logout");
-  } catch {}
-  await clearTokens();
-}
-
-export async function forgotPassword(email: string): Promise<{ detail: string; dev_token?: string }> {
-  return api.post("/auth/forgot-password", { email }, false);
-}
-
-export async function resetPassword(token: string, new_password: string): Promise<{ detail: string }> {
-  return api.post("/auth/reset-password", { token, new_password }, false);
+export async function resetPassword(token: string, new_password: string) {
+  return route<{ detail: string }>("POST", "/auth/reset-password", { token, new_password });
 }
 
 export async function fetchMe(): Promise<User> {
-  return api.get<User>("/users/me");
+  return db.getMe() as Promise<User>;
 }
+
+/* ── Currency formatter ────────────────────────────────────── */
 
 export function formatXAF(amount: number, currency = "XAF"): string {
   return `${Math.round(amount).toLocaleString("fr-FR")} ${currency}`;
