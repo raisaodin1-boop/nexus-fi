@@ -36,12 +36,16 @@ export function AdminDashboard() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
+    const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000));
     try {
-      const [a, s, u, p] = await Promise.all([
-        api.get<Analytics>("/admin/analytics"),
-        api.get<Series>("/analytics/platform/savings?days=14"),
-        api.get<Series>("/analytics/platform/users?days=14"),
-        api.get<any[]>("/admin/promotion-requests"),
+      const [a, s, u, p] = await Promise.race([
+        Promise.all([
+          api.get<Analytics>("/admin/analytics"),
+          api.get<Series>("/analytics/platform/savings?days=14"),
+          api.get<Series>("/analytics/platform/users?days=14"),
+          api.get<any[]>("/admin/promotion-requests"),
+        ]),
+        timeout,
       ]);
       setAnalytics(a); setSavings(s); setUsersSeries(u);
       setPendingReqs(p.filter((r: any) => r.status === "pending").length);
@@ -51,9 +55,26 @@ export function AdminDashboard() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  if (loading || !analytics) {
+  if (loading) {
     return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator color={Colors.secondary} size="large" /></View></SafeAreaView>;
   }
+
+  // Fallback when Supabase hasn't returned data yet — show the console link
+  if (!analytics) {
+    return (
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32 }}>
+          <ShieldAlert color={Colors.primary} size={40} />
+          <Text style={[styles.name, { marginTop: 12 }]}>Console Admin</Text>
+          <Text style={[styles.hello, { textAlign: "center", marginTop: 6 }]}>Les données sont en cours de chargement depuis Supabase.</Text>
+          <TouchableOpacity onPress={() => router.push("/admin")} style={{ marginTop: 20, backgroundColor: Colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }}>
+            <Text style={{ color: "#fff", fontWeight: "800" }}>Ouvrir la console admin →</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   const dist = analytics.score_distribution;
   const totalDist = Object.values(dist).reduce((a, b) => a + b, 0) || 1;
   const tier = analytics.tier_distribution;
