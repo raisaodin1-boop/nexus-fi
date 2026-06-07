@@ -28,7 +28,7 @@ export default function HomeTab() {
     );
   }
 
-  if (user.role === "super_admin") return <AdminDashboard />;
+  if (user.role === "super_admin" || (user.role as string) === "admin") return <AdminDashboard />;
   if (user.role === "tontine_manager") return <ManagerDashboard />;
   return <MemberDashboard />;
 }

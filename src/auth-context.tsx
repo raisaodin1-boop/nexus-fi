@@ -44,11 +44,13 @@ async function fetchProfile(userId: string): Promise<Partial<User>> {
 
 async function buildUser(sbUser: any): Promise<User> {
   const profile = await fetchProfile(sbUser.id);
+  const rawRole = profile.role || sbUser.user_metadata?.role || "member";
+  const role = (rawRole === "admin" || rawRole === "super_admin") ? "super_admin" : rawRole as string;
   return {
     id: sbUser.id,
     email: sbUser.email ?? "",
     full_name: profile.full_name || sbUser.user_metadata?.full_name || "",
-    role: profile.role || sbUser.user_metadata?.role || "member",
+    role,
     is_email_verified: !!sbUser.email_confirmed_at,
     phone: profile.phone ?? sbUser.phone ?? null,
     gender: profile.gender ?? null,

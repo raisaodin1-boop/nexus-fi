@@ -215,9 +215,7 @@ export default function ProfileScreen() {
               {user?.role === "member" ? (
                 <SettingRow icon={<Sparkles color={Colors.accent} size={18} />} label="Demander une promotion Manager" onPress={() => router.push("/promotion-request")} testID="profile-promotion" borderColor={borderColor} txtColor={txt} />
               ) : null}
-              {user?.role === "super_admin" ? (
-                <SettingRow icon={<Shield color={Colors.accent} size={18} />} label="Console admin" onPress={() => router.push("/admin")} testID="profile-go-admin" borderColor={borderColor} txtColor={txt} />
-              ) : (
+              {(user?.role === "super_admin" || user?.role === "admin") ? null : (
                 <SettingRow icon={<Shield color={Colors.accent} size={18} />} label="Sécurité du compte" onPress={() => {}} disabled borderColor={borderColor} txtColor={txt} />
               )}
 
@@ -248,6 +246,24 @@ export default function ProfileScreen() {
               </View>
             </Card>
           </View>
+
+          {/* Admin Console — prominent card for super_admin */}
+          {(user?.role === "super_admin" || user?.role === "admin") ? (
+            <View style={{ paddingHorizontal: Spacing.xl, marginTop: Spacing.xl }}>
+              <TouchableOpacity onPress={() => router.push("/admin")} testID="profile-go-admin">
+                <LinearGradient colors={["#0D0F1A", "#1A1B2E"]} style={styles.adminCard}>
+                  <View style={styles.adminCardIcon}>
+                    <Shield color={Colors.accent} size={22} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.adminCardTitle}>Console Admin</Text>
+                    <Text style={styles.adminCardSub}>Utilisateurs · Tontines · KYC · Promotions</Text>
+                  </View>
+                  <ChevronRight color="rgba(255,255,255,0.4)" size={20} />
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          ) : null}
 
           {/* Logout */}
           <View style={{ paddingHorizontal: Spacing.xl, marginTop: Spacing.xl }}>
@@ -334,4 +350,8 @@ const styles = StyleSheet.create({
   toggleRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10 },
   toggleLabel: { flex: 1, fontSize: 14, fontWeight: "700" },
   versionTxt: { textAlign: "center", fontSize: 11, marginTop: 30, fontWeight: "600", letterSpacing: 1 },
+  adminCard: { flexDirection: "row", alignItems: "center", gap: 14, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: "rgba(245,200,66,0.25)" },
+  adminCardIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: "rgba(245,200,66,0.15)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(245,200,66,0.3)" },
+  adminCardTitle: { color: Colors.accent, fontWeight: "900", fontSize: 15, letterSpacing: 0.2 },
+  adminCardSub: { color: "rgba(255,255,255,0.45)", fontSize: 11, marginTop: 2 },
 });

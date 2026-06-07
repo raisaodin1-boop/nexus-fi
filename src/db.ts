@@ -599,6 +599,166 @@ export async function listPayments() {
 
 /* ── ADMIN ───────────────────────────────────────────────── */
 
+export async function getAdminAnalytics() {
+  const [
+    usersRes, activeTontinesRes, allTontinesRes, assocRes, coopRes,
+    savingsRes, contribRes, kycRes, eventsRes
+  ] = await Promise.all([
+    getSupabase().from("profiles").select("id, created_at, role", { count: "exact" }),
+    getSupabase().from("tontines").select("id", { count: "exact" }).eq("status", "active"),
+    getSupabase().from("tontines").select("id, status", { count: "exact" }),
+    getSupabase().from("associations").select("id", { count: "exact" }),
+    getSupabase().from("cooperatives").select("id", { count: "exact" }),
+    getSupabase().from("savings_goals").select("current_amount"),
+    getSupabase().from("tontine_contributions").select("amount"),
+    getSupabase().from("kyc_submissions").select("status"),
+    getSupabase().from("identity_events").select("created_at").order("created_at", { ascending: false }).limit(100),
+  ]);
+
+  const users = usersRes.data ?? [];
+  const now = Date.now();
+  const d7 = new Date(now - 7 * 86400000).toISOString();
+  const d30 = new Date(now - 30 * 86400000).toISOString();
+  const new7d = users.filter((u: any) => u.created_at >= d7).length;
+  const new30d = users.filter((u: any) => u.created_at >= d30).length;
+
+  const allTontines = allTontinesRes.data ?? [];
+  const closedTontines = allTontines.filter((t: any) => t.status === "closed").length;
+  const activeTontinesCount = allTontines.filter((t: any) => t.status === "active").length;
+
+  const savingsVol = (savingsRes.data ?? []).reduce((s: number, g: any) => s + Number(g.current_amount), 0);
+  const contribVol = (contribRes.data ?? []).reduce((s: number, c: any) => s + Number(c.amount), 0);
+
+  const kyc = kycRes.data ?? [];
+  const kycPending = kyc.filter((k: any) => k.status === "pending").length;
+  const kycApproved = kyc.filter((k: any) => k.status === "approved").length;
+
+  // User growth series (last 30 days)
+  const userSeries: { date: string; value: number }[] = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(now - i * 86400000).toISOString().slice(0, 10);
+    userSeries.push({ date: d, value: users.filter((u: any) => (u.created_at ?? "").slice(0, 10) <= d).length });
+  }
+
+  return {
+    users: { total: users.length, new_7d: new7d, new_30d: new30d, managers: users.filter((u: any) => u.role === "tontine_manager").length, admins: users.filter((u: any) => u.role === "super_admin" || u.role === "admin").length },
+    tontines: { total: allTontines.length, active: activeTontinesCount, closed: closedTontines },
+    associations: assocRes.count ?? 0,
+    cooperatives: coopRes.count ?? 0,
+    savings_volume: savingsVol,
+    contributions_volume: contribVol,
+    kyc: { pending: kycPending, approved: kycApproved },
+    user_series: userSeries,
+  };
+}
+
+export async function adminListUsers(search = "") {
+  let q = getSupabase().from("profiles").select("id, full_name, phone, role, created_at, kyc_status, country, city").order("created_at", { ascending: false }).limit(100);
+  if (search) q = q.ilike("full_name", `%${search}%`);
+  const { data, error } = await q;
+  throwSb(error);
+  return data ?? [];
+}
+
+export async function adminUpdateUserRole(userId: string, role: string) {
+  const { error } = await getSupabase().from("profiles").update({ role }).eq("id", userId);
+  throwSb(error);
+  return { detail: "Rôle mis à jour" };
+}
+
+export async function adminDeactivateUser(userId: string) {
+  const { error } = await getSupabase().from("profiles").update({ role: "suspended" }).eq("id", userId);
+  throwSb(error);
+  return { detail: "Utilisateur suspendu" };
+}
+
+export async function adminListTontines(search = "") {
+  let q = getSupabase()
+    .from("tontines")
+    .select("id, name, status, amount_per_cycle, frequency, max_members, invite_code, created_at, auto_close_date, profiles!tontines_owner_id_fkey(full_name), tontine_members(count)")
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (search) q = q.ilike("name", `%${search}%`);
+  const { data, error } = await q;
+  throwSb(error);
+  return (data ?? []).map((t: any) => ({
+    ...t,
+    owner_name: t.profiles?.full_name ?? "—",
+    members_count: t.tontine_members?.[0]?.count ?? 0,
+  }));
+}
+
+export async function adminUpdateTontine(id: string, updates: { status?: string; auto_close_date?: string | null }) {
+  const { error } = await getSupabase().from("tontines").update(updates).eq("id", id);
+  throwSb(error);
+  return { detail: "Tontine mise à jour" };
+}
+
+export async function adminDeleteTontine(id: string) {
+  await getSupabase().from("tontine_contributions").delete().eq("tontine_id", id);
+  await getSupabase().from("tontine_members").delete().eq("tontine_id", id);
+  const { error } = await getSupabase().from("tontines").delete().eq("id", id);
+  throwSb(error);
+  return { detail: "Tontine supprimée" };
+}
+
+export async function adminListKyc() {
+  const { data, error } = await getSupabase()
+    .from("kyc_submissions")
+    .select("id, user_id, status, submitted_at, profiles(full_name, phone, country)")
+    .order("submitted_at", { ascending: false })
+    .limit(100);
+  throwSb(error);
+  return (data ?? []).map((k: any) => ({
+    ...k,
+    full_name: k.profiles?.full_name ?? "—",
+    phone: k.profiles?.phone ?? "—",
+    country: k.profiles?.country ?? "—",
+  }));
+}
+
+export async function adminHandleKyc(userId: string, approve: boolean) {
+  const status = approve ? "approved" : "rejected";
+  await getSupabase().from("kyc_submissions").update({ status, reviewed_at: new Date().toISOString() }).eq("user_id", userId);
+  await getSupabase().from("profiles").update({ kyc_status: status }).eq("id", userId);
+  if (approve) {
+    await getSupabase().from("notifications").insert({ user_id: userId, title: "KYC approuvé ✅", body: "Votre identité a été vérifiée avec succès.", type: "kyc" });
+  } else {
+    await getSupabase().from("notifications").insert({ user_id: userId, title: "KYC refusé", body: "Votre dossier KYC a été refusé. Contactez le support.", type: "kyc" });
+  }
+  return { detail: `KYC ${approve ? "approuvé" : "refusé"}` };
+}
+
+export async function adminListPromotionRequests() {
+  const { data } = await getSupabase()
+    .from("notifications")
+    .select("id, user_id, body, created_at, is_read, profiles!notifications_user_id_fkey(full_name, phone)")
+    .eq("type", "promotion_request")
+    .order("created_at", { ascending: false })
+    .limit(50);
+  return (data ?? []).map((n: any) => ({
+    id: n.id,
+    user_id: n.user_id,
+    full_name: n.profiles?.full_name ?? "—",
+    phone: n.profiles?.phone ?? "—",
+    body: n.body,
+    created_at: n.created_at,
+    status: n.is_read ? "processed" : "pending",
+  }));
+}
+
+export async function adminHandlePromotion(userId: string, approve: boolean) {
+  if (approve) {
+    await getSupabase().from("profiles").update({ role: "tontine_manager" }).eq("id", userId);
+    await getSupabase().from("notifications").insert({ user_id: userId, title: "Promotion accordée 🎉", body: "Félicitations ! Vous êtes maintenant Tontine Manager.", type: "promotion" });
+  } else {
+    await getSupabase().from("notifications").insert({ user_id: userId, title: "Promotion refusée", body: "Votre demande de promotion Manager a été examinée et refusée.", type: "promotion" });
+  }
+  // Mark promotion request as read
+  await getSupabase().from("notifications").update({ is_read: true }).eq("user_id", userId).eq("type", "promotion_request");
+  return { detail: `Promotion ${approve ? "accordée" : "refusée"}` };
+}
+
 export async function getAdminStats() {
   const [users, tontines, kyc] = await Promise.all([
     getSupabase().from("profiles").select("*", { count: "exact", head: true }),
