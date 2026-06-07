@@ -45,7 +45,10 @@ export default function LoginScreen() {
     setError(null);
     setLoading(true);
     try {
-      await login(email.trim(), password);
+      const timeout = new Promise<never>((_, rej) =>
+        setTimeout(() => rej({ detail: "Délai dépassé. Vérifiez votre connexion internet." }), 15000)
+      );
+      await Promise.race([login(email.trim(), password), timeout]);
       // login() updates auth state via onAuthStateChange — navigate immediately
       router.replace("/(tabs)");
     } catch (e: any) {
