@@ -106,6 +106,9 @@ else:
         "https://hodix.app",
         "https://www.hodix.app",
         "https://hodixemergent-production.up.railway.app",
+        "https://web-production-7d726.up.railway.app",
+        "https://nexus-fi.vercel.app",
+        "https://nexus-fi-git-claude-blissful-s-179986-raisaodin1-boops-projects.vercel.app",
     ]
 
 app.add_middleware(
