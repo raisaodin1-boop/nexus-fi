@@ -12,7 +12,8 @@ import {
   ViewStyle,
   TextStyle,
 } from "react-native";
-import * as Haptics from "expo-haptics";
+import { Platform } from "react-native";
+const Haptics = Platform.OS !== "web" ? require("expo-haptics") : null;
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 
 interface BtnProps {
@@ -57,10 +58,12 @@ export function Button({
       disabled={disabled || loading}
       onPress={() => {
         try {
-          if (variant === "danger") {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          } else {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          if (Haptics) {
+            if (variant === "danger") {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            } else {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }
           }
         } catch {}
         onPress?.();
