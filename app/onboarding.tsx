@@ -136,6 +136,7 @@ export default function Onboarding() {
 
   const finish = async () => {
     await storage.setItem("hodix_onboarded", true);
+    await storage.setItem("hodix_welcome_seen", true);
     router.replace("/(auth)/login");
   };
 

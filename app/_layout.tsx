@@ -23,6 +23,7 @@ import { I18nProvider } from "@/src/i18n";
 import { ToastProvider } from "@/src/toast";
 import { api } from "@/src/api";
 import { OfflineBanner } from "@/src/offline";
+import { useFirstLaunch } from "@/src/use-first-launch";
 
 if (Platform.OS !== "web") {
   SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -75,6 +76,19 @@ function PushSetup() {
   return null;
 }
 
+function FirstLaunchGuard() {
+  const { isFirstLaunch } = useFirstLaunch();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isFirstLaunch === true) {
+      router.replace("/welcome");
+    }
+  }, [isFirstLaunch]);
+
+  return null;
+}
+
 function RootLayoutInner() {
   const [loaded, error] = useIconFonts();
 
@@ -90,7 +104,8 @@ function RootLayoutInner() {
   return (
     <>
       <PushSetup />
-      <StatusBar style="dark" />
+      <FirstLaunchGuard />
+      <StatusBar style="light" />
       <OfflineBanner />
       <Stack screenOptions={{ headerShown: false, animation: "fade" }} />
     </>
