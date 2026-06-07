@@ -1,5 +1,6 @@
 // HTTP client and Auth helpers for HODIX.
 import { storage } from "@/src/utils/storage";
+import { getSupabase } from "@/src/supabase";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
 
@@ -63,6 +64,18 @@ export class ApiError extends Error {
   }
 }
 
+async function getBestToken(): Promise<string | null> {
+  // Prefer stored Hodix JWT; fall back to live Supabase session token
+  const stored = await getAccessToken();
+  if (stored) return stored;
+  try {
+    const { data } = await getSupabase().auth.getSession();
+    return data.session?.access_token ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -73,7 +86,7 @@ async function request<T>(
     ...((options.headers as Record<string, string>) || {}),
   };
   if (withAuth) {
-    const token = await getAccessToken();
+    const token = await getBestToken();
     if (token) headers.Authorization = `Bearer ${token}`;
   }
   const url = `${BASE}/api${path}`;

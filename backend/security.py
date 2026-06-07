@@ -6,8 +6,9 @@ from typing import Any, Optional
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 
-JWT_SECRET = os.environ["JWT_SECRET_KEY"]
-JWT_REFRESH_SECRET = os.environ["JWT_REFRESH_SECRET_KEY"]
+# Use .get() with fallbacks so the server starts even without these env vars
+JWT_SECRET = os.environ.get("JWT_SECRET_KEY", "hodix-dev-secret-change-in-production")
+JWT_REFRESH_SECRET = os.environ.get("JWT_REFRESH_SECRET_KEY", "hodix-dev-refresh-secret-change-in-production")
 ACCESS_EXPIRE_MIN = int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES", 1440))
 REFRESH_EXPIRE_DAYS = int(os.environ.get("REFRESH_TOKEN_EXPIRE_DAYS", 30))
 ALGO = "HS256"
