@@ -1,0 +1,88 @@
+{
+  "theme": "LIGHT",
+  "archetype": "4 (Swiss & High-Contrast) + Premium African Trust Fintech",
+  "colors": {
+    "primary": "#0B1F3A",
+    "secondary": "#1D4ED8",
+    "accent": "#10B981",
+    "background": "#F8FAFC",
+    "surface": "#FFFFFF",
+    "text_main": "#0F172A",
+    "text_muted": "#64748B",
+    "border": "#E2E8F0"
+  },
+  "typography": {
+    "font_family": "Inter",
+    "headings": {
+      "strategy": "Clean, tight tracking, high-contrast weights for premium feel.",
+      "h1": "text-4xl tracking-tighter font-black text-[#0B1F3A]",
+      "h2": "text-3xl tracking-tight font-extrabold text-[#0B1F3A]",
+      "h3": "text-2xl tracking-tight font-bold text-[#0B1F3A]"
+    },
+    "body": {
+      "default": "text-base text-[#475569]",
+      "small": "text-sm text-[#64748B]"
+    }
+  },
+  "spacing_and_layout": {
+    "strategy": "Mobile-first native layout. Generous breathing room.",
+    "app_container": "flex-1 bg-[#F8FAFC]",
+    "section_padding": "px-6 py-8"
+  },
+  "components": {
+    "buttons": {
+      "primary": "w-full bg-[#1D4ED8] rounded-2xl py-4 px-6 flex-row items-center justify-center gap-2",
+      "secondary": "w-full bg-white rounded-2xl py-4 px-6 border border-[#E2E8F0] flex-row items-center justify-center gap-2",
+      "accent": "w-full bg-[#10B981] rounded-2xl py-4 px-6 flex-row items-center justify-center gap-2",
+      "text_primary": "text-white font-semibold text-center",
+      "text_secondary": "text-[#0B1F3A] font-semibold text-center"
+    },
+    "cards": {
+      "premium": "bg-white rounded-3xl p-6 border border-slate-100",
+      "dark": "bg-[#0B1F3A] rounded-3xl p-6 relative overflow-hidden"
+    },
+    "inputs": {
+      "default": "w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-[#0B1F3A]"
+    },
+    "trust_gauge": {
+      "strategy": "Use React Native Svg for a semi-circle gauge. Gradient stroke from Deep Blue to Emerald. Prominent score text in the center."
+    }
+  },
+  "icons_library": "lucide-react-native",
+  "motion_and_interactions": {
+    "strategy": "Use react-native-reanimated for smooth transitions.",
+    "splash": "Fade In + Scale Up + Glow Effect on Logo",
+    "tap_effect": "Wrap buttons in TouchableOpacity with activeOpacity={0.8}"
+  },
+  "image_assets": {
+    "onboarding_community": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/7ab80315-b235-4d0e-a8d6-cbb4bd791500/images/0c28df23e0bd7bce9114c855932bd74f368332d282cc676c491b3c0b95945340.png",
+      "description": "3D illustration of an elegant African community saving together.",
+      "category": "onboarding_slide"
+    },
+    "onboarding_trust_score": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/7ab80315-b235-4d0e-a8d6-cbb4bd791500/images/a8378a16bc0a6597a09d5f40dc82dd4a4830929ea00aa9a8d61254b0ab9b940a.png",
+      "description": "3D illustration of a glowing trust score gauge.",
+      "category": "onboarding_slide"
+    },
+    "onboarding_certificate": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/7ab80315-b235-4d0e-a8d6-cbb4bd791500/images/4c5671dced2472136990ea82bd0f82ac09f51544885ff55e3776a01c994c5b93.png",
+      "description": "3D illustration of a beautiful floating financial certificate.",
+      "category": "onboarding_slide"
+    },
+    "community_real": {
+      "url": "https://images.unsplash.com/photo-1694286066858-462538cd9886?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njl8MHwxfHNlYXJjaHwzfHxhZnJpY2FuJTIwcGVvcGxlJTIwc2F2aW5nJTIwbW9uZXklMjBzbWlsaW5nfGVufDB8fHx8MTc4MDE3MTQ5N3ww&ixlib=rb-4.1.0&q=85",
+      "description": "African woman smiling with community.",
+      "category": "groups_cover"
+    }
+  },
+  "instructions_to_main_agent": [
+    "This is an Expo React Native application using NativeWind for styling. Build native screens, NO web container hacks (do not use max-w-md mx-auto min-h-screen). Use standard NativeWind React Native classes (flex-1).",
+    "Implement an animated splash screen (Fade In + Scale Up + Glow) showing the Hodix logo and tagline 'Building Trust Together'.",
+    "Build the 6 onboarding slides using the provided 3D image assets. Use React Native Reanimated for swiping/transitioning.",
+    "Create bottom tab navigation using Expo Router or React Navigation with lucide-react-native icons.",
+    "The Trust Score UI should use react-native-svg for a semi-circle gauge visualization prominently colored with Emerald (#10B981) for positive scores, alongside risk category labels.",
+    "Financial Identity Profile should be styled like a premium certificate (deep blue background with gold/emerald accents, formal layout).",
+    "Use testID on ALL buttons, inputs, and clickable elements (e.g. testID='login-submit-button') instead of data-testid, as this is React Native."
+  ]
+}
