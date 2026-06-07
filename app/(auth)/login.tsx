@@ -81,8 +81,8 @@ export default function LoginScreen() {
       } else {
         router.replace("/(tabs)");
       }
-    } catch (e) {
-      const msg = e instanceof ApiError ? e.detail : "Connexion impossible.";
+    } catch (e: any) {
+      const msg = e instanceof ApiError ? e.detail : (e?.detail ?? e?.message ?? "Connexion impossible.");
       setError(msg);
     } finally {
       setLoading(false);
@@ -109,8 +109,8 @@ export default function LoginScreen() {
         return;
       }
       router.replace("/(tabs)");
-    } catch (e) {
-      const msg = e instanceof ApiError ? e.detail : "Connexion impossible.";
+    } catch (e: any) {
+      const msg = e instanceof ApiError ? e.detail : (e?.detail ?? e?.message ?? "Connexion impossible.");
       setError(msg);
     } finally {
       setBioLoading(false);
