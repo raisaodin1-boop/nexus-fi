@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -156,9 +157,6 @@ export default function LoginScreen() {
     </SafeAreaView>
   );
 }
-
-// Inline TextInput to avoid RN import conflict
-import { TextInput } from "react-native";
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bg },

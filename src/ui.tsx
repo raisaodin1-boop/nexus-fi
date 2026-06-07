@@ -3,6 +3,7 @@ import React, { useEffect, useRef } from "react";
 import {
   ActivityIndicator,
   Animated,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -12,8 +13,19 @@ import {
   ViewStyle,
   TextStyle,
 } from "react-native";
-import * as Haptics from "expo-haptics";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
+
+const triggerHaptic = Platform.OS !== "web"
+  ? (type: "impact" | "warning") => {
+      import("expo-haptics").then((Haptics) => {
+        if (type === "warning") {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+        } else {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        }
+      }).catch(() => {});
+    }
+  : (_type: "impact" | "warning") => {};
 
 interface BtnProps {
   label: string;
@@ -56,13 +68,7 @@ export function Button({
       activeOpacity={0.85}
       disabled={disabled || loading}
       onPress={() => {
-        try {
-          if (variant === "danger") {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          } else {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          }
-        } catch {}
+        triggerHaptic(variant === "danger" ? "warning" : "impact");
         onPress?.();
       }}
       testID={testID}
