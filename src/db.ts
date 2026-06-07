@@ -703,29 +703,46 @@ export async function adminDeactivateUser(userId: string) {
 }
 
 export async function adminListTontines(search = "") {
-  // Avoid columns that may not exist yet (status, auto_close_date)
   let q = getSupabase()
     .from("tontines")
-    .select("id, name, amount_per_cycle, frequency, max_members, invite_code, created_at, owner_id, tontine_members(count)")
+    .select("id, name, amount_per_cycle, frequency, max_members, invite_code, created_at, owner_id")
     .order("created_at", { ascending: false })
     .limit(100);
   if (search) q = q.ilike("name", `%${search}%`);
   const { data, error } = await q;
   if (error) return [];
 
-  // Try to also get status/auto_close_date (may not exist yet)
-  let statusMap: Record<string, { status: string; auto_close_date: string | null }> = {};
+  const tontines = data ?? [];
+  const ids = tontines.map((t: any) => t.id);
+
+  // Get member counts
+  const memberCounts: Record<string, number> = {};
+  try {
+    const { data: mc } = await getSupabase().from("tontine_members").select("tontine_id").in("tontine_id", ids);
+    for (const m of mc ?? []) memberCounts[m.tontine_id] = (memberCounts[m.tontine_id] ?? 0) + 1;
+  } catch {}
+
+  // Get owner names
+  const ownerIds = [...new Set(tontines.map((t: any) => t.owner_id))];
+  const ownerNames: Record<string, string> = {};
+  try {
+    const { data: owners } = await getSupabase().from("profiles").select("id, full_name").in("id", ownerIds);
+    for (const o of owners ?? []) ownerNames[o.id] = o.full_name ?? "—";
+  } catch {}
+
+  // Try to get status/auto_close_date (columns may not exist yet)
+  const statusMap: Record<string, { status: string; auto_close_date: string | null }> = {};
   try {
     const { data: sd } = await getSupabase().from("tontines").select("id, status, auto_close_date");
     if (sd) for (const t of sd) statusMap[t.id] = { status: t.status, auto_close_date: t.auto_close_date };
   } catch {}
 
-  return (data ?? []).map((t: any) => ({
+  return tontines.map((t: any) => ({
     ...t,
     status: statusMap[t.id]?.status ?? "active",
     auto_close_date: statusMap[t.id]?.auto_close_date ?? null,
-    owner_name: "—",
-    members_count: t.tontine_members?.[0]?.count ?? 0,
+    owner_name: ownerNames[t.owner_id] ?? "—",
+    members_count: memberCounts[t.id] ?? 0,
   }));
 }
 
@@ -746,15 +763,23 @@ export async function adminDeleteTontine(id: string) {
 export async function adminListKyc() {
   const { data, error } = await getSupabase()
     .from("kyc_submissions")
-    .select("id, user_id, status, submitted_at, profiles(full_name, phone, country)")
+    .select("id, user_id, status, submitted_at")
     .order("submitted_at", { ascending: false })
     .limit(100);
-  throwSb(error);
+  if (error) return [];
+
+  const userIds = [...new Set((data ?? []).map((k: any) => k.user_id))];
+  const profileMap: Record<string, any> = {};
+  try {
+    const { data: profiles } = await getSupabase().from("profiles").select("id, full_name, phone, country").in("id", userIds);
+    for (const p of profiles ?? []) profileMap[p.id] = p;
+  } catch {}
+
   return (data ?? []).map((k: any) => ({
     ...k,
-    full_name: k.profiles?.full_name ?? "—",
-    phone: k.profiles?.phone ?? "—",
-    country: k.profiles?.country ?? "—",
+    full_name: profileMap[k.user_id]?.full_name ?? "—",
+    phone: profileMap[k.user_id]?.phone ?? "—",
+    country: profileMap[k.user_id]?.country ?? "—",
   }));
 }
 
@@ -773,14 +798,22 @@ export async function adminHandleKyc(userId: string, approve: boolean) {
 export async function adminListPromotionRequests() {
   const { data } = await getSupabase()
     .from("notifications")
-    .select("id, user_id, body, created_at, is_read, profiles!notifications_user_id_fkey(full_name, phone)")
+    .select("id, user_id, body, created_at, is_read")
     .eq("type", "promotion_request")
     .order("created_at", { ascending: false })
     .limit(50);
+
+  const userIds = [...new Set((data ?? []).map((n: any) => n.user_id))];
+  const profileMap: Record<string, any> = {};
+  try {
+    const { data: profiles } = await getSupabase().from("profiles").select("id, full_name, phone").in("id", userIds);
+    for (const p of profiles ?? []) profileMap[p.id] = p;
+  } catch {}
+
   return (data ?? []).map((n: any) => ({
     id: n.id,
     user_id: n.user_id,
-    full_name: n.profiles?.full_name ?? "—",
+    full_name: profileMap[n.user_id]?.full_name ?? "—",
     phone: n.profiles?.phone ?? "—",
     body: n.body,
     created_at: n.created_at,
