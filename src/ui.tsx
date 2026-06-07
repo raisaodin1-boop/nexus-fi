@@ -98,15 +98,35 @@ interface FieldProps extends TextInputProps {
 }
 
 export function Field({ label, error, testID, style, ...rest }: FieldProps) {
+  const borderAnim = useRef(new Animated.Value(0)).current;
+
+  const onFocus = () => {
+    Animated.timing(borderAnim, { toValue: 1, duration: 180, useNativeDriver: false }).start();
+    rest.onFocus?.({} as any);
+  };
+  const onBlur = () => {
+    Animated.timing(borderAnim, { toValue: 0, duration: 180, useNativeDriver: false }).start();
+    rest.onBlur?.({} as any);
+  };
+
+  const borderColor = borderAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [error ? Colors.danger : Colors.border, error ? Colors.danger : Colors.secondary],
+  });
+
   return (
     <View style={{ marginBottom: Spacing.md }}>
       {label ? <Text style={styles.fieldLabel}>{label}</Text> : null}
-      <TextInput
-        placeholderTextColor={Colors.textSubtle}
-        style={[styles.input, error ? { borderColor: Colors.danger } : null, style]}
-        testID={testID}
-        {...rest}
-      />
+      <Animated.View style={{ borderWidth: 1.5, borderColor, borderRadius: Radius.md, backgroundColor: Colors.surface }}>
+        <TextInput
+          placeholderTextColor={Colors.textSubtle}
+          style={[styles.input, { borderWidth: 0, borderRadius: Radius.md }, style]}
+          testID={testID}
+          onFocus={onFocus}
+          onBlur={onBlur}
+          {...rest}
+        />
+      </Animated.View>
       {error ? <Text style={styles.fieldError}>{error}</Text> : null}
     </View>
   );
@@ -193,13 +213,25 @@ export function EmptyState({
   cta?: React.ReactNode;
   icon?: React.ReactNode;
 }) {
+  const scaleAnim = useRef(new Animated.Value(0.85)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, damping: 12, stiffness: 120 }),
+      Animated.timing(opacityAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
   return (
-    <View style={styles.empty}>
-      {icon ? <View style={{ marginBottom: Spacing.md }}>{icon}</View> : null}
+    <Animated.View style={[styles.empty, { opacity: opacityAnim, transform: [{ scale: scaleAnim }] }]}>
+      {icon
+        ? <View style={styles.emptyIconBox}>{icon}</View>
+        : <View style={styles.emptyIconBox}><View style={styles.emptyIconDefault} /></View>}
       <Text style={styles.emptyTitle}>{title}</Text>
       <Text style={styles.emptyDesc}>{description}</Text>
       {cta ? <View style={{ marginTop: Spacing.lg, width: "100%" }}>{cta}</View> : null}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -332,8 +364,92 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 22, fontWeight: "800", color: Colors.text, letterSpacing: -0.5 },
   statHint: { fontSize: 11, color: Colors.textSubtle, marginTop: 4 },
   empty: {
-    alignItems: "center", padding: Spacing.xxxl,
+    alignItems: "center", padding: Spacing.xxxl, gap: 8,
   },
-  emptyTitle: { fontSize: 17, fontWeight: "700", color: Colors.text, marginBottom: 6 },
-  emptyDesc: { fontSize: 14, color: Colors.textMuted, textAlign: "center", lineHeight: 20 },
+  emptyIconBox: {
+    width: 72, height: 72, borderRadius: 36,
+    backgroundColor: Colors.surfaceAlt, alignItems: "center", justifyContent: "center",
+    marginBottom: 8,
+  },
+  emptyIconDefault: { width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.border },
+  emptyTitle: { fontSize: 17, fontWeight: "800", color: Colors.text, textAlign: "center" },
+  emptyDesc: { fontSize: 14, color: Colors.textMuted, textAlign: "center", lineHeight: 20, maxWidth: "85%" },
 });
+
+// ─── Confetti overlay ─────────────────────────────────────────────────────────
+
+const CONFETTI_COLORS = ["#10B981", "#1D4ED8", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899"];
+
+interface ConfettiParticle {
+  x: Animated.Value;
+  y: Animated.Value;
+  opacity: Animated.Value;
+  rotate: Animated.Value;
+  color: string;
+  size: number;
+  startX: number;
+}
+
+import { Dimensions } from "react-native";
+const { width: SW, height: SH } = Dimensions.get("window");
+
+export function ConfettiOverlay({ visible }: { visible: boolean }) {
+  const particles = useRef<ConfettiParticle[]>(
+    Array.from({ length: 28 }, (_, i) => ({
+      x: new Animated.Value(0),
+      y: new Animated.Value(0),
+      opacity: new Animated.Value(0),
+      rotate: new Animated.Value(0),
+      color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+      size: 8 + (i % 5) * 2,
+      startX: (i / 28) * SW,
+    }))
+  ).current;
+
+  useEffect(() => {
+    if (!visible) return;
+    particles.forEach((p, i) => {
+      p.x.setValue(0);
+      p.y.setValue(0);
+      p.opacity.setValue(1);
+      p.rotate.setValue(0);
+      const delay = i * 40;
+      Animated.parallel([
+        Animated.timing(p.x, { toValue: (Math.random() - 0.5) * 160, duration: 1200, delay, useNativeDriver: true }),
+        Animated.timing(p.y, { toValue: SH * 0.6 + Math.random() * SH * 0.3, duration: 1400, delay, useNativeDriver: true }),
+        Animated.timing(p.rotate, { toValue: 6, duration: 1200, delay, useNativeDriver: true }),
+        Animated.sequence([
+          Animated.delay(delay + 800),
+          Animated.timing(p.opacity, { toValue: 0, duration: 400, useNativeDriver: true }),
+        ]),
+      ]).start();
+    });
+  }, [visible]);
+
+  if (!visible) return null;
+
+  return (
+    <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none" }} pointerEvents="none">
+      {particles.map((p, i) => (
+        <Animated.View
+          key={i}
+          style={{
+            position: "absolute",
+            top: SH * 0.2,
+            left: p.startX,
+            width: p.size,
+            height: p.size,
+            borderRadius: p.size / 4,
+            backgroundColor: p.color,
+            opacity: p.opacity,
+            transform: [
+              { translateX: p.x },
+              { translateY: p.y },
+              { rotate: p.rotate.interpolate({ inputRange: [0, 6], outputRange: ["0deg", "720deg"] }) },
+            ],
+          }}
+        />
+      ))}
+    </View>
+  );
+}
