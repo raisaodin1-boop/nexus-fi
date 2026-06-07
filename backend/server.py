@@ -62,7 +62,20 @@ async def root():
 
 @api_router.get("/health")
 async def health():
-    return {"status": "ok"}
+    db_ok = False
+    db_err = ""
+    try:
+        db = get_db()
+        await db.command("ping")
+        db_ok = True
+    except Exception as e:
+        db_err = str(e)
+    return {
+        "status": "ok" if db_ok else "degraded",
+        "db": "connected" if db_ok else f"error: {db_err}",
+        "app": "HODIX",
+        "version": "1.0.0",
+    }
 
 
 api_router.include_router(auth_router)
@@ -89,36 +102,28 @@ api_router.include_router(referral_router)
 app.include_router(api_router)
 app.include_router(ws_router)
 
-# CORS — allow specific origins in production, wildcard only in dev
+# CORS — regex covers all vercel.app, railway.app, localhost, Expo
+# NOTE: allow_credentials=True + allow_origins=["*"] is invalid in Starlette,
+# so we always use allow_origin_regex and keep allow_origins=[].
 _raw_origins = os.environ.get("ALLOWED_ORIGINS", "").strip()
 if _raw_origins:
-    _allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+    _explicit_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+    _origin_regex = None
 else:
-    # Dev fallback: allow localhost variants + Expo
-    _allowed_origins = [
-        "http://localhost:8081",
-        "http://localhost:8082",
-        "http://localhost:8083",
-        "http://localhost:3000",
-        "http://127.0.0.1:8081",
-        "http://127.0.0.1:8082",
-        "http://127.0.0.1:8083",
-        "http://127.0.0.1:3000",
-        "exp://localhost:8081",
-        "exp://localhost:8082",
-        "https://hodix.app",
-        "https://www.hodix.app",
-        "https://hodixemergent-production.up.railway.app",
-        "https://web-production-7d726.up.railway.app",
-        "https://nexus-fi.vercel.app",
-        "https://nexus-fi-eta.vercel.app",
-        "https://nexus-fi-git-claude-blissful-s-179986-raisaodin1-boops-projects.vercel.app",
-    ]
+    _explicit_origins = []
+    _origin_regex = (
+        r"https?://(localhost|127\.0\.0\.1)(:\d+)?"
+        r"|exp://localhost(:\d+)?"
+        r"|https://[a-zA-Z0-9][a-zA-Z0-9\-]*\.vercel\.app"
+        r"|https://[a-zA-Z0-9][a-zA-Z0-9\-]*\.up\.railway\.app"
+        r"|https://(www\.)?hodix\.app"
+    )
 
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=_allowed_origins,
+    allow_origins=_explicit_origins,
+    allow_origin_regex=_origin_regex,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Idempotency-Key"],
 )
