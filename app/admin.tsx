@@ -46,19 +46,10 @@ export default function AdminScreen() {
   const [search, setSearch] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  if (user?.role !== "super_admin") {
-    return (
-      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-        <View style={styles.center}>
-          <Shield color={Colors.danger} size={48} />
-          <Text style={styles.denied}>Accès refusé</Text>
-          <Text style={styles.deniedSub}>Réservé aux super administrateurs.</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const isAdmin = user?.role === "super_admin" || (user?.role as string) === "admin";
 
   const load = useCallback(async () => {
+    if (!isAdmin) return;
     setLoading(true);
     try {
       const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 15000));
@@ -84,6 +75,18 @@ export default function AdminScreen() {
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  if (!isAdmin) {
+    return (
+      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+        <View style={styles.center}>
+          <Shield color={Colors.danger} size={48} />
+          <Text style={styles.denied}>Accès refusé</Text>
+          <Text style={styles.deniedSub}>Réservé aux super administrateurs.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const confirm = (title: string, msg: string, onOk: () => void) => {
     if (Platform.OS === "web") {
