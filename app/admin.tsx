@@ -646,7 +646,4 @@ const styles = StyleSheet.create({
 
   kycBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10 },
   kycBtnTxt: { color: "#fff", fontSize: 13, fontWeight: "800" },
-
-  surfaceAlt: Colors.surfaceAlt,
-  successLight: Colors.successLight,
 });
