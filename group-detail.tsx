@@ -1,0 +1,363 @@
+// Group detail (shared for tontines/associations/cooperatives)
+import { useCallback, useState } from "react";
+import {
+  ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Platform, ScrollView,
+  Share, StyleSheet, Text, TouchableOpacity, View,
+} from "react-native";
+import { useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
+import { Copy, Crown, Users as UsersIcon, ChevronRight, CreditCard, MessageSquare } from "lucide-react-native";
+
+import { api, ApiError, formatXAF } from "@/src/api";
+import { Button, Card, Field } from "@/src/ui";
+import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
+
+interface Member {
+  id: string; user_id: string; full_name: string; role: string;
+  rotation_position?: number; has_received?: boolean;
+  status?: "a_jour" | "en_retard" | "suspendu";
+  cycles_paid?: number;
+}
+interface Contrib { id: string; user_id: string; full_name: string; amount: number; created_at: string; cycle?: number }
+
+interface Props {
+  endpoint: string; // "/tontines/<id>" etc.
+  contributeEndpoint: string;
+  detailKey: "tontine" | "association" | "cooperative";
+  testIDPrefix: string;
+  showRotation?: boolean;
+  advanceEndpoint?: string;
+}
+
+export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testIDPrefix, showRotation, advanceEndpoint }: Props) {
+  const router = useRouter();
+  const [data, setData] = useState<any | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [amount, setAmount] = useState("");
+  const [memberId, setMemberId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const d = await api.get<any>(endpoint);
+      setData(d);
+      if (d?.[detailKey]) {
+        // Default to current user as member
+      }
+    } catch {}
+    setLoading(false);
+  }, [endpoint, detailKey]);
+
+  useEffectOnFocus(load);
+
+  if (loading || !data) {
+    return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator color={Colors.secondary} /></View></SafeAreaView>;
+  }
+
+  const item = data[detailKey];
+  const isAdmin = data.is_admin;
+  const members: Member[] = data.members ?? [];
+  const contribs: Contrib[] = data.contributions ?? [];
+
+  const shareWhatsApp = async () => {
+    const appLink = "https://hodix.app";
+    const message = `🏦 Rejoignez la tontine *"${item.name}"* sur Hodix !\n\n📌 Code d'invitation : *${item.invite_code}*\n\n📱 Téléchargez l'app : ${appLink}\n\nOu rejoignez directement : hodix://join?code=${item.invite_code}`;
+    const url = `whatsapp://send?text=${encodeURIComponent(message)}`;
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+      if (canOpen) {
+        await Linking.openURL(url);
+      } else {
+        await Share.share({ message });
+      }
+    } catch {
+      await Share.share({ message });
+    }
+  };
+
+  const shareGeneric = async () => {
+    try {
+      await Share.share({
+        message: `Rejoignez "${item.name}" sur Hodix avec le code : ${item.invite_code} — https://hodix.app`,
+      });
+    } catch {}
+  };
+
+  const contribute = async () => {
+    const amt = parseFloat(amount);
+    if (!amt || amt <= 0) { setError("Montant invalide"); return; }
+    const target = memberId ?? members[0]?.user_id;
+    if (!target) { setError("Aucun membre"); return; }
+    setError(null); setBusy(true);
+    try {
+      await api.post(contributeEndpoint, { member_user_id: target, amount: amt });
+      setAmount("");
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.detail : "Erreur");
+    } finally { setBusy(false); }
+  };
+
+  const advanceRotation = async () => {
+    if (!advanceEndpoint) return;
+    setBusy(true);
+    try {
+      await api.post(advanceEndpoint);
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.detail : "Erreur");
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
+          <TouchableOpacity onPress={() => router.back()} testID={`${testIDPrefix}-back`}><Text style={styles.back}>← Retour</Text></TouchableOpacity>
+
+          <LinearGradient colors={[Colors.primary, Colors.gradMid]} style={[styles.hero, Shadow.cardDark]}>
+            <Text style={styles.heroName}>{item.name}</Text>
+            {item.description ? <Text style={styles.heroDesc}>{item.description}</Text> : null}
+            <View style={styles.heroStats}>
+              <View style={styles.heroStat}>
+                <Text style={styles.heroStatVal}>{item.members_count}</Text>
+                <Text style={styles.heroStatLbl}>Membres</Text>
+              </View>
+              <View style={styles.heroStat}>
+                <Text style={styles.heroStatVal}>
+                  {formatXAF(item.total_collected ?? item.total_capital ?? 0, item.currency)}
+                </Text>
+                <Text style={styles.heroStatLbl}>Collecté</Text>
+              </View>
+              {item.contribution_amount ? (
+                <View style={styles.heroStat}>
+                  <Text style={styles.heroStatVal}>{formatXAF(item.contribution_amount, item.currency)}</Text>
+                  <Text style={styles.heroStatLbl}>Contribution</Text>
+                </View>
+              ) : null}
+            </View>
+            {showRotation && data.compliance_pct !== undefined ? (
+              <View style={{ marginTop: 14 }}>
+                <Text style={styles.compLbl}>Conformité {data.compliance_pct}%</Text>
+                <View style={styles.compBar}><View style={[styles.compFill, { width: `${data.compliance_pct}%` }]} /></View>
+              </View>
+            ) : null}
+            <View style={styles.codeRowContainer}>
+              <TouchableOpacity onPress={shareGeneric} style={[styles.codeRow, { flex: 1 }]} testID={`${testIDPrefix}-share-code`}>
+                <Copy color="#fff" size={14} />
+                <Text style={styles.codeText}>{item.invite_code}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={shareWhatsApp} style={styles.whatsappCodeBtn} testID={`${testIDPrefix}-share-whatsapp`}>
+                <MessageSquare color="#fff" size={14} />
+                <Text style={styles.whatsappCodeBtnText}>WhatsApp ▶</Text>
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
+
+          <TouchableOpacity onPress={shareWhatsApp} style={styles.whatsappBtn} testID={`${testIDPrefix}-whatsapp-share`}>
+            <MessageSquare color="#fff" size={18} />
+            <Text style={styles.whatsappBtnText}>📲 Partager le lien sur WhatsApp</Text>
+          </TouchableOpacity>
+
+          {isAdmin && showRotation && advanceEndpoint ? (
+            <View style={{ marginTop: 16, gap: 10 }}>
+              <Button testID={`${testIDPrefix}-advance`} label={`Faire avancer le cycle (Cycle ${item.current_cycle})`} variant="accent" onPress={advanceRotation} loading={busy} />
+              <Button
+                testID={`${testIDPrefix}-send-reminders`}
+                label="Envoyer rappels SMS aux membres"
+                variant="secondary"
+                icon={<MessageSquare color={Colors.primary} size={16} />}
+                onPress={async () => {
+                  try {
+                    const r = await api.post<any>(`/sms/tontines/${item.id}/reminders`);
+                    Alert.alert(
+                      "Rappels envoyés",
+                      `${r.sent} envoyés · ${r.skipped} ignorés (n° manquant) · ${r.failed} échecs.`,
+                    );
+                  } catch (e: any) {
+                    Alert.alert("Erreur", e?.detail ?? "Échec");
+                  }
+                }}
+              />
+            </View>
+          ) : null}
+
+          {detailKey === "tontine" && item.contribution_amount ? (
+            <View style={{ marginTop: 16 }}>
+              <Button
+                testID={`${testIDPrefix}-pay-stripe`}
+                label={`💳 Payer ma contribution — ${formatXAF(item.contribution_amount, item.currency)}`}
+                variant="accent"
+                icon={<CreditCard color="#fff" size={18} />}
+                onPress={() => router.push({
+                  pathname: "/payments/pay",
+                  params: { tontine_id: item.id, amount: String(item.contribution_amount) },
+                } as any)}
+              />
+              <Text style={styles.paySubLabel}>Paiement sécurisé via Orange Money, MTN ou carte bancaire</Text>
+            </View>
+          ) : null}
+
+          {detailKey === "tontine" ? (
+            isAdmin ? (
+              <>
+                <Text style={styles.section}>Enregistrer une contribution manuelle (admin)</Text>
+                <Text style={styles.adminNote}>Réservé aux contributions en espèces vérifiées.</Text>
+                <Card>
+                  <Field testID={`${testIDPrefix}-amount`} label="Montant" placeholder={item.contribution_amount?.toString() ?? "10000"} value={amount} onChangeText={setAmount} keyboardType="number-pad" />
+                  <Text style={styles.fieldLbl}>Membre concerné</Text>
+                  <View style={{ gap: 6, marginBottom: 12 }}>
+                    {members.map((m) => {
+                      const active = (memberId ?? members[0]?.user_id) === m.user_id;
+                      return (
+                        <TouchableOpacity
+                          testID={`${testIDPrefix}-member-${m.user_id}`}
+                          key={m.id}
+                          onPress={() => setMemberId(m.user_id)}
+                          style={[styles.memberOpt, active ? { borderColor: Colors.secondary, backgroundColor: "#EFF6FF" } : null]}
+                        >
+                          <Text style={styles.memberOptText}>{m.full_name}{m.role === "admin" ? " · Admin" : ""}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  {error ? <Text style={styles.error}>{error}</Text> : null}
+                  <Button testID={`${testIDPrefix}-contribute`} label="Enregistrer la contribution" onPress={contribute} loading={busy} />
+                </Card>
+              </>
+            ) : null
+          ) : (
+            <>
+              <Text style={styles.section}>Enregistrer une contribution</Text>
+              <Card>
+                <Field testID={`${testIDPrefix}-amount`} label="Montant" placeholder={item.contribution_amount?.toString() ?? "10000"} value={amount} onChangeText={setAmount} keyboardType="number-pad" />
+                <Text style={styles.fieldLbl}>Membre concerné</Text>
+                <View style={{ gap: 6, marginBottom: 12 }}>
+                  {members.map((m) => {
+                    const active = (memberId ?? members[0]?.user_id) === m.user_id;
+                    return (
+                      <TouchableOpacity
+                        testID={`${testIDPrefix}-member-${m.user_id}`}
+                        key={m.id}
+                        onPress={() => setMemberId(m.user_id)}
+                        style={[styles.memberOpt, active ? { borderColor: Colors.secondary, backgroundColor: "#EFF6FF" } : null]}
+                      >
+                        <Text style={styles.memberOptText}>{m.full_name}{m.role === "admin" ? " · Admin" : ""}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                {error ? <Text style={styles.error}>{error}</Text> : null}
+                <Button testID={`${testIDPrefix}-contribute`} label="Enregistrer la contribution" onPress={contribute} loading={busy} />
+              </Card>
+            </>
+          )}
+
+          <Text style={styles.section}>Membres ({members.length})</Text>
+          <View style={{ gap: 8 }}>
+            {members.map((m) => {
+              const statusMeta = m.status === "suspendu"
+                ? { c: Colors.danger, lbl: "Suspendu" }
+                : m.status === "en_retard"
+                ? { c: Colors.warning, lbl: "En retard" }
+                : { c: Colors.accent, lbl: "À jour" };
+              return (
+                <Card key={m.id} style={styles.memberRow}>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarLetter}>{m.full_name?.[0]?.toUpperCase()}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.memberName}>{m.full_name}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
+                      {m.role === "admin" ? <Crown color={Colors.accent} size={12} /> : <UsersIcon color={Colors.textSubtle} size={12} />}
+                      <Text style={styles.memberRole}>{m.role === "admin" ? "Administrateur" : "Membre"}</Text>
+                      {showRotation && m.rotation_position ? (
+                        <Text style={styles.rotPos}>· #{m.rotation_position}{m.has_received ? " ✓" : ""}</Text>
+                      ) : null}
+                    </View>
+                  </View>
+                  {showRotation && m.status ? (
+                    <View style={[styles.statusPill, { backgroundColor: statusMeta.c + "20", borderColor: statusMeta.c }]}>
+                      <Text style={[styles.statusText, { color: statusMeta.c }]}>{statusMeta.lbl}</Text>
+                    </View>
+                  ) : null}
+                </Card>
+              );
+            })}
+          </View>
+
+          <Text style={styles.section}>Contributions ({contribs.length})</Text>
+          {contribs.length === 0 ? (
+            <Card><Text style={styles.empty}>Aucune contribution pour l'instant.</Text></Card>
+          ) : (
+            <View style={{ gap: 8 }}>
+              {contribs.slice(0, 30).map((c) => (
+                <Card key={c.id} style={styles.contribRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.contribName}>{c.full_name}</Text>
+                    <Text style={styles.contribDate}>{new Date(c.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })}{c.cycle ? ` · Cycle ${c.cycle}` : ""}</Text>
+                  </View>
+                  <Text style={styles.contribAmt}>+{formatXAF(c.amount, item.currency)}</Text>
+                </Card>
+              ))}
+            </View>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+// Tiny helper to call load on focus without circular imports
+import { useFocusEffect } from "expo-router";
+function useEffectOnFocus(fn: () => void) {
+  useFocusEffect(useCallback(() => { fn(); }, [fn]));
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: Colors.bg },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  back: { color: Colors.textMuted, fontWeight: "600", marginBottom: 12 },
+  hero: { borderRadius: Radius.xxl, padding: 22, overflow: "hidden" },
+  heroName: { color: "#fff", fontSize: 22, fontWeight: "900", letterSpacing: -0.3 },
+  heroDesc: { color: "rgba(255,255,255,0.75)", fontSize: 13, marginTop: 6, lineHeight: 18 },
+  heroStats: { flexDirection: "row", gap: 16, marginTop: 18 },
+  heroStat: { flex: 1 },
+  heroStatVal: { color: Colors.accent, fontSize: 16, fontWeight: "900", letterSpacing: -0.3 },
+  heroStatLbl: { color: "rgba(255,255,255,0.6)", fontSize: 11, marginTop: 2, fontWeight: "600", letterSpacing: 0.3 },
+  compLbl: { color: "rgba(255,255,255,0.8)", fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
+  compBar: { marginTop: 6, height: 6, backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 3, overflow: "hidden" },
+  compFill: { height: "100%", backgroundColor: Colors.accent, borderRadius: 3 },
+  codeRowContainer: { flexDirection: "row", gap: 8, marginTop: 16 },
+  codeRow: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(16,185,129,0.18)", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
+  codeText: { color: "#fff", fontWeight: "800", letterSpacing: 2, flex: 1 },
+  codeShare: { color: Colors.accent, fontWeight: "700", fontSize: 12 },
+  whatsappCodeBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#25D366", paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12 },
+  whatsappCodeBtnText: { color: "#fff", fontWeight: "800", fontSize: 12 },
+  whatsappBtn: { backgroundColor: "#25D366", borderRadius: 14, padding: 14, flexDirection: "row", gap: 10, alignItems: "center", marginTop: 12 },
+  whatsappBtnText: { color: "#fff", fontWeight: "800", fontSize: 15 },
+  paySubLabel: { color: Colors.textMuted, fontSize: 12, fontWeight: "600", textAlign: "center", marginTop: 6 },
+  adminNote: { color: Colors.textMuted, fontSize: 12, fontWeight: "600", marginBottom: 8, marginTop: -4 },
+  section: { color: Colors.text, fontSize: 14, fontWeight: "800", marginTop: 24, marginBottom: 10, letterSpacing: -0.3 },
+  fieldLbl: { color: Colors.text, fontSize: 13, fontWeight: "700", marginBottom: 6 },
+  memberOpt: { padding: 10, borderRadius: 10, borderWidth: 1, borderColor: Colors.border },
+  memberOptText: { color: Colors.text, fontWeight: "600", fontSize: 13 },
+  empty: { color: Colors.textMuted, textAlign: "center", padding: 20, fontSize: 13 },
+  error: { backgroundColor: "#FEE2E2", color: Colors.danger, padding: 10, borderRadius: 12, fontSize: 13, fontWeight: "600", marginBottom: 12 },
+  memberRow: { flexDirection: "row", alignItems: "center", padding: 12, gap: 12 },
+  avatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: Colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
+  avatarLetter: { color: Colors.primary, fontWeight: "900", fontSize: 14 },
+  memberName: { color: Colors.text, fontWeight: "800", fontSize: 14 },
+  memberRole: { color: Colors.textMuted, fontSize: 11, fontWeight: "600" },
+  rotPos: { color: Colors.textMuted, fontSize: 11, fontWeight: "600" },
+  contribRow: { flexDirection: "row", alignItems: "center", padding: 12 },
+  contribName: { color: Colors.text, fontWeight: "700", fontSize: 13 },
+  contribDate: { color: Colors.textMuted, fontSize: 11, marginTop: 2, fontWeight: "500" },
+  contribAmt: { color: Colors.accentDark, fontWeight: "800", fontSize: 14 },
+  statusPill: {
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, borderWidth: 1,
+  },
+  statusText: { fontSize: 10, fontWeight: "900", letterSpacing: 0.4 },
+});
