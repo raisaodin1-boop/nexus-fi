@@ -215,7 +215,20 @@ export default function ProfileScreen() {
               {user?.role === "member" ? (
                 <SettingRow icon={<Sparkles color={Colors.accent} size={18} />} label="Demander une promotion Manager" onPress={() => router.push("/promotion-request")} testID="profile-promotion" borderColor={borderColor} txtColor={txt} />
               ) : null}
-              {(user?.role === "super_admin" || user?.role === "admin") ? null : (
+              {(user?.role === "super_admin" || user?.role === "admin") ? (
+                <TouchableOpacity onPress={() => router.push("/admin")} testID="profile-go-admin">
+                  <LinearGradient colors={["#0D0F1A", "#1A1B2E"]} style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 14, borderRadius: 14, marginBottom: 4 }}>
+                    <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: "rgba(245,200,66,0.2)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(245,200,66,0.4)" }}>
+                      <Shield color={Colors.accent} size={18} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: Colors.accent, fontWeight: "900", fontSize: 14, letterSpacing: 0.3 }}>Console Admin</Text>
+                      <Text style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, marginTop: 1 }}>Tableau de bord super administrateur</Text>
+                    </View>
+                    <ChevronRight color="rgba(255,255,255,0.4)" size={18} />
+                  </LinearGradient>
+                </TouchableOpacity>
+              ) : (
                 <SettingRow icon={<Shield color={Colors.accent} size={18} />} label="Sécurité du compte" onPress={() => {}} disabled borderColor={borderColor} txtColor={txt} />
               )}
 
