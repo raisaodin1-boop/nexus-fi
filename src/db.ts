@@ -6,10 +6,25 @@ import { getSupabase } from "@/src/supabase";
 
 /* ── helpers ─────────────────────────────────────────────── */
 
+// uid() reads from local session storage — NO network round-trip
 async function uid(): Promise<string> {
-  const { data } = await getSupabase().auth.getUser();
-  if (!data.user) throw { status: 401, detail: "Non authentifié" };
-  return data.user.id;
+  const { data } = await getSupabase().auth.getSession();
+  if (!data.session?.user) throw { status: 401, detail: "Non authentifié" };
+  return data.session.user.id;
+}
+
+// Simple in-memory cache with TTL
+const _cache = new Map<string, { v: any; ts: number }>();
+async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
+  const hit = _cache.get(key);
+  if (hit && Date.now() - hit.ts < ttlMs) return hit.v as T;
+  const v = await fn();
+  _cache.set(key, { v, ts: Date.now() });
+  return v;
+}
+export function invalidateCache(prefix?: string) {
+  if (!prefix) { _cache.clear(); return; }
+  for (const k of _cache.keys()) if (k.startsWith(prefix)) _cache.delete(k);
 }
 
 function inviteCode(len = 6): string {
@@ -320,6 +335,7 @@ export async function contributeFund(id: string, amount: number) {
 
 export async function getSavingsSummary() {
   const me = await uid();
+  return cached(`savings-summary-${me}`, 60_000, async () => {
   const { data } = await getSupabase()
     .from("savings_goals")
     .select("current_amount, target_amount, is_active")
@@ -330,18 +346,24 @@ export async function getSavingsSummary() {
   const total_target = goals.reduce((s: number, g: any) => s + Number(g.target_amount), 0);
   const progress_pct = total_target > 0 ? Math.round((total_saved / total_target) * 100) : 0;
   return { total_saved, total_target, active_goals: goals.length, progress_pct, currency: "XAF" };
+  });
 }
 
 export async function getTrustScore() {
-  const identity = await getIdentity();
-  return identity.trust_score;
+  const me = await uid();
+  return cached(`trust-score-${me}`, 120_000, async () => {
+    const identity = await getIdentity();
+    return identity.trust_score;
+  });
 }
 
 export async function getInsights() {
-  // AI insights stub — returns tips from trust score
-  const identity = await getIdentity();
-  const tips = identity.trust_score.tips ?? [];
-  return { items: tips.map((text: string) => ({ text, kind: "tip" })) };
+  const me = await uid();
+  return cached(`insights-${me}`, 120_000, async () => {
+    const identity = await getIdentity();
+    const tips = identity.trust_score.tips ?? [];
+    return { items: tips.map((text: string) => ({ text, kind: "tip" })) };
+  });
 }
 
 export async function getSavingsSeries(days = 14) {
@@ -367,14 +389,16 @@ export async function getSavingsSeries(days = 14) {
 
 export async function listSavings() {
   const me = await uid();
-  const { data, error } = await getSupabase()
-    .from("savings_goals")
-    .select("*")
-    .eq("user_id", me)
-    .eq("is_active", true)
-    .order("created_at", { ascending: false });
-  throwSb(error);
-  return data ?? [];
+  return cached(`savings-${me}`, 60_000, async () => {
+    const { data, error } = await getSupabase()
+      .from("savings_goals")
+      .select("*")
+      .eq("user_id", me)
+      .eq("is_active", true)
+      .order("created_at", { ascending: false });
+    throwSb(error);
+    return data ?? [];
+  });
 }
 
 export async function getSaving(id: string) {
@@ -404,6 +428,8 @@ export async function depositSaving(id: string, amount: number, note?: string) {
   const total = (txs ?? []).reduce((s: number, t: any) => s + Number(t.amount), 0);
   await getSupabase().from("savings_goals").update({ current_amount: total }).eq("id", id);
   await addIdentityEvent(me, "savings_deposit", amount >= 50000 ? 1 : 0.5);
+  invalidateCache(`savings-${me}`);
+  invalidateCache(`identity-${me}`);
   return { detail: "Dépôt enregistré" };
 }
 
@@ -415,7 +441,8 @@ async function addIdentityEvent(user_id: string, event_type: string, points: num
 
 export async function getIdentity() {
   const me = await uid();
-  const { data: sbUser } = await getSupabase().auth.getUser();
+  return cached(`identity-${me}`, 90_000, async () => {
+  const { data: sbUser } = await getSupabase().auth.getSession();
 
   const [profileRes, savingsRes, tontineRes, assocRes, coopRes, eventsRes, txRes] = await Promise.all([
     getSupabase().from("profiles").select("*").eq("id", me).single(),
@@ -440,7 +467,7 @@ export async function getIdentity() {
   const signupBonus = events.filter((e: any) => e.event_type === "signup_bonus").reduce((s: number, e: any) => s + e.points_delta, 0);
   const txPoints = events.filter((e: any) => e.event_type !== "signup_bonus" && e.event_type !== "yearly_bonus").reduce((s: number, e: any) => s + e.points_delta, 0);
 
-  const createdAt = sbUser.user?.created_at ?? new Date().toISOString();
+  const createdAt = sbUser.session?.user?.created_at ?? new Date().toISOString();
   const ageMs = Date.now() - new Date(createdAt).getTime();
   const ageDays = Math.floor(ageMs / 86400000);
   const yearlyBonus = Math.floor(ageDays / 365) * 5;
@@ -461,8 +488,8 @@ export async function getIdentity() {
 
   return {
     user: {
-      full_name: profile.full_name ?? sbUser.user?.user_metadata?.full_name ?? "",
-      email: sbUser.user?.email ?? "",
+      full_name: profile.full_name ?? sbUser.session?.user?.user_metadata?.full_name ?? "",
+      email: sbUser.session?.user?.email ?? "",
       phone: profile.phone ?? null,
       country: profile.country ?? null,
       city: profile.city ?? null,
@@ -502,6 +529,7 @@ export async function getIdentity() {
     },
     currency: "XAF",
   };
+  });
 }
 
 export async function getIdentityProfile() {
@@ -544,14 +572,16 @@ export async function getIdentityProfile() {
 
 export async function listNotifications() {
   const me = await uid();
-  const { data, error } = await getSupabase()
-    .from("notifications")
-    .select("*")
-    .eq("user_id", me)
-    .order("created_at", { ascending: false })
-    .limit(50);
-  throwSb(error);
-  return data ?? [];
+  return cached(`notifs-${me}`, 30_000, async () => {
+    const { data, error } = await getSupabase()
+      .from("notifications")
+      .select("*")
+      .eq("user_id", me)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    throwSb(error);
+    return data ?? [];
+  });
 }
 
 export async function markNotifRead(id: string) {
