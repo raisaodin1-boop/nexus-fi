@@ -8,6 +8,7 @@ config.resolver.sourceExts.push("mjs");
 config.resolver.extraNodeModules = {
   ...config.resolver.extraNodeModules,
   "@opentelemetry/api": require.resolve("./src/empty-module.js"),
+  "expo-local-authentication": require.resolve("./src/empty-module.js"),
 };
 
 module.exports = config;
