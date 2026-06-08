@@ -27,6 +27,7 @@ import {
 
 import { api, ApiError, formatXAF } from "@/src/api";
 import { Button, Card, Field, SkeletonBox, SkeletonCard } from "@/src/ui";
+import { DocumentButton } from "@/src/document-button";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 
 /* ─── Types ─────────────────────────────────────────── */
@@ -562,6 +563,11 @@ export function TontineDetailView({ id }: { id: string }) {
               <Text style={styles.codeText}>{tontine.invite_code}</Text>
               <Text style={styles.codeCta}>Partager</Text>
             </TouchableOpacity>
+
+            {/* PDF certificate */}
+            <View style={{ marginTop: 16 }}>
+              <DocumentButton kind="tontine_certificate" refId={id} compact />
+            </View>
 
             {/* Admin: Record disbursement */}
             {is_admin && (

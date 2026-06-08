@@ -34,3 +34,5 @@ async def ensure_indexes():
     # TTL index: MongoDB auto-deletes expired reminder_dedup docs (no cron needed)
     await db.reminder_dedup.create_index("key", unique=True)
     await db.reminder_dedup.create_index("expires_at", expireAfterSeconds=0)
+    await db.documents.create_index([("user_id", 1), ("created_at", -1)])
+    await db.documents.create_index("id", unique=True)
