@@ -230,10 +230,33 @@ async def get_tontine(tontine_id: str, user=Depends(get_current_user)):
     total_expected = tontine["contribution_amount"] * tontine["members_count"]
     compliance = round((tontine["total_collected"] / total_expected * 100) if total_expected else 0, 1)
 
+    # Cycle info: current beneficiary + next
+    current_cycle = tontine.get("current_cycle", 1)
+    total_cycles = tontine.get("members_count", 1)
+    cur_ben = next((m for m in members if m.get("rotation_position") == current_cycle), None)
+    next_ben = next((m for m in members if m.get("rotation_position") == current_cycle + 1), None)
+
+    cycle_info = {
+        "current_cycle": current_cycle,
+        "total_cycles": total_cycles,
+        "current_beneficiary_id": cur_ben["user_id"] if cur_ben else None,
+        "current_beneficiary_name": cur_ben["full_name"] if cur_ben else None,
+        "next_beneficiary_name": next_ben["full_name"] if next_ben else None,
+        "rotation_mode": tontine.get("rotation_mode", "rotation"),
+        "cycle_start_date": tontine.get("cycle_start_date"),
+        "compliance_pct": compliance,
+    }
+
+    disbursements = await db.tontine_disbursements.find(
+        {"tontine_id": tontine_id}, _proj()
+    ).sort("disbursed_at", -1).to_list(100)
+
     return {
         "tontine": tontine,
         "members": members,
         "contributions": contributions,
+        "disbursements": disbursements,
+        "cycle": cycle_info,
         "is_admin": membership["role"] == "admin",
         "compliance_pct": compliance,
     }
@@ -532,3 +555,125 @@ async def kick_member(tontine_id: str, target_user_id: str, user=Depends(get_cur
     )
     await log_event("tontine.member_kicked", user_id=user["id"], metadata={"tontine_id": tontine_id, "kicked": target_user_id})
     return {"detail": "kicked"}
+
+
+# ─── Disbursements ─────────────────────────────────────────────────────────────
+
+@router.get("/{tontine_id}/disbursements")
+async def list_disbursements(tontine_id: str, user=Depends(get_current_user)):
+    """Return all recorded disbursements for a tontine (members can read)."""
+    db = get_db()
+    tontine = await db.tontines.find_one({"id": tontine_id}, _proj())
+    if not tontine:
+        raise HTTPException(404, "Tontine introuvable.")
+    member = await db.tontine_members.find_one({"tontine_id": tontine_id, "user_id": user["id"]})
+    if not member and user["role"] != "super_admin":
+        raise HTTPException(403, "Non autorisé.")
+    items = await db.tontine_disbursements.find(
+        {"tontine_id": tontine_id}, _proj()
+    ).sort("disbursed_at", -1).to_list(200)
+    return items
+
+
+@router.post("/{tontine_id}/disbursements")
+async def record_disbursement(tontine_id: str, payload: dict, user=Depends(get_current_user)):
+    """Record that a member received the pot. Admin only."""
+    db = get_db()
+    tontine = await db.tontines.find_one({"id": tontine_id}, _proj())
+    if not tontine:
+        raise HTTPException(404, "Tontine introuvable.")
+    if user["role"] != "super_admin" and tontine["admin_id"] != user["id"]:
+        raise HTTPException(403, "Seul l'admin peut enregistrer une remise.")
+
+    beneficiary_id = payload.get("beneficiary_id", "")
+    amount = float(payload.get("amount", 0))
+    cycle = int(payload.get("cycle", tontine.get("current_cycle", 1)))
+    note = (payload.get("note") or "").strip() or None
+
+    if not beneficiary_id or amount <= 0:
+        raise HTTPException(400, "beneficiary_id et amount sont requis.")
+
+    # Resolve beneficiary name
+    ben_member = await db.tontine_members.find_one(
+        {"tontine_id": tontine_id, "user_id": beneficiary_id}, _proj()
+    )
+    if not ben_member:
+        raise HTTPException(404, "Bénéficiaire introuvable dans cette tontine.")
+    ben_name = ben_member.get("full_name", "Membre")
+
+    doc = {
+        "id": gen_id(),
+        "tontine_id": tontine_id,
+        "beneficiary_id": beneficiary_id,
+        "beneficiary_name": ben_name,
+        "amount": amount,
+        "cycle": cycle,
+        "note": note,
+        "recorded_by": user["id"],
+        "disbursed_at": now_utc(),
+    }
+    await db.tontine_disbursements.insert_one(doc)
+
+    # Mark beneficiary as having received
+    await db.tontine_members.update_one(
+        {"tontine_id": tontine_id, "user_id": beneficiary_id},
+        {"$set": {"has_received": True}},
+    )
+
+    # Notify beneficiary
+    await create_notification(
+        beneficiary_id,
+        f"💰 Remise reçue — {tontine['name']}",
+        f"Vous avez reçu {amount:,.0f} XAF pour le cycle {cycle}. Félicitations !",
+        kind="success",
+        action_url=f"/tontines/{tontine_id}",
+    )
+
+    await log_event(
+        "tontine.disbursement",
+        user_id=user["id"],
+        metadata={"tontine_id": tontine_id, "beneficiary_id": beneficiary_id, "cycle": cycle, "amount": amount},
+    )
+
+    doc.pop("_id", None)
+    return doc
+
+
+# ─── Rotation order patch ──────────────────────────────────────────────────────
+
+@router.patch("/{tontine_id}/rotation")
+async def update_rotation(tontine_id: str, payload: dict, user=Depends(get_current_user)):
+    """
+    Update rotation positions for tontine members.
+    Body: { "order": [{"member_id": str, "position": int}, ...] }
+    """
+    db = get_db()
+    tontine = await db.tontines.find_one({"id": tontine_id}, _proj())
+    if not tontine:
+        raise HTTPException(404, "Tontine introuvable.")
+    if user["role"] != "super_admin" and tontine["admin_id"] != user["id"]:
+        raise HTTPException(403, "Seul l'admin peut modifier la rotation.")
+
+    order = payload.get("order", [])
+    if not order:
+        raise HTTPException(400, "order est requis.")
+
+    for entry in order:
+        mid = entry.get("member_id")
+        pos = entry.get("position")
+        if mid and pos is not None:
+            await db.tontine_members.update_one(
+                {"id": mid, "tontine_id": tontine_id},
+                {"$set": {"rotation_position": int(pos)}},
+            )
+
+    await log_event("tontine.rotation_updated", user_id=user["id"], metadata={"tontine_id": tontine_id})
+    return {"detail": "rotation mise à jour"}
+
+
+# ─── Advance cycle (frontend alias) ───────────────────────────────────────────
+
+@router.post("/{tontine_id}/advance")
+async def advance_cycle_alias(tontine_id: str, user=Depends(get_current_user)):
+    """Alias for advance-rotation — used by the mobile frontend."""
+    return await advance_rotation(tontine_id, user)
