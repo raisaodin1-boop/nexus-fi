@@ -823,6 +823,51 @@ export async function adminHandleKyc(userId: string, approve: boolean) {
   return { detail: `KYC ${approve ? "approuvé" : "refusé"}` };
 }
 
+export async function createPromotionRequest(reason: string) {
+  const { data: { user } } = await getSupabase().auth.getUser();
+  if (!user) throw { status: 401, detail: "Non authentifié." };
+
+  // Check for existing pending request
+  const { data: existing } = await getSupabase()
+    .from("notifications")
+    .select("id, is_read, created_at")
+    .eq("user_id", user.id)
+    .eq("type", "promotion_request")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existing && !existing.is_read) {
+    throw { status: 400, detail: "Vous avez déjà une demande en attente." };
+  }
+
+  const { data, error } = await getSupabase()
+    .from("notifications")
+    .insert({ user_id: user.id, title: "Demande de promotion Manager", body: reason, type: "promotion_request", is_read: false })
+    .select("id, user_id, body, created_at, is_read")
+    .single();
+
+  if (error) throw { status: 400, detail: error.message };
+  return { id: data.id, user_id: data.user_id, reason: data.body, status: "pending", created_at: data.created_at };
+}
+
+export async function getMyPromotionRequest() {
+  const { data: { user } } = await getSupabase().auth.getUser();
+  if (!user) throw { status: 401, detail: "Non authentifié." };
+
+  const { data } = await getSupabase()
+    .from("notifications")
+    .select("id, user_id, body, created_at, is_read")
+    .eq("user_id", user.id)
+    .eq("type", "promotion_request")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!data) return null;
+  return { id: data.id, user_id: data.user_id, reason: data.body, status: data.is_read ? "processed" : "pending", created_at: data.created_at };
+}
+
 export async function adminListPromotionRequests() {
   const { data } = await getSupabase()
     .from("notifications")
