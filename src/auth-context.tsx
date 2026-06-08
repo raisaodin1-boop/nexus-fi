@@ -1,95 +1,149 @@
-// AuthContext for HODIX
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import {
-  User,
-  clearTokens,
-  fetchMe,
-  getAccessToken,
-  getStoredUser,
-  login as apiLogin,
-  logout as apiLogout,
-  register as apiRegister,
-  refreshTokens,
-} from "@/src/api";
+// AuthContext — Supabase Auth, stable, no loop
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { supabase } from "@/src/supabase";
+import { sendWelcomeMessage, applyReferralBonus } from "@/src/db";
 
-interface AuthState {
+export interface User {
+  id: string;
+  email: string;
+  full_name: string;
+  role: string;
+  is_email_verified: boolean;
+  phone?: string | null;
+  gender?: string | null;
+  country?: string | null;
+  city?: string | null;
+  occupation?: string | null;
+  photo_base64?: string | null;
+  created_at: string;
+}
+
+interface AuthCtx {
   user: User | null;
   loading: boolean;
   isAuthed: boolean;
-}
-
-interface AuthCtx extends AuthState {
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, full_name: string) => Promise<void>;
+  register: (email: string, password: string, full_name: string, referralCode?: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 }
 
 const Ctx = createContext<AuthCtx | undefined>(undefined);
 
+async function fetchProfile(userId: string): Promise<Partial<User>> {
+  try {
+    const timeout = new Promise<null>((res) => setTimeout(() => res(null), 8000));
+    const query = supabase
+      .from("profiles")
+      .select("full_name,role,phone,gender,country,city,occupation")
+      .eq("id", userId)
+      .single();
+    const result = await Promise.race([query, timeout]);
+    if (!result || !("data" in result)) return {};
+    return (result as any).data ?? {};
+  } catch {
+    return {};
+  }
+}
+
+async function buildUser(sbUser: any): Promise<User> {
+  const profile = await fetchProfile(sbUser.id);
+  const rawRole = profile.role || sbUser.user_metadata?.role || "member";
+  const role = (rawRole === "admin" || rawRole === "super_admin") ? "super_admin" : rawRole as string;
+  return {
+    id: sbUser.id,
+    email: sbUser.email ?? "",
+    full_name: profile.full_name || sbUser.user_metadata?.full_name || "",
+    role,
+    is_email_verified: !!sbUser.email_confirmed_at,
+    phone: profile.phone ?? sbUser.phone ?? null,
+    gender: profile.gender ?? null,
+    country: profile.country ?? null,
+    city: profile.city ?? null,
+    occupation: profile.occupation ?? null,
+    created_at: sbUser.created_at ?? new Date().toISOString(),
+  };
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<AuthState>({
-    user: null,
-    loading: true,
-    isAuthed: false,
-  });
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const initialized = useRef(false);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const token = await getAccessToken();
-        if (!token) {
-          setState({ user: null, loading: false, isAuthed: false });
-          return;
-        }
-        const cached = await getStoredUser();
-        if (cached) {
-          setState({ user: cached, loading: false, isAuthed: true });
-        }
-        try {
-          const fresh = await fetchMe();
-          setState({ user: fresh, loading: false, isAuthed: true });
-        } catch {
-          // Access token expired — try refresh before giving up
-          const refreshed = await refreshTokens();
-          if (refreshed) {
-            setState({ user: refreshed, loading: false, isAuthed: true });
-          } else {
-            await clearTokens();
-            setState({ user: null, loading: false, isAuthed: false });
-          }
-        }
-      } catch {
-        setState({ user: null, loading: false, isAuthed: false });
+    // Only initialize once
+    if (initialized.current) return;
+    initialized.current = true;
+
+    // Listen to auth changes — this also fires immediately with current session
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        const u = await buildUser(session.user);
+        setUser(u);
+      } else {
+        setUser(null);
       }
-    })();
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const u = await apiLogin(email, password);
-    setState({ user: u, loading: false, isAuthed: true });
-    return u;
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      const msg = error.message.includes("Invalid login")
+        ? "Email ou mot de passe incorrect."
+        : error.message.includes("not confirmed")
+        ? "Email non confirmé. Désactivez la confirmation dans Supabase → Auth → Email."
+        : error.message.includes("Too many")
+        ? "Trop de tentatives. Réessayez dans quelques minutes."
+        : error.message;
+      throw { detail: msg };
+    }
+    // onAuthStateChange handles state update
   }, []);
 
-  const register = useCallback(async (email: string, password: string, full_name: string) => {
-    const u = await apiRegister(email, password, full_name);
-    setState({ user: u, loading: false, isAuthed: true });
+  const register = useCallback(async (email: string, password: string, full_name: string, referralCode?: string) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name, role: "member" } },
+    });
+    if (error) throw { detail: error.message };
+
+    // Post-signup side effects (non-blocking)
+    const newUserId = data.user?.id;
+    if (newUserId) {
+      setTimeout(async () => {
+        try { await sendWelcomeMessage(newUserId, full_name); } catch {}
+        if (referralCode?.trim()) {
+          try { await applyReferralBonus(newUserId, referralCode.trim().toUpperCase()); } catch {}
+        }
+      }, 2000); // wait 2s for profile row to be created via trigger
+    }
   }, []);
 
   const logout = useCallback(async () => {
-    try { await apiLogout(); } catch {}
-    setState({ user: null, loading: false, isAuthed: false });
+    // Clear local state immediately — no waiting for network
+    setUser(null);
+    setLoading(false);
+    // Sign out from Supabase in background
+    supabase.auth.signOut().catch(() => {});
   }, []);
 
   const refresh = useCallback(async () => {
-    try {
-      const u = await fetchMe();
-      setState((p) => ({ ...p, user: u, isAuthed: true, loading: false }));
-    } catch {}
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      const u = await buildUser(session.user);
+      setUser(u);
+    }
   }, []);
 
   return (
-    <Ctx.Provider value={{ ...state, login, register, logout, refresh }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ user, loading, isAuthed: !!user, login, register, logout, refresh }}>
+      {children}
+    </Ctx.Provider>
   );
 }
 
