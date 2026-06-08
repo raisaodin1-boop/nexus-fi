@@ -1,18 +1,21 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter, useFocusEffect } from "expo-router";
-import { CreditCard, ArrowUpRight, ArrowDownLeft } from "lucide-react-native";
-import { Colors, Spacing } from "@/src/theme";
-import { Card, EmptyState } from "@/src/ui";
+import { LinearGradient } from "expo-linear-gradient";
+import { ArrowLeft, ArrowDownLeft, ArrowUpRight, CreditCard } from "lucide-react-native";
+
 import { api, formatXAF } from "@/src/api";
+import { Card, EmptyState, SkeletonCard } from "@/src/ui";
+import { Colors, Spacing } from "@/src/theme";
 
 interface Payment {
-  id: string;
-  amount: number;
-  direction: "in" | "out";
-  description: string;
-  created_at: string;
+  id: string; type: string; amount: number; currency: string;
+  description: string; status: string; created_at: string;
+}
+
+function formatDate(d: string) {
+  return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 export default function PaymentsScreen() {
@@ -20,74 +23,80 @@ export default function PaymentsScreen() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
-    try {
-      const d = await api.get<any>("/payments/history");
-      setPayments(Array.isArray(d) ? d : (d.payments ?? d.results ?? []));
-    } catch {}
-    setLoading(false);
-  }, []);
-
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => {
+    api.get<Payment[]>("/payments/history")
+      .then(setPayments)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []));
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <TouchableOpacity onPress={() => router.back()} testID="payments-back" style={{ marginBottom: 12 }}>
-          <Text style={styles.back}>← Retour</Text>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
+      <LinearGradient colors={[Colors.primary, Colors.gradMid]} style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <ArrowLeft color="#fff" size={22} />
         </TouchableOpacity>
+        <Text style={styles.headerTitle}>Historique des paiements</Text>
+        <View style={{ width: 40 }} />
+      </LinearGradient>
 
-        <View style={styles.header}>
-          <CreditCard color={Colors.primary} size={24} />
-          <Text style={styles.title}>Historique des paiements</Text>
+      {loading ? (
+        <View style={{ padding: Spacing.xl, gap: 12 }}>
+          <SkeletonCard /><SkeletonCard /><SkeletonCard />
         </View>
-
-        {loading ? (
-          <View style={styles.center}><ActivityIndicator color={Colors.secondary} /></View>
-        ) : payments.length === 0 ? (
-          <EmptyState
-            title="Aucun paiement"
-            description="Vos transactions apparaîtront ici."
-            icon={<CreditCard color={Colors.textSubtle} size={36} />}
-          />
-        ) : (
-          <View style={{ gap: 10 }}>
-            {payments.map((p) => (
-              <Card key={p.id} testID={`payment-item-${p.id}`} style={styles.paymentRow}>
-                <View style={[styles.dirIcon, { backgroundColor: p.direction === "in" ? Colors.successLight : Colors.dangerLight }]}>
-                  {p.direction === "in"
-                    ? <ArrowDownLeft color={Colors.success} size={18} />
-                    : <ArrowUpRight color={Colors.danger} size={18} />
-                  }
+      ) : (
+        <FlatList
+          data={payments}
+          keyExtractor={(p) => p.id}
+          contentContainerStyle={{ padding: Spacing.xl, gap: 10, paddingBottom: 40 }}
+          renderItem={({ item: p }) => {
+            const isIn = p.type === "credit" || p.type === "deposit";
+            return (
+              <Card style={{ padding: 14, flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <View style={[styles.iconBox, { backgroundColor: isIn ? `${Colors.accent}20` : `${Colors.danger}20` }]}>
+                  {isIn
+                    ? <ArrowDownLeft color={Colors.accent} size={20} />
+                    : <ArrowUpRight color={Colors.danger} size={20} />}
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.payDesc}>{p.description}</Text>
-                  <Text style={styles.payDate}>
-                    {new Date(p.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })}
-                  </Text>
+                  <Text style={styles.desc}>{p.description}</Text>
+                  <Text style={styles.date}>{formatDate(p.created_at)}</Text>
                 </View>
-                <Text style={[styles.payAmt, { color: p.direction === "in" ? Colors.success : Colors.danger }]}>
-                  {p.direction === "in" ? "+" : "-"}{formatXAF(p.amount)}
-                </Text>
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text style={[styles.amount, { color: isIn ? Colors.accent : Colors.danger }]}>
+                    {isIn ? "+" : "-"}{formatXAF(p.amount, p.currency)}
+                  </Text>
+                  <Text style={styles.status}>{p.status}</Text>
+                </View>
               </Card>
-            ))}
-          </View>
-        )}
-      </ScrollView>
+            );
+          }}
+          ListEmptyComponent={
+            <Card style={{ marginTop: 20 }}>
+              <EmptyState
+                title="Aucun paiement"
+                description="Vos transactions apparaîtront ici."
+                icon={<CreditCard color={Colors.textMuted} size={40} />}
+              />
+            </Card>
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bg },
-  content: { padding: Spacing.xl, paddingBottom: 60 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 60 },
-  back: { color: Colors.textMuted, fontWeight: "600" },
-  header: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 20 },
-  title: { fontSize: 22, fontWeight: "900", color: Colors.primary, letterSpacing: -0.5 },
-  paymentRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
-  dirIcon: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  payDesc: { fontSize: 14, fontWeight: "700", color: Colors.text },
-  payDate: { fontSize: 11, color: Colors.textMuted, fontWeight: "500", marginTop: 2 },
-  payAmt: { fontSize: 15, fontWeight: "800" },
+  header: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: Spacing.xl, paddingVertical: Spacing.lg,
+  },
+  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" },
+  headerTitle: { color: "#fff", fontSize: 18, fontWeight: "900" },
+  iconBox: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  desc: { fontSize: 14, fontWeight: "700", color: Colors.text },
+  date: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
+  amount: { fontSize: 15, fontWeight: "900" },
+  status: { fontSize: 11, color: Colors.textMuted, fontWeight: "600", marginTop: 2 },
 });

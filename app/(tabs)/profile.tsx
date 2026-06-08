@@ -15,7 +15,7 @@ import {
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { LogOut, Save, Shield, ShieldCheck, Bell, ChevronRight, Edit3, Mail, MapPin, Phone, Briefcase, Sparkles, CreditCard, Moon, Fingerprint, Globe, MessageCircle } from "lucide-react-native";
+import { LogOut, Save, Shield, ShieldCheck, Bell, ChevronRight, Edit3, Mail, MapPin, Phone, Briefcase, Sparkles, CreditCard, Moon, Fingerprint, Globe } from "lucide-react-native";
 import * as SecureStore from "expo-secure-store";
 
 import { useAuth } from "@/src/auth-context";
@@ -64,10 +64,9 @@ export default function ProfileScreen() {
   };
 
   const confirmLogout = () => {
-    const doLogout = () => {
-      // Logout is instant — state cleared locally first
-      logout();
-      router.replace("/(auth)/login");
+    const doLogout = async () => {
+      try { await logout(); } catch {}
+      try { router.replace("/(auth)/login"); } catch {}
     };
     if (Platform.OS === "web") {
       if (window.confirm("Voulez-vous vraiment vous déconnecter ?")) doLogout();
@@ -118,12 +117,10 @@ export default function ProfileScreen() {
               {user?.photo_base64 ? (
                 <Image source={{ uri: `data:image/png;base64,${user.photo_base64}` }} style={styles.avatarImg} />
               ) : (
-                <Text style={styles.avatarLetter}>
-                {(user?.full_name?.[0] || user?.email?.[0] || "?").toUpperCase()}
-              </Text>
+                <Text style={styles.avatarLetter}>{user?.full_name?.[0]?.toUpperCase() ?? "?"}</Text>
               )}
             </View>
-            <Text style={styles.fullName}>{user?.full_name || user?.email?.split("@")[0] || "—"}</Text>
+            <Text style={styles.fullName}>{user?.full_name}</Text>
             <Text style={styles.email}>{user?.email}</Text>
             <View style={styles.rolePill}>
               <Text style={styles.roleText}>{roleLabel(user?.role)}</Text>
@@ -210,25 +207,13 @@ export default function ProfileScreen() {
             <Card>
               <SettingRow icon={<Globe color={Colors.secondary} size={18} />} label={t("profile.language") + " · " + (language === "fr" ? "Français" : "English")} onPress={() => Alert.alert("Langue / Language", "", [{ text: "Français", onPress: () => setLanguage("fr") }, { text: "English", onPress: () => setLanguage("en") }, { text: t("common.cancel"), style: "cancel" }])} testID="profile-language" borderColor={borderColor} txtColor={txt} />
               <SettingRow icon={<Bell color={Colors.secondary} size={18} />} label="Notifications" onPress={() => router.push("/notifications")} testID="profile-go-notifs" borderColor={borderColor} txtColor={txt} />
-              <SettingRow icon={<MessageCircle color={Colors.primary} size={18} />} label="Messagerie interne" onPress={() => router.push("/messages")} testID="profile-go-messages" borderColor={borderColor} txtColor={txt} />
               <SettingRow icon={<ShieldCheck color={Colors.accent} size={18} />} label="Vérification KYC" onPress={() => router.push("/kyc")} testID="profile-go-kyc" borderColor={borderColor} txtColor={txt} />
               <SettingRow icon={<CreditCard color={Colors.primary} size={18} />} label="Mes Paiements" onPress={() => router.push("/payments")} testID="profile-go-payments" borderColor={borderColor} txtColor={txt} />
               {user?.role === "member" ? (
                 <SettingRow icon={<Sparkles color={Colors.accent} size={18} />} label="Demander une promotion Manager" onPress={() => router.push("/promotion-request")} testID="profile-promotion" borderColor={borderColor} txtColor={txt} />
               ) : null}
-              {(user?.role === "super_admin" || user?.role === "admin") ? (
-                <TouchableOpacity onPress={() => router.push("/admin")} testID="profile-go-admin">
-                  <LinearGradient colors={["#0D0F1A", "#1A1B2E"]} style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 14, borderRadius: 14, marginBottom: 4 }}>
-                    <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: "rgba(245,200,66,0.2)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(245,200,66,0.4)" }}>
-                      <Shield color={Colors.accent} size={18} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: Colors.accent, fontWeight: "900", fontSize: 14, letterSpacing: 0.3 }}>Console Admin</Text>
-                      <Text style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, marginTop: 1 }}>Tableau de bord super administrateur</Text>
-                    </View>
-                    <ChevronRight color="rgba(255,255,255,0.4)" size={18} />
-                  </LinearGradient>
-                </TouchableOpacity>
+              {user?.role === "super_admin" ? (
+                <SettingRow icon={<Shield color={Colors.accent} size={18} />} label="Console admin" onPress={() => router.push("/admin")} testID="profile-go-admin" borderColor={borderColor} txtColor={txt} />
               ) : (
                 <SettingRow icon={<Shield color={Colors.accent} size={18} />} label="Sécurité du compte" onPress={() => {}} disabled borderColor={borderColor} txtColor={txt} />
               )}
@@ -260,24 +245,6 @@ export default function ProfileScreen() {
               </View>
             </Card>
           </View>
-
-          {/* Admin Console — prominent card for super_admin */}
-          {(user?.role === "super_admin" || user?.role === "admin") ? (
-            <View style={{ paddingHorizontal: Spacing.xl, marginTop: Spacing.xl }}>
-              <TouchableOpacity onPress={() => router.push("/admin")} testID="profile-go-admin">
-                <LinearGradient colors={["#0D0F1A", "#1A1B2E"]} style={styles.adminCard}>
-                  <View style={styles.adminCardIcon}>
-                    <Shield color={Colors.accent} size={22} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.adminCardTitle}>Console Admin</Text>
-                    <Text style={styles.adminCardSub}>Utilisateurs · Tontines · KYC · Promotions</Text>
-                  </View>
-                  <ChevronRight color="rgba(255,255,255,0.4)" size={20} />
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          ) : null}
 
           {/* Logout */}
           <View style={{ paddingHorizontal: Spacing.xl, marginTop: Spacing.xl }}>
@@ -364,8 +331,4 @@ const styles = StyleSheet.create({
   toggleRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10 },
   toggleLabel: { flex: 1, fontSize: 14, fontWeight: "700" },
   versionTxt: { textAlign: "center", fontSize: 11, marginTop: 30, fontWeight: "600", letterSpacing: 1 },
-  adminCard: { flexDirection: "row", alignItems: "center", gap: 14, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: "rgba(245,200,66,0.25)" },
-  adminCardIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: "rgba(245,200,66,0.15)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(245,200,66,0.3)" },
-  adminCardTitle: { color: Colors.accent, fontWeight: "900", fontSize: 15, letterSpacing: 0.2 },
-  adminCardSub: { color: "rgba(255,255,255,0.45)", fontSize: 11, marginTop: 2 },
 });

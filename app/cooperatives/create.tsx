@@ -1,15 +1,15 @@
 import { useRouter } from "expo-router";
 import { GroupCreateForm } from "@/src/group-forms";
 
-export default function CreateCooperative() {
+export default function CooperativeCreate() {
   const router = useRouter();
   return (
     <GroupCreateForm
       title="Nouvelle coopérative"
-      subtitle="Construisez un projet collectif durable."
+      subtitle="Gérez votre coopérative avec transparence."
       endpoint="/cooperatives"
       testIDPrefix="coop-create"
-      onSuccess={(d) => router.replace(`/${d.id}`)}
+      onSuccess={(d) => router.replace(`/cooperatives/${d.id}` as any)}
     />
   );
 }

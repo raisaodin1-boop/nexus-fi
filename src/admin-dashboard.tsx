@@ -1,13 +1,13 @@
 // Super Admin home — Investor-Ready Control Center.
 import { useCallback, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { ShieldAlert, Users, Activity, ChevronRight, Crown, Sparkles } from "lucide-react-native";
 
 import { api, formatXAF } from "@/src/api";
-import { Card, StatCard } from "@/src/ui";
+import { Card, StatCard, SkeletonBox, SkeletonCard } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { LineChart } from "@/src/charts";
 
@@ -36,53 +36,54 @@ export function AdminDashboard() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    setLoading(true);
-    const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
+    const safe = async <T>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch { return null; }
     };
-    const timeout12 = <T,>(p: Promise<T>) =>
-      Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000))]);
-
-    // Load analytics + promos in parallel, independently — one failure doesn't kill the other
-    const [a, p] = await Promise.all([
-      safe(() => timeout12(api.get<Analytics>("/admin/analytics"))),
+    const [a, s, u, p] = await Promise.all([
+      safe(() => api.get<Analytics>("/admin/analytics")),
+      safe(() => api.get<Series>("/analytics/platform/savings?days=14")),
+      safe(() => api.get<Series>("/analytics/platform/users?days=14")),
       safe(() => api.get<any[]>("/admin/promotion-requests")),
     ]);
     if (a) setAnalytics(a);
-    if (p) setPendingReqs((p as any[]).filter((r: any) => r.status === "pending").length);
-    setLoading(false);
-
-    // Charts are non-critical — load after initial render
-    const [s, u] = await Promise.all([
-      safe(() => api.get<Series>("/analytics/savings-series")),
-      safe(() => api.get<Series>("/analytics/users-series")),
-    ]);
     if (s) setSavings(s);
     if (u) setUsersSeries(u);
+    if (p) setPendingReqs(p.filter((r: any) => r.status === "pending").length);
+    setLoading(false);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  if (loading) {
-    return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator color={Colors.secondary} size="large" /></View></SafeAreaView>;
-  }
-
-  // Fallback when Supabase hasn't returned data yet — show the console link
-  if (!analytics) {
+  if (loading || !analytics) {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32 }}>
-          <ShieldAlert color={Colors.primary} size={40} />
-          <Text style={[styles.name, { marginTop: 12 }]}>Console Admin</Text>
-          <Text style={[styles.hello, { textAlign: "center", marginTop: 6 }]}>Les données sont en cours de chargement depuis Supabase.</Text>
-          <TouchableOpacity onPress={() => router.push("/admin")} style={{ marginTop: 20, backgroundColor: Colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }}>
-            <Text style={{ color: "#fff", fontWeight: "800" }}>Ouvrir la console admin →</Text>
-          </TouchableOpacity>
-        </View>
+        <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+          <View style={styles.header}>
+            <View style={{ gap: 8 }}>
+              <SkeletonBox width={120} height={12} />
+              <SkeletonBox width={180} height={28} />
+              <SkeletonBox width={100} height={18} style={{ marginTop: 4 }} />
+            </View>
+            <SkeletonBox width={44} height={44} borderRadius={22} />
+          </View>
+          <View style={{ paddingHorizontal: Spacing.xl }}>
+            <SkeletonBox height={120} borderRadius={20} />
+          </View>
+          <View style={styles.statsRow}>
+            <SkeletonBox height={80} borderRadius={16} style={{ flex: 1 }} />
+            <SkeletonBox height={80} borderRadius={16} style={{ flex: 1 }} />
+          </View>
+          <View style={styles.statsRow}>
+            <SkeletonBox height={80} borderRadius={16} style={{ flex: 1 }} />
+            <SkeletonBox height={80} borderRadius={16} style={{ flex: 1 }} />
+          </View>
+          <View style={{ paddingHorizontal: Spacing.xl, marginTop: 12, gap: 10 }}>
+            <SkeletonCard /><SkeletonCard />
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
-
   const dist = analytics.score_distribution ?? { excellent: 0, very_good: 0, good: 0, emerging: 0, new: 0 };
   const totalDist = Object.values(dist).reduce((a, b) => a + b, 0) || 1;
   const tier = analytics.tier_distribution ?? { bronze: 0, silver: 0, gold: 0, platinum: 0 };
@@ -91,6 +92,10 @@ export function AdminDashboard() {
   const totalGroups = activeGroups.tontines + activeGroups.associations + activeGroups.cooperatives;
   const payments = analytics.payments ?? { count: 0, amount_minor: 0, commission_minor: 0, currency: "XAF" };
   const commission = payments.commission_minor / 100;
+  const users = analytics.users ?? { total: 0, active: 0, new_7d: 0, new_30d: 0 };
+  const funds = analytics.funds ?? { count: 0, balance: 0, collected: 0 };
+  const kyc = analytics.kyc ?? { level1: 0, level2_approved: 0, pending_review: 0 };
+  const avgTrustScore = analytics.avg_trust_score ?? 0;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -127,9 +132,9 @@ export function AdminDashboard() {
             <Text style={styles.heroLbl}>Volume total d'épargne</Text>
             <Text style={styles.heroVal}>{formatXAF(analytics.savings_volume)}</Text>
             <View style={styles.heroRow}>
-              <View><Text style={styles.heroStLbl}>Utilisateurs</Text><Text style={styles.heroStVal}>{analytics.users.total}</Text></View>
-              <View><Text style={styles.heroStLbl}>Actifs</Text><Text style={styles.heroStVal}>{analytics.users.active}</Text></View>
-              <View><Text style={styles.heroStLbl}>+7j</Text><Text style={styles.heroStVal}>{analytics.users.new_7d}</Text></View>
+              <View><Text style={styles.heroStLbl}>Utilisateurs</Text><Text style={styles.heroStVal}>{users.total}</Text></View>
+              <View><Text style={styles.heroStLbl}>Actifs</Text><Text style={styles.heroStVal}>{users.active}</Text></View>
+              <View><Text style={styles.heroStLbl}>+7j</Text><Text style={styles.heroStVal}>{users.new_7d}</Text></View>
             </View>
           </LinearGradient>
         </View>
@@ -137,12 +142,12 @@ export function AdminDashboard() {
         {/* === SECTION 1: UTILISATEURS === */}
         <SectionTitle>👥 Utilisateurs</SectionTitle>
         <View style={styles.statsRow}>
-          <StatCard label="Total" value={`${analytics.users.total}`} accent={Colors.secondary} />
-          <StatCard label="Actifs" value={`${analytics.users.active}`} accent={Colors.accent} />
+          <StatCard label="Total" value={`${users.total}`} accent={Colors.secondary} />
+          <StatCard label="Actifs" value={`${users.active}`} accent={Colors.accent} />
         </View>
         <View style={styles.statsRow}>
-          <StatCard label="Nouveaux 7j" value={`+${analytics.users.new_7d}`} accent={Colors.accentDark} />
-          <StatCard label="Nouveaux 30j" value={`+${analytics.users.new_30d}`} accent={Colors.warning} />
+          <StatCard label="Nouveaux 7j" value={`+${users.new_7d}`} accent={Colors.accentDark} />
+          <StatCard label="Nouveaux 30j" value={`+${users.new_30d}`} accent={Colors.warning} />
         </View>
 
         {/* === SECTION 2: COMMUNAUTÉS === */}
@@ -153,7 +158,7 @@ export function AdminDashboard() {
         </View>
         <View style={styles.statsRow}>
           <StatCard label="Coopératives" value={`${activeGroups.cooperatives}`} accent={Colors.primary} />
-          <StatCard label="Fonds communaut." value={`${analytics.funds?.count ?? 0}`} accent={Colors.warning} hint={`Solde : ${formatXAF(analytics.funds?.balance ?? 0)}`} />
+          <StatCard label="Fonds communaut." value={`${funds.count}`} accent={Colors.warning} hint={`Solde : ${formatXAF(funds.balance)}`} />
         </View>
 
         {/* === SECTION 3: FINANCES === */}
@@ -170,8 +175,8 @@ export function AdminDashboard() {
         {/* === SECTION 4: IDENTITÉ FINANCIÈRE === */}
         <SectionTitle>🪪 Identité financière</SectionTitle>
         <View style={styles.statsRow}>
-          <StatCard label="Trust Score moyen" value={`${(analytics.avg_trust_score ?? 0).toFixed(1)}/100`} accent={Colors.accent} />
-          <StatCard label="KYC niveau 2" value={`${analytics.kyc?.level2_approved ?? 0}`} accent={Colors.secondary} hint={`${analytics.kyc?.pending_review ?? 0} en attente`} />
+          <StatCard label="Trust Score moyen" value={`${avgTrustScore.toFixed(1)}/100`} accent={Colors.accent} />
+          <StatCard label="KYC niveau 2" value={`${kyc.level2_approved}`} accent={Colors.secondary} hint={`${kyc.pending_review} en attente`} />
         </View>
 
         {/* Tier distribution */}

@@ -34,14 +34,17 @@ export function ManagerDashboard() {
   const [unread, setUnread] = useState(0);
 
   const load = useCallback(async () => {
-    try {
-      const [o, s, n] = await Promise.all([
-        api.get<Overview>("/manager/overview"),
-        api.get<Series>("/analytics/me/contributions?days=14"),
-        api.get<{ unread_count: number }>("/notifications"),
-      ]);
-      setOverview(o); setSeries(s); setUnread(n.unread_count);
-    } catch {}
+    const safe = async <T>(fn: () => Promise<T>): Promise<T | null> => {
+      try { return await fn(); } catch { return null; }
+    };
+    const [o, s, n] = await Promise.all([
+      safe(() => api.get<Overview>("/manager/overview")),
+      safe(() => api.get<Series>("/analytics/me/contributions?days=14")),
+      safe(() => api.get<{ unread_count: number }>("/notifications")),
+    ]);
+    if (o) setOverview(o);
+    if (s) setSeries(s);
+    if (n) setUnread(n.unread_count ?? 0);
     setLoading(false);
   }, []);
 

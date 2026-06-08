@@ -8,7 +8,7 @@ export default function TontineJoin() {
       title="Rejoindre une tontine"
       endpoint="/tontines/join"
       testIDPrefix="tontine-join"
-      onSuccess={(d) => router.replace(`/tontines/${d.tontine_id}`)}
+      onSuccess={(d) => router.replace(`/tontines/${d.tontine_id}` as any)}
     />
   );
 }

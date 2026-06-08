@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { GroupCreateForm } from "@/src/group-forms";
 
-export default function CreateAssociation() {
+export default function AssociationCreate() {
   const router = useRouter();
   return (
     <GroupCreateForm
@@ -9,7 +9,7 @@ export default function CreateAssociation() {
       subtitle="Animez votre communauté autour d'une cause commune."
       endpoint="/associations"
       testIDPrefix="assoc-create"
-      onSuccess={(d) => router.replace(`/${d.id}`)}
+      onSuccess={(d) => router.replace(`/associations/${d.id}` as any)}
     />
   );
 }

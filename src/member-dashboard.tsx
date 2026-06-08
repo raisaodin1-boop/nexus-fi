@@ -1,7 +1,6 @@
 // Member dashboard — premium personal fintech home.
 import { useCallback, useState } from "react";
 import {
-  ActivityIndicator,
   Image,
   RefreshControl,
   ScrollView,
@@ -17,7 +16,7 @@ import { Bell, ChevronRight, PiggyBank, Users, Wallet, TrendingUp, Sparkles, QrC
 
 import { useAuth } from "@/src/auth-context";
 import { api, formatXAF } from "@/src/api";
-import { Card, SectionTitle, StatCard } from "@/src/ui";
+import { Card, SectionTitle, StatCard, SkeletonBox, SkeletonCard } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { TrustGauge } from "@/src/trust-gauge";
 import { LineChart } from "@/src/charts";
@@ -44,23 +43,21 @@ export function MemberDashboard() {
   const [savingsSeries, setSavingsSeries] = useState<Series | null>(null);
 
   const load = useCallback(async () => {
-    const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000));
-    try {
-      const [s, t, i, n, ss] = await Promise.race([
-        Promise.all([
-          api.get<Summary>("/savings/summary"),
-          api.get<TrustScore>("/trust-score"),
-          api.get<{ items: Insight[] }>("/insights"),
-          api.get<{ unread_count: number }>("/notifications"),
-          api.get<Series>("/analytics/me/savings?days=14"),
-        ]),
-        timeout,
-      ]);
-      setSummary(s); setTrust(t); setInsights(i.items); setUnread(n.unread_count);
-      setSavingsSeries(ss);
-    } catch (e) {
-      console.warn("home load", e);
-    }
+    const safe = async <T>(fn: () => Promise<T>): Promise<T | null> => {
+      try { return await fn(); } catch { return null; }
+    };
+    const [s, t, i, n, ss] = await Promise.all([
+      safe(() => api.get<Summary>("/savings/summary")),
+      safe(() => api.get<TrustScore>("/trust-score")),
+      safe(() => api.get<{ items: Insight[] }>("/insights")),
+      safe(() => api.get<{ unread_count: number }>("/notifications")),
+      safe(() => api.get<Series>("/analytics/me/savings?days=14")),
+    ]);
+    if (s) setSummary(s);
+    if (t) setTrust(t);
+    if (i) setInsights(i.items ?? []);
+    if (n) setUnread(n.unread_count ?? 0);
+    if (ss) setSavingsSeries(ss);
     setLoading(false);
   }, []);
 
@@ -70,8 +67,31 @@ export function MemberDashboard() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.center}><ActivityIndicator size="large" color={Colors.secondary} /></View>
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+          <View style={styles.header}>
+            <View style={{ gap: 8 }}>
+              <SkeletonBox width={80} height={14} />
+              <SkeletonBox width={140} height={26} />
+            </View>
+            <SkeletonBox width={44} height={44} borderRadius={22} />
+          </View>
+          <View style={{ paddingHorizontal: Spacing.xl }}>
+            <SkeletonBox height={200} borderRadius={20} />
+          </View>
+          <View style={styles.statsRow}>
+            <SkeletonBox height={80} borderRadius={16} style={{ flex: 1 }} />
+            <SkeletonBox height={80} borderRadius={16} style={{ flex: 1 }} />
+          </View>
+          <View style={styles.statsRow}>
+            <SkeletonBox height={80} borderRadius={16} style={{ flex: 1 }} />
+            <SkeletonBox height={80} borderRadius={16} style={{ flex: 1 }} />
+          </View>
+          <View style={{ paddingHorizontal: Spacing.xl, marginTop: 12, gap: 10 }}>
+            <SkeletonCard />
+            <SkeletonCard />
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }

@@ -135,8 +135,8 @@ export default function ReferralScreen() {
                 </View>
                 <View style={styles.statCard}>
                   <Star color={Colors.gold} size={22} />
-                  <Text style={styles.statValue}>{info.bonus_points}</Text>
-                  <Text style={styles.statLabel}>Points bonus</Text>
+                  <Text style={styles.statValue}>{info.bonus_points} XAF</Text>
+                  <Text style={styles.statLabel}>Bonus cotisation</Text>
                 </View>
               </View>
 
@@ -167,7 +167,7 @@ export default function ReferralScreen() {
                         <Text style={styles.referralDate}>Inscrit le {formatDate(ref.joined_at)}</Text>
                       </View>
                       <View style={styles.bonusPill}>
-                        <Text style={styles.bonusPillText}>+50 pts</Text>
+                        <Text style={styles.bonusPillText}>+500 XAF</Text>
                       </View>
                     </View>
                   ))}

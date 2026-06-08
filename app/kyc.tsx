@@ -1,101 +1,103 @@
 import { useCallback, useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Alert } from "react-native";
+import { Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { ShieldCheck, Upload, CheckCircle, Clock, XCircle } from "lucide-react-native";
-import { Colors, Spacing } from "@/src/theme";
-import { Card, Button } from "@/src/ui";
+import { ArrowLeft, ShieldCheck, CheckCircle, Clock, XCircle } from "lucide-react-native";
+
 import { api, ApiError } from "@/src/api";
+import { Button, Card } from "@/src/ui";
+import { Colors, Radius, Spacing } from "@/src/theme";
+import { useToast } from "@/src/toast";
 
-type KycStatus = "approved" | "pending" | "rejected" | "not_submitted";
+interface KycStatus { kyc_status: string; submitted_at?: string }
 
-const STATUS_META: Record<KycStatus, { label: string; color: string; icon: React.ReactNode }> = {
-  approved: { label: "Approuvé", color: Colors.success, icon: <CheckCircle color={Colors.success} size={20} /> },
-  pending: { label: "En attente", color: Colors.warning, icon: <Clock color={Colors.warning} size={20} /> },
-  rejected: { label: "Rejeté", color: Colors.danger, icon: <XCircle color={Colors.danger} size={20} /> },
-  not_submitted: { label: "Non soumis", color: Colors.textMuted, icon: <Upload color={Colors.textMuted} size={20} /> },
-};
-
-const STATUS_DESC: Record<KycStatus, string> = {
-  approved: "Votre identité a été vérifiée avec succès. Vous avez accès à toutes les fonctionnalités.",
-  pending: "Votre dossier KYC est en cours de vérification. Vous serez notifié sous 24-48h.",
-  rejected: "Votre dossier KYC a été rejeté. Veuillez soumettre à nouveau avec des documents valides.",
-  not_submitted: "Vous n'avez pas encore soumis votre dossier KYC. Soumettez-le pour accéder à toutes les fonctionnalités.",
+const STATUS_MAP: Record<string, { label: string; color: string; icon: any; desc: string }> = {
+  not_submitted: { label: "Non soumis", color: Colors.textMuted, icon: ShieldCheck, desc: "Vérifiez votre identité pour accéder aux fonctionnalités premium." },
+  pending_review: { label: "En cours d'examen", color: Colors.warning, icon: Clock, desc: "Votre dossier est en cours de vérification par notre équipe." },
+  approved: { label: "Approuvé", color: Colors.accent, icon: CheckCircle, desc: "Votre identité a été vérifiée avec succès !" },
+  rejected: { label: "Rejeté", color: Colors.danger, icon: XCircle, desc: "Votre dossier a été rejeté. Vous pouvez le soumettre à nouveau." },
 };
 
 export default function KycScreen() {
   const router = useRouter();
+  const { show } = useToast();
   const [status, setStatus] = useState<KycStatus | null>(null);
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    try {
-      const d = await api.get<any>("/users/me/kyc");
-      setStatus(d.status ?? "not_submitted");
-    } catch {
-      setStatus("not_submitted");
+  useFocusEffect(useCallback(() => {
+    api.get<KycStatus>("/users/me/kyc").then(setStatus).catch(() => {});
+  }, []));
+
+  const handleSubmit = async () => {
+    const doSubmit = async () => {
+      setSubmitting(true);
+      try {
+        await api.post("/kyc/submit");
+        show("Dossier KYC soumis avec succès !", "success");
+        setStatus({ kyc_status: "pending_review" });
+      } catch (e) {
+        show(e instanceof ApiError ? e.detail : "Erreur lors de la soumission", "error");
+      } finally {
+        setSubmitting(false);
+      }
+    };
+    if (Platform.OS === "web") {
+      if (window.confirm("Soumettre votre dossier KYC ?")) doSubmit();
+    } else {
+      Alert.alert("Soumettre KYC", "Confirmer la soumission de votre dossier de vérification ?", [
+        { text: "Annuler", style: "cancel" },
+        { text: "Soumettre", onPress: doSubmit },
+      ]);
     }
-    setLoading(false);
-  }, []);
-
-  useFocusEffect(useCallback(() => { load(); }, [load]));
-
-  const submit = async () => {
-    setError(null); setSubmitting(true);
-    try {
-      await api.post("/kyc/submit");
-      Alert.alert("KYC soumis", "Votre dossier a été soumis. Vous serez notifié sous 24-48h.");
-      await load();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.detail : "Erreur lors de la soumission");
-    } finally { setSubmitting(false); }
   };
 
-  const meta = status ? STATUS_META[status] : null;
+  const info = STATUS_MAP[status?.kyc_status ?? "not_submitted"] ?? STATUS_MAP.not_submitted;
+  const Icon = info.icon;
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-      <ScrollView contentContainerStyle={styles.content}>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
+      <LinearGradient colors={[Colors.primary, Colors.gradMid]} style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.back}>← Retour</Text>
+          <ArrowLeft color="#fff" size={22} />
         </TouchableOpacity>
+        <Text style={styles.headerTitle}>Vérification KYC</Text>
+        <View style={{ width: 40 }} />
+      </LinearGradient>
 
-        <LinearGradient colors={[Colors.primary, Colors.gradMid]} style={styles.hero}>
-          <ShieldCheck color="#fff" size={36} />
-          <Text style={styles.heroTitle}>Vérification KYC</Text>
-          <Text style={styles.heroSub}>Know Your Customer — identité vérifiée</Text>
-        </LinearGradient>
+      <ScrollView contentContainerStyle={{ padding: Spacing.xl, gap: 20 }}>
+        <Card style={{ padding: 24, alignItems: "center", gap: 16 }}>
+          <View style={[styles.iconBox, { backgroundColor: `${info.color}20` }]}>
+            <Icon color={info.color} size={40} />
+          </View>
+          <Text style={[styles.statusLabel, { color: info.color }]}>{info.label}</Text>
+          <Text style={styles.statusDesc}>{info.desc}</Text>
+        </Card>
 
-        {!loading && meta && (
-          <Card style={{ marginTop: 20, gap: 12 }}>
-            <View style={styles.statusRow}>
-              {meta.icon}
-              <View style={[styles.statusBadge, { borderColor: meta.color }]}>
-                <Text testID="kyc-status" style={[styles.statusText, { color: meta.color }]}>
-                  {meta.label}
-                </Text>
+        <Card style={{ padding: 20, gap: 12 }}>
+          <Text style={styles.sectionTitle}>Niveaux de vérification</Text>
+          {[
+            { level: "Niveau 1", desc: "Email vérifié — automatique à l'inscription", done: true },
+            { level: "Niveau 2", desc: "Pièce d'identité + selfie — accès aux virements", done: status?.kyc_status === "approved" },
+          ].map((item) => (
+            <View key={item.level} style={styles.levelRow}>
+              <CheckCircle color={item.done ? Colors.accent : Colors.textMuted} size={18} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.levelTitle}>{item.level}</Text>
+                <Text style={styles.levelDesc}>{item.desc}</Text>
               </View>
             </View>
-            <Text style={styles.statusDesc}>{STATUS_DESC[status!]}</Text>
-          </Card>
+          ))}
+        </Card>
+
+        {(status?.kyc_status === "not_submitted" || status?.kyc_status === "rejected") && (
+          <Button
+            label="Soumettre mon dossier KYC"
+            onPress={handleSubmit}
+            loading={submitting}
+            testID="kyc-submit"
+          />
         )}
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        {!loading && (status === "not_submitted" || status === "rejected") ? (
-          <View style={{ marginTop: 20 }}>
-            <Button
-              testID="kyc-submit"
-              label="Soumettre KYC"
-              icon={<Upload color="#fff" size={18} />}
-              onPress={submit}
-              loading={submitting}
-            />
-          </View>
-        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -103,15 +105,17 @@ export default function KycScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bg },
-  content: { padding: Spacing.xl, paddingBottom: 60 },
-  backBtn: { marginBottom: 12 },
-  back: { color: Colors.textMuted, fontWeight: "600" },
-  hero: { borderRadius: 20, padding: 28, alignItems: "center", gap: 10 },
-  heroTitle: { color: "#fff", fontSize: 22, fontWeight: "900", letterSpacing: -0.3 },
-  heroSub: { color: "rgba(255,255,255,0.75)", fontSize: 13, fontWeight: "600" },
-  statusRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  statusBadge: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 5 },
-  statusText: { fontWeight: "800", fontSize: 14 },
-  statusDesc: { fontSize: 13, color: Colors.textMuted, lineHeight: 20 },
-  error: { backgroundColor: "#FEE2E2", color: Colors.danger, padding: 10, borderRadius: 12, fontSize: 13, fontWeight: "600", marginTop: 12 },
+  header: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: Spacing.xl, paddingVertical: Spacing.lg,
+  },
+  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" },
+  headerTitle: { color: "#fff", fontSize: 18, fontWeight: "900" },
+  iconBox: { width: 80, height: 80, borderRadius: 40, alignItems: "center", justifyContent: "center" },
+  statusLabel: { fontSize: 20, fontWeight: "900" },
+  statusDesc: { fontSize: 14, color: Colors.textMuted, textAlign: "center", lineHeight: 20 },
+  sectionTitle: { fontSize: 15, fontWeight: "800", color: Colors.primary, marginBottom: 4 },
+  levelRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  levelTitle: { fontSize: 14, fontWeight: "700", color: Colors.text },
+  levelDesc: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
 });

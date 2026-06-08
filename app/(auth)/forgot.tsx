@@ -1,150 +1,127 @@
-// HODIX Forgot / Reset password.
 import { useState } from "react";
-import {
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
+import { ArrowLeft, Mail } from "lucide-react-native";
 
-import { Button, Field } from "@/src/ui";
-import { Colors, Spacing } from "@/src/theme";
-import { ApiError, forgotPassword, resetPassword } from "@/src/api";
+import { forgotPassword } from "@/src/api";
+import { HodixLogo } from "@/src/logo";
+import { Colors, Radius, Spacing } from "@/src/theme";
+import { useToast } from "@/src/toast";
 
 export default function ForgotScreen() {
   const router = useRouter();
-  const [step, setStep] = useState<"request" | "reset">("request");
+  const { show } = useToast();
   const [email, setEmail] = useState("");
-  const [resetToken, setResetToken] = useState("");
-  const [newPassword, setNewPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
 
-  const handleRequest = async () => {
-    setError(null); setLoading(true);
+  const handleSubmit = async () => {
+    if (!email.trim()) { show("Entrez votre adresse email", "error"); return; }
+    setLoading(true);
     try {
-      const res = await forgotPassword(email.trim());
-      // Dev mode: token returned in body
-      if (res.dev_token) {
-        setResetToken(res.dev_token);
-        setMessage("Token de réinitialisation pré-rempli (mode démo).");
-      } else {
-        setMessage(res.detail);
-      }
-      setStep("reset");
-    } catch (e) {
-      setError(e instanceof ApiError ? e.detail : "Erreur.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleReset = async () => {
-    setError(null); setLoading(true);
-    try {
-      await resetPassword(resetToken.trim(), newPassword);
-      setMessage("Mot de passe modifié. Redirection...");
-      setTimeout(() => router.replace("/(auth)/login"), 1500);
-    } catch (e) {
-      setError(e instanceof ApiError ? e.detail : "Erreur.");
+      await forgotPassword(email.trim().toLowerCase());
+      setSent(true);
+      show("Email envoyé ! Vérifiez votre boîte.", "success");
+    } catch (e: any) {
+      show(e?.detail || "Erreur lors de l'envoi", "error");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <TouchableOpacity onPress={() => router.back()} style={styles.back} testID="forgot-back">
-            <Text style={styles.backText}>← Retour</Text>
-          </TouchableOpacity>
+    <SafeAreaView style={styles.safe}>
+      <LinearGradient colors={[Colors.primary, Colors.gradMid, Colors.secondary]} style={styles.header}>
+        <HodixLogo size={48} />
+        <Text style={styles.title}>Mot de passe oublié</Text>
+        <Text style={styles.subtitle}>Entrez votre email pour recevoir un lien de réinitialisation</Text>
+      </LinearGradient>
 
-          <Text style={styles.title}>
-            {step === "request" ? "Réinitialiser votre mot de passe" : "Définir un nouveau mot de passe"}
-          </Text>
-          <Text style={styles.subtitle}>
-            {step === "request"
-              ? "Entrez votre email pour recevoir un lien de réinitialisation."
-              : "Collez votre token et choisissez un nouveau mot de passe."}
-          </Text>
+      <View style={styles.form}>
+        {sent ? (
+          <View style={styles.sentBox}>
+            <Text style={styles.sentTitle}>Email envoyé !</Text>
+            <Text style={styles.sentDesc}>Vérifiez votre boîte de réception et suivez le lien pour réinitialiser votre mot de passe.</Text>
+            <TouchableOpacity onPress={() => router.replace("/(auth)/login")} style={styles.backToLogin}>
+              <Text style={styles.backToLoginText}>Retour à la connexion</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Email</Text>
+              <View style={styles.inputRow}>
+                <Mail size={18} color={Colors.textMuted} />
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="votre@email.com"
+                  placeholderTextColor={Colors.textMuted}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                />
+              </View>
+            </View>
 
-          {step === "request" ? (
-            <>
-              <Field
-                testID="forgot-email"
-                label="Email"
-                placeholder="vous@exemple.com"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-              />
-              {message ? <View style={styles.info}><Text style={styles.infoText}>{message}</Text></View> : null}
-              {error ? <Text style={styles.error}>{error}</Text> : null}
-              <Button
-                testID="forgot-request-submit"
-                label="Envoyer le lien"
-                onPress={handleRequest}
-                loading={loading}
-                disabled={!email}
-              />
-            </>
-          ) : (
-            <>
-              <Field
-                testID="forgot-token"
-                label="Token de réinitialisation"
-                placeholder="Collez le token reçu par email"
-                value={resetToken}
-                onChangeText={setResetToken}
-                autoCapitalize="none"
-                multiline
-              />
-              <Field
-                testID="forgot-new-password"
-                label="Nouveau mot de passe"
-                placeholder="••••••••"
-                value={newPassword}
-                onChangeText={setNewPassword}
-                secureTextEntry
-              />
-              {message ? <View style={styles.info}><Text style={styles.infoText}>{message}</Text></View> : null}
-              {error ? <Text style={styles.error}>{error}</Text> : null}
-              <Button
-                testID="forgot-reset-submit"
-                label="Confirmer le nouveau mot de passe"
-                onPress={handleReset}
-                loading={loading}
-                disabled={!resetToken || !newPassword}
-              />
-            </>
-          )}
-        </ScrollView>
-      </KeyboardAvoidingView>
+            <TouchableOpacity
+              style={[styles.btn, loading && styles.btnDisabled]}
+              onPress={handleSubmit}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={[Colors.secondary, Colors.accent]}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                style={styles.btnGrad}
+              >
+                {loading
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={styles.btnText}>Envoyer le lien</Text>}
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
+              <ArrowLeft size={16} color={Colors.secondary} />
+              <Text style={styles.backText}>Retour à la connexion</Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bg },
-  content: { padding: Spacing.xxl, paddingTop: Spacing.lg },
-  back: { marginBottom: 16 },
-  backText: { color: Colors.textMuted, fontWeight: "600" },
-  title: { fontSize: 24, fontWeight: "900", color: Colors.primary, letterSpacing: -0.5 },
-  subtitle: { fontSize: 14, color: Colors.textMuted, marginTop: 6, marginBottom: 24, lineHeight: 20 },
-  error: {
-    backgroundColor: "#FEE2E2", color: Colors.danger, padding: 12,
-    borderRadius: 12, fontSize: 13, fontWeight: "600", marginBottom: 12,
+  header: {
+    paddingTop: Spacing.xl, paddingBottom: Spacing.xl * 1.5,
+    paddingHorizontal: Spacing.xl, alignItems: "center", gap: 10,
+    borderBottomLeftRadius: 32, borderBottomRightRadius: 32,
   },
-  info: {
-    backgroundColor: "#DCFCE7", padding: 12, borderRadius: 12, marginBottom: 12,
+  title: { fontSize: 24, fontWeight: "900", color: "#fff", marginTop: 8, letterSpacing: -0.5 },
+  subtitle: { fontSize: 13, color: "rgba(255,255,255,0.75)", textAlign: "center", lineHeight: 18 },
+  form: { padding: Spacing.xl, gap: 16, marginTop: 8 },
+  fieldGroup: { gap: 6 },
+  label: { fontSize: 13, fontWeight: "600", color: Colors.text },
+  inputRow: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: 14, paddingVertical: 14, gap: 10,
   },
-  infoText: { color: Colors.accentDark, fontSize: 13, fontWeight: "600" },
+  input: { flex: 1, fontSize: 15, color: Colors.text, outlineStyle: "none" } as any,
+  btn: { borderRadius: Radius.lg, overflow: "hidden" },
+  btnDisabled: { opacity: 0.7 },
+  btnGrad: { alignItems: "center", justifyContent: "center", paddingVertical: 16 },
+  btnText: { fontSize: 16, fontWeight: "700", color: "#fff" },
+  backRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  backText: { fontSize: 14, color: Colors.secondary, fontWeight: "600" },
+  sentBox: { alignItems: "center", gap: 12, paddingTop: 20 },
+  sentTitle: { fontSize: 22, fontWeight: "900", color: Colors.primary },
+  sentDesc: { fontSize: 14, color: Colors.textMuted, textAlign: "center", lineHeight: 20 },
+  backToLogin: { marginTop: 8 },
+  backToLoginText: { fontSize: 15, color: Colors.secondary, fontWeight: "700" },
 });

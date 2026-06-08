@@ -8,7 +8,7 @@ export default function AssociationJoin() {
       title="Rejoindre une association"
       endpoint="/associations/join"
       testIDPrefix="assoc-join"
-      onSuccess={(d) => router.replace(`/associations/${d.association_id}`)}
+      onSuccess={(d) => router.replace(`/associations/${d.association_id}` as any)}
     />
   );
 }

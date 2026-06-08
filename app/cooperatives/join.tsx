@@ -8,7 +8,7 @@ export default function CooperativeJoin() {
       title="Rejoindre une coopérative"
       endpoint="/cooperatives/join"
       testIDPrefix="coop-join"
-      onSuccess={(d) => router.replace(`/cooperatives/${d.cooperative_id}`)}
+      onSuccess={(d) => router.replace(`/cooperatives/${d.cooperative_id}` as any)}
     />
   );
 }

@@ -1,188 +1,157 @@
-// HODIX Login — with biometric (Face ID / Fingerprint) support
-import { useEffect, useState } from "react";
+// HODIX — Login screen
+import { useState } from "react";
 import {
-  Alert,
-  KeyboardAvoidingView, Platform, ScrollView, StyleSheet,
-  Text, TouchableOpacity, View,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { Link, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Eye, EyeOff, Fingerprint } from "lucide-react-native";
-import * as LocalAuthentication from "expo-local-authentication";
-import * as SecureStore from "expo-secure-store";
+import { LinearGradient } from "expo-linear-gradient";
+import { Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react-native";
 
-import { Button, Field } from "@/src/ui";
-import { Colors, Spacing } from "@/src/theme";
 import { useAuth } from "@/src/auth-context";
-import { ApiError } from "@/src/api";
+import { forgotPassword } from "@/src/api";
 import { HodixLogo } from "@/src/logo";
+import { Colors, Radius, Spacing } from "@/src/theme";
+import { useToast } from "@/src/toast";
 
 export default function LoginScreen() {
   const router = useRouter();
   const { login } = useAuth();
+  const { show } = useToast();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPwd, setShowPwd] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [bioAvailable, setBioAvailable] = useState(false);
-  const [bioLoading, setBioLoading] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
 
-  // On mount: check if biometric login is enabled
-  useEffect(() => {
-    (async () => {
-      try {
-        const enabled = await SecureStore.getItemAsync("bio_enabled");
-        if (enabled !== "1") return;
-        const hasHw = await LocalAuthentication.hasHardwareAsync();
-        const enrolled = await LocalAuthentication.isEnrolledAsync();
-        setBioAvailable(hasHw && enrolled);
-      } catch {}
-    })();
-  }, []);
-
-  const onSubmit = async () => {
-    setError(null);
+  async function handleLogin() {
+    if (!email.trim() || !password) {
+      show("Remplissez tous les champs", "error");
+      return;
+    }
     setLoading(true);
     try {
-      const timeout = new Promise<never>((_, rej) =>
-        setTimeout(() => rej({ detail: "Délai dépassé. Vérifiez votre connexion internet." }), 15000)
-      );
-      await Promise.race([login(email.trim(), password), timeout]);
-      // login() updates auth state via onAuthStateChange — navigate immediately
-      router.replace("/(tabs)");
+      await login(email.trim().toLowerCase(), password);
+      router.replace("/");
     } catch (e: any) {
-      const msg = e instanceof ApiError ? e.detail : (e?.detail ?? e?.message ?? "Connexion impossible.");
-      setError(msg);
+      show(e?.detail || e?.message || "Identifiants incorrects", "error");
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const onBioLogin = async () => {
-    setBioLoading(true);
-    setError(null);
-    try {
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: "Connectez-vous à HODIX",
-        cancelLabel: "Annuler",
-      });
-      if (!result.success) {
-        setBioLoading(false);
-        return;
-      }
-      // Biometric confirmed — check Supabase session is still active
-      const { data } = await (await import("@/src/supabase")).getSupabase().auth.getSession();
-      if (!data.session) {
-        setError("Session expirée. Reconnectez-vous avec votre mot de passe.");
-        setBioLoading(false);
-        return;
-      }
-      router.replace("/(tabs)");
-    } catch (e: any) {
-      const msg = e instanceof ApiError ? e.detail : (e?.detail ?? e?.message ?? "Connexion impossible.");
-      setError(msg);
-    } finally {
-      setBioLoading(false);
+  async function handleForgot() {
+    if (!email.trim()) {
+      show("Entrez votre email pour réinitialiser", "error");
+      return;
     }
-  };
-
-  const fillDemo = () => {
-    setEmail("demo@hodix.app");
-    setPassword("Demo123!");
-  };
+    setForgotLoading(true);
+    try {
+      await forgotPassword(email.trim().toLowerCase());
+      show("Email de réinitialisation envoyé !", "success");
+    } catch (e: any) {
+      show(e?.detail || "Erreur lors de l'envoi", "error");
+    } finally {
+      setForgotLoading(false);
+    }
+  }
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
-        <ScrollView
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={{ alignItems: "center", marginTop: 40, marginBottom: Spacing.xxl }}>
-            <HodixLogo size={60} />
-            <Text style={styles.brand}>HODIX</Text>
-            <Text style={styles.subtitle}>Connexion à votre identité financière</Text>
+    <SafeAreaView style={styles.safe}>
+      <LinearGradient colors={[Colors.primary, Colors.gradMid, Colors.secondary]} style={styles.header}>
+        <HodixLogo size={56} />
+        <Text style={styles.title}>Bon retour 👋</Text>
+        <Text style={styles.subtitle}>Connectez-vous à votre espace HODIX</Text>
+      </LinearGradient>
+
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
+
+          {/* Email */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Email</Text>
+            <View style={styles.inputRow}>
+              <Mail size={18} color={Colors.textMuted} />
+              <TextInput
+                style={styles.input}
+                value={email}
+                onChangeText={setEmail}
+                placeholder="votre@email.com"
+                placeholderTextColor={Colors.textMuted}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoComplete="email"
+              />
+            </View>
           </View>
 
-          {/* Biometric login button */}
-          {bioAvailable ? (
-            <TouchableOpacity
-              style={styles.bioBtn}
-              onPress={onBioLogin}
-              disabled={bioLoading}
-              testID="login-biometric"
-            >
-              <Fingerprint color={Colors.secondary} size={22} />
-              <Text style={styles.bioBtnText}>
-                {bioLoading ? "Vérification…" : "Se connecter avec Face ID / Empreinte"}
-              </Text>
-            </TouchableOpacity>
-          ) : null}
-
-          <Field
-            testID="login-email"
-            label="Email"
-            placeholder="vous@exemple.com"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            autoComplete="email"
-          />
-          <View style={{ position: "relative" }}>
-            <Field
-              testID="login-password"
-              label="Mot de passe"
-              placeholder="••••••••"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPwd}
-              autoComplete="password"
-            />
-            <TouchableOpacity
-              style={{ position: "absolute", right: 14, bottom: 22, zIndex: 10, padding: 4 }}
-              onPress={() => setShowPwd((v) => !v)}
-              testID="login-eye"
-            >
-              {showPwd ? <EyeOff color={Colors.textMuted} size={20} /> : <Eye color={Colors.textMuted} size={20} />}
-            </TouchableOpacity>
+          {/* Password */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Mot de passe</Text>
+            <View style={styles.inputRow}>
+              <Lock size={18} color={Colors.textMuted} />
+              <TextInput
+                style={styles.input}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="••••••••"
+                placeholderTextColor={Colors.textMuted}
+                secureTextEntry={!showPassword}
+                autoComplete="password"
+              />
+              <TouchableOpacity onPress={() => setShowPassword(v => !v)}>
+                {showPassword
+                  ? <EyeOff size={18} color={Colors.textMuted} />
+                  : <Eye size={18} color={Colors.textMuted} />}
+              </TouchableOpacity>
+            </View>
           </View>
 
-          {error ? <Text style={styles.error} testID="login-error">{error}</Text> : null}
-
-          <Button
-            testID="login-submit"
-            label="Se connecter"
-            onPress={onSubmit}
-            loading={loading}
-            disabled={!email || !password}
-          />
-
-          <TouchableOpacity onPress={fillDemo} testID="login-fill-demo" style={styles.demoBtn}>
-            <Text style={styles.demoText}>Utiliser le compte de démonstration</Text>
+          {/* Forgot password */}
+          <TouchableOpacity onPress={handleForgot} disabled={forgotLoading} style={styles.forgotRow}>
+            {forgotLoading
+              ? <ActivityIndicator size="small" color={Colors.secondary} />
+              : <Text style={styles.forgotText}>Mot de passe oublié ?</Text>}
           </TouchableOpacity>
 
-          <View style={styles.row}>
-            <Link href="/(auth)/forgot" asChild>
-              <TouchableOpacity testID="login-forgot">
-                <Text style={styles.link}>Mot de passe oublié ?</Text>
-              </TouchableOpacity>
-            </Link>
+          {/* Login button */}
+          <TouchableOpacity
+            style={[styles.btn, loading && styles.btnDisabled]}
+            onPress={handleLogin}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={[Colors.secondary, Colors.accent]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+              style={styles.btnGrad}
+            >
+              {loading
+                ? <ActivityIndicator color="#fff" />
+                : <>
+                    <Text style={styles.btnText}>Se connecter</Text>
+                    <ArrowRight size={18} color="#fff" />
+                  </>}
+            </LinearGradient>
+          </TouchableOpacity>
+
+          {/* Register link */}
+          <View style={styles.registerRow}>
+            <Text style={styles.registerLabel}>Pas encore de compte ? </Text>
+            <TouchableOpacity onPress={() => router.push("/(auth)/register")}>
+              <Text style={styles.registerLink}>Créer un compte</Text>
+            </TouchableOpacity>
           </View>
 
-          <View style={styles.divider} />
-
-          <Text style={styles.bottomQ}>Pas encore de compte ?</Text>
-          <Link href="/(auth)/register" asChild>
-            <TouchableOpacity testID="login-go-register">
-              <Text style={styles.bottomLink}>Créer un compte Hodix</Text>
-            </TouchableOpacity>
-          </Link>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -191,36 +160,51 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bg },
-  content: { padding: Spacing.xxl, paddingBottom: 40 },
-  brand: { color: Colors.primary, fontSize: 28, fontWeight: "900", letterSpacing: 6, marginTop: 12 },
-  subtitle: { color: Colors.textMuted, fontSize: 14, marginTop: 4, fontWeight: "500" },
-  error: {
-    backgroundColor: "#FEE2E2",
-    color: Colors.danger,
-    padding: 12,
-    borderRadius: 12,
-    fontSize: 13,
-    fontWeight: "600",
-    marginBottom: 12,
+  header: {
+    paddingTop: Spacing.xl,
+    paddingBottom: Spacing.xl * 1.5,
+    paddingHorizontal: Spacing.xl,
+    alignItems: "center",
+    gap: 10,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
   },
-  bioBtn: {
+  title: { fontSize: 26, fontWeight: "900", color: "#fff", marginTop: 8, letterSpacing: -0.5 },
+  subtitle: { fontSize: 14, color: "rgba(255,255,255,0.75)", textAlign: "center" },
+  form: { padding: Spacing.xl, gap: 16, paddingBottom: 40 },
+  fieldGroup: { gap: 6 },
+  label: { fontSize: 13, fontWeight: "600", color: Colors.text },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === "web" ? 14 : 0,
+    gap: 10,
+  },
+  input: {
+    flex: 1,
+    fontSize: 15,
+    color: Colors.text,
+    paddingVertical: Platform.OS === "web" ? 0 : 14,
+    outlineStyle: "none",
+  } as any,
+  forgotRow: { alignItems: "flex-end", marginTop: -4 },
+  forgotText: { fontSize: 13, color: Colors.secondary, fontWeight: "600" },
+  btn: { borderRadius: Radius.lg, overflow: "hidden", marginTop: 8 },
+  btnDisabled: { opacity: 0.7 },
+  btnGrad: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
-    borderWidth: 2,
-    borderColor: Colors.secondary,
-    borderRadius: 14,
-    paddingVertical: 14,
-    marginBottom: Spacing.lg,
-    backgroundColor: "rgba(29,78,216,0.05)",
+    paddingVertical: 16,
+    gap: 8,
   },
-  bioBtnText: { color: Colors.secondary, fontWeight: "700", fontSize: 14 },
-  demoBtn: { marginTop: 12, padding: 12, alignItems: "center" },
-  demoText: { color: Colors.secondary, fontWeight: "600", fontSize: 13 },
-  row: { alignItems: "center", marginTop: 4 },
-  link: { color: Colors.secondary, fontWeight: "600" },
-  divider: { height: 1, backgroundColor: Colors.border, marginVertical: Spacing.xxl },
-  bottomQ: { textAlign: "center", color: Colors.textMuted, marginBottom: 6 },
-  bottomLink: { textAlign: "center", color: Colors.primary, fontWeight: "800", fontSize: 15 },
+  btnText: { fontSize: 16, fontWeight: "700", color: "#fff" },
+  registerRow: { flexDirection: "row", justifyContent: "center", marginTop: 8 },
+  registerLabel: { fontSize: 14, color: Colors.textMuted },
+  registerLink: { fontSize: 14, color: Colors.secondary, fontWeight: "700" },
 });
