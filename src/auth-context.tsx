@@ -1,12 +1,14 @@
 // AuthContext — Supabase Auth, stable, no loop
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import * as WebBrowser from "expo-web-browser";
-import * as AuthSession from "expo-auth-session";
+import { Platform } from "react-native";
 import { supabase } from "@/src/supabase";
 import { sendWelcomeMessage, applyReferralBonus } from "@/src/db";
 
-// Required for OAuth redirect handling on mobile
-WebBrowser.maybeCompleteAuthSession();
+// Complete auth session on mobile (no-op on web)
+if (Platform.OS !== "web") {
+  // Dynamic import to avoid expo-crypto web build failure
+  import("expo-web-browser").then((m) => m.maybeCompleteAuthSession()).catch(() => {});
+}
 
 export interface User {
   id: string;
@@ -131,13 +133,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const loginWithGoogle = useCallback(async () => {
-    const redirectTo = AuthSession.makeRedirectUri({ scheme: "hodix", path: "auth/callback" });
+    if (Platform.OS === "web") {
+      // On web: Supabase handles the full redirect — no expo-auth-session needed
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: window.location.origin + "/auth/callback" },
+      });
+      if (error) throw { detail: error.message };
+      return; // Browser will redirect
+    }
+
+    // On native: use expo-auth-session + expo-web-browser
+    const { makeRedirectUri } = await import("expo-auth-session");
+    const WebBrowser = await import("expo-web-browser");
+    const redirectTo = makeRedirectUri({ scheme: "hodix", path: "auth/callback" });
+
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: {
-        redirectTo,
-        skipBrowserRedirect: true,
-      },
+      options: { redirectTo, skipBrowserRedirect: true },
     });
     if (error) throw { detail: error.message };
     if (!data.url) throw { detail: "Impossible d'ouvrir Google Sign-In." };
@@ -145,7 +158,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
     if (result.type !== "success") return;
 
-    // Extract tokens from the URL fragment/query
     const url = result.url;
     const params = new URLSearchParams(url.includes("#") ? url.split("#")[1] : url.split("?")[1] ?? "");
     const accessToken = params.get("access_token");
