@@ -215,11 +215,25 @@ export function useDocument() {
         // KYC gate
         const kyc = await checkKyc();
         if (!kyc.ok) {
-          Alert.alert(
-            "Vérification requise",
-            kyc.message ?? "Vous devez compléter et faire valider votre identité avant d'accéder aux certificats.",
-            [{ text: "OK" }]
-          );
+          if (kyc.level === 1) {
+            Alert.alert(
+              "Profil incomplet",
+              "Vous devez compléter vos informations personnelles (nom, téléphone, date de naissance, adresse) avant d'accéder aux certificats.",
+              [
+                { text: "Annuler", style: "cancel" },
+                { text: "Compléter mon profil →", onPress: () => router.push("/complete-profile") },
+              ]
+            );
+          } else {
+            Alert.alert(
+              "Vérification KYC requise",
+              "Votre identité doit être approuvée par l'administration avant d'accéder aux certificats. Complétez vos 2 niveaux de vérification.",
+              [
+                { text: "Fermer", style: "cancel" },
+                { text: "Vérifier mon identité →", onPress: () => router.push("/kyc") },
+              ]
+            );
+          }
           return;
         }
 
@@ -252,6 +266,14 @@ export function useDocument() {
         const html = buildCertificateHtml(params.kind, certData);
 
         setDownloading(true);
+
+        if (Platform.OS === "web") {
+          const blob = new Blob([html], { type: "text/html" });
+          const url = URL.createObjectURL(blob);
+          window.open(url, "_blank");
+          return;
+        }
+
         const { uri } = await Print.printToFileAsync({ html, base64: false });
         await Sharing.shareAsync(uri, {
           mimeType: "application/pdf",
