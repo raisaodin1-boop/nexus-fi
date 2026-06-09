@@ -4,7 +4,17 @@
  * Source of truth: src/db/*.ts
  */
 
-export * from "@/src/db/index";
+export * from "./db/profiles";
+export * from "./db/tontines";
+export * from "./db/groups";
+export * from "./db/savings";
+export * from "./db/identity";
+export * from "./db/admin";
+export * from "./db/notifications";
+export * from "./db/messages";
+export * from "./db/misc";
+export * from "./db/wallet-security";
+export { invalidateCache } from "./db/helpers";
 
 // Wallet operations (delegated to wallet-db.ts)
 import * as walletDb from "@/src/wallet-db";
