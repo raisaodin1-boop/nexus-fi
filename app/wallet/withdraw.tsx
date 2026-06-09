@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { ChevronLeft, CheckCircle2 } from "lucide-react-native";
+import { ChevronLeft, CheckCircle2, Shield } from "lucide-react-native";
 
 import { api } from "@/src/api";
 import { Button, Field } from "@/src/ui";
@@ -28,12 +28,13 @@ export default function WithdrawScreen() {
   const [success, setSuccess]     = useState(false);
   const [showPin, setShowPin]     = useState(false);
   const [showOtp, setShowOtp]     = useState(false);
-  // Pending check-tx result flags
   const [pendingOtp, setPendingOtp] = useState(false);
   const [amountXaf, setAmountXaf] = useState(0);
+  const [userId, setUserId]       = useState("");
 
   useEffect(() => {
     api.get<WalletBalance>("/wallet").then(setWallet).catch(() => {});
+    api.get<{ id: string }>("/users/me").then(me => setUserId(me.id)).catch(() => {});
   }, []);
 
   const maxBal = wallet
@@ -98,6 +99,25 @@ export default function WithdrawScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
+      {/* ── Security modals ── */}
+      <PinConfirmModal
+        visible={showPin}
+        userId={userId}
+        amount={amountXaf}
+        onSuccess={() => {
+          setShowPin(false);
+          if (pendingOtp) { setShowOtp(true); }
+          else { doWithdraw(); }
+        }}
+        onCancel={() => { setShowPin(false); setLoading(false); }}
+      />
+      <OtpModal
+        visible={showOtp}
+        amountXaf={amountXaf}
+        onSuccess={() => { setShowOtp(false); doWithdraw(); }}
+        onCancel={() => { setShowOtp(false); setLoading(false); }}
+      />
+
       <LinearGradient colors={["#0B1F3A", "#EF4444"]} style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.back}>
           <ChevronLeft color="#fff" size={24} />

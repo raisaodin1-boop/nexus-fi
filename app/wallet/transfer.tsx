@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -27,6 +27,11 @@ export default function TransferScreen() {
   const [showOtp, setShowOtp]     = useState(false);
   const [pendingOtp, setPendingOtp] = useState(false);
   const [amountXaf, setAmountXaf] = useState(0);
+  const [userId, setUserId]       = useState("");
+
+  useEffect(() => {
+    api.get<{ id: string }>("/users/me").then(me => setUserId(me.id)).catch(() => {});
+  }, []);
 
   // Extract phone from recipient if it looks like a phone number
   const recipientPhone = /^\+?\d[\d\s]{7,}$/.test(recipient.trim()) ? recipient.trim() : undefined;
@@ -92,6 +97,25 @@ export default function TransferScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
+      {/* ── Security modals ── */}
+      <PinConfirmModal
+        visible={showPin}
+        userId={userId}
+        amount={amountXaf}
+        onSuccess={() => {
+          setShowPin(false);
+          if (pendingOtp) { setShowOtp(true); }
+          else { doTransfer(); }
+        }}
+        onCancel={() => { setShowPin(false); setLoading(false); }}
+      />
+      <OtpModal
+        visible={showOtp}
+        amountXaf={amountXaf}
+        onSuccess={() => { setShowOtp(false); doTransfer(); }}
+        onCancel={() => { setShowOtp(false); setLoading(false); }}
+      />
+
       <LinearGradient colors={["#0B1F3A", "#1D4ED8"]} style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.back}>
           <ChevronLeft color="#fff" size={24} />
