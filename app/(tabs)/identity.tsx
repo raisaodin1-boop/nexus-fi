@@ -254,6 +254,50 @@ export default function Identity() {
           </Card>
         </View>
 
+        {/* Credit Score CTA */}
+        <View style={{ paddingHorizontal: Spacing.xl, marginTop: 4 }}>
+          <TouchableOpacity
+            onPress={() => router.push("/credit-score")}
+            activeOpacity={0.85}
+            style={creditStyles.cta}
+          >
+            <LinearGradient colors={["#0B1F3A", "#1D4ED8"]} style={creditStyles.ctaGrad}>
+              <View style={creditStyles.ctaLeft}>
+                <Award color="#D4AF37" size={22} />
+                <View>
+                  <Text style={creditStyles.ctaTitle}>Score de crédit détaillé</Text>
+                  <Text style={creditStyles.ctaSub}>Régularité · Épargne · Réseau · KYC · Ancienneté</Text>
+                </View>
+              </View>
+              <Text style={creditStyles.ctaArrow}>›</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+
+        {/* Streaks CTA */}
+        <TouchableOpacity onPress={() => router.push("/streaks" as any)} activeOpacity={0.85} style={{ marginHorizontal: Spacing.xl, marginBottom: 12 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14, backgroundColor: Colors.surface, borderRadius: 14, borderWidth: 1, borderColor: Colors.border }}>
+            <Text style={{ fontSize: 24 }}>🔥</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: Colors.text, fontWeight: "800", fontSize: 13 }}>Mes Streaks</Text>
+              <Text style={{ color: Colors.textMuted, fontSize: 11, marginTop: 1 }}>Séries de cotisations · Badges · Récompenses</Text>
+            </View>
+            <Text style={{ color: Colors.textMuted, fontSize: 20 }}>›</Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* QR Payment CTA */}
+        <TouchableOpacity onPress={() => router.push("/qr-payment" as any)} activeOpacity={0.85} style={{ marginHorizontal: Spacing.xl, marginBottom: 12 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14, backgroundColor: Colors.surface, borderRadius: 14, borderWidth: 1, borderColor: Colors.border }}>
+            <Text style={{ fontSize: 24 }}>📲</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: Colors.text, fontWeight: "800", fontSize: 13 }}>Mon QR de paiement</Text>
+              <Text style={{ color: Colors.textMuted, fontSize: 11, marginTop: 1 }}>Recevoir de l'argent · Partager sur WhatsApp</Text>
+            </View>
+            <Text style={{ color: Colors.textMuted, fontSize: 20 }}>›</Text>
+          </View>
+        </TouchableOpacity>
+
         {/* Components — /1000 system */}
         <SectionTitle>Composantes du score</SectionTitle>
         <View style={{ paddingHorizontal: Spacing.xl, gap: 10 }}>
@@ -571,4 +615,16 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     flex: 1,
   },
+});
+
+const creditStyles = StyleSheet.create({
+  cta: { borderRadius: Radius.xl, overflow: "hidden", marginBottom: 4 },
+  ctaGrad: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    padding: 16, gap: 12,
+  },
+  ctaLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
+  ctaTitle: { fontSize: 14, fontWeight: "800", color: "#fff" },
+  ctaSub: { fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 2 },
+  ctaArrow: { fontSize: 24, color: "#fff", fontWeight: "300" },
 });

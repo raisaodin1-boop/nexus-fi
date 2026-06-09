@@ -21,7 +21,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowLeft, ArrowDown, ArrowUp, Award, CheckCircle, ChevronRight,
-  Copy, Crown, MessageSquare, RefreshCw, Shuffle, Users as UsersIcon,
+  Copy, Crown, MessageSquare, RefreshCw, Shield, Shuffle, Trophy, Users as UsersIcon,
   Wallet, X,
 } from "lucide-react-native";
 
@@ -39,8 +39,9 @@ interface Member {
   role: "admin" | "member";
   rotation_position: number;
   has_received: boolean;
-  status: "a_jour" | "en_retard" | "suspendu";
+  status: "a_jour" | "en_retard" | "suspendu" | "exclu";
   cycles_paid: number;
+  cycles_late?: number;
 }
 
 interface Contribution {
@@ -569,6 +570,33 @@ export function TontineDetailView({ id }: { id: string }) {
               <DocumentButton kind="tontine_certificate" refId={id} compact />
             </View>
 
+            {/* Leaderboard CTA */}
+            <TouchableOpacity onPress={() => router.push(`/tontines/leaderboard?id=${id}`)} style={[styles.disbBtn, Shadow.card]} testID="tontine-leaderboard-btn">
+              <LinearGradient colors={[Colors.secondary, Colors.gradEnd]} style={styles.disbBtnGrad}>
+                <Trophy color="#fff" size={18} />
+                <Text style={styles.disbBtnText}>Classement</Text>
+                <ChevronRight color="#fff" size={16} />
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* Security CTA */}
+            <TouchableOpacity
+              onPress={() => router.push(`/tontines/security?id=${id}` as any)}
+              style={{ marginBottom: 12 }}
+              activeOpacity={0.85}
+              testID="tontine-security-btn"
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14,
+                backgroundColor: "#FEF3C7", borderRadius: 14, borderWidth: 1, borderColor: "#F59E0B44" }}>
+                <Shield size={20} color="#F59E0B" />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: "#92400E", fontWeight: "800", fontSize: 13 }}>Sécurité & Garanties</Text>
+                  <Text style={{ color: "#B45309", fontSize: 11, marginTop: 1 }}>Escrow · Fonds de réserve · Votes d'exclusion</Text>
+                </View>
+                <Text style={{ color: "#F59E0B", fontSize: 20, fontWeight: "300" }}>›</Text>
+              </View>
+            </TouchableOpacity>
+
             {/* Admin: Record disbursement */}
             {is_admin && (
               <TouchableOpacity onPress={() => setShowDisbModal(true)} style={[styles.disbBtn, Shadow.card]}>
@@ -653,9 +681,19 @@ export function TontineDetailView({ id }: { id: string }) {
                   <Text style={styles.rotAvatarLetter}>{m.full_name?.[0]?.toUpperCase()}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                     {m.role === "admin" ? <Crown color={Colors.accent} size={12} /> : <UsersIcon color={Colors.textSubtle} size={12} />}
                     <Text style={styles.rotName}>{m.full_name}</Text>
+                    {m.status === "exclu" && (
+                      <View style={{ backgroundColor: "#FEE2E2", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ color: "#EF4444", fontSize: 10, fontWeight: "700" }}>⛔ Exclu</Text>
+                      </View>
+                    )}
+                    {(m.status === "en_retard" || (m.cycles_late ?? 0) > 0) && m.status !== "exclu" && (
+                      <View style={{ backgroundColor: "#FEF3C7", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ color: "#D97706", fontSize: 10, fontWeight: "700" }}>⚠️ En retard</Text>
+                      </View>
+                    )}
                   </View>
                   <Text style={styles.rotStatus}>
                     Pos. #{m.rotation_position} · {m.cycles_paid ?? 0} cycle(s) payé(s)

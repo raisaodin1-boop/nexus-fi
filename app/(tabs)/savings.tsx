@@ -1,5 +1,5 @@
 // SAVINGS - List goals + summary
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -10,11 +10,12 @@ import {
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Plus, Target, Lock, Repeat } from "lucide-react-native";
+import { Plus, Target, Lock, Repeat, TrendingUp } from "lucide-react-native";
 
 import { api, formatXAF } from "@/src/api";
 import { Card, EmptyState, Button } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
+import type { GoalPrediction } from "@/src/savings-ai";
 
 interface Goal {
   id: string;
@@ -35,7 +36,20 @@ const typeMeta: Record<string, { label: string; icon: any; color: string }> = {
 export default function SavingsList() {
   const router = useRouter();
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [predictions, setPredictions] = useState<Record<string, GoalPrediction>>({});
   const [loading, setLoading] = useState(true);
+
+  // Load predictions in background after goals render
+  useEffect(() => {
+    if (!goals.length) return;
+    api.get<{ goal: any; prediction: GoalPrediction }[]>("/savings/analytics")
+      .then(items => {
+        const map: Record<string, GoalPrediction> = {};
+        for (const item of items) map[item.goal.id] = item.prediction;
+        setPredictions(map);
+      })
+      .catch(() => {});
+  }, [goals]);
 
   const load = useCallback(async () => {
     try {
@@ -130,6 +144,27 @@ export default function SavingsList() {
                       <Text style={styles.goalAmount}>{formatXAF(g.current_amount, g.currency)}</Text>
                       <Text style={styles.goalTarget}>/ {formatXAF(g.target_amount, g.currency)}</Text>
                     </View>
+                    {/* ── AI prediction chip ── */}
+                    {predictions[g.id] && (() => {
+                      const pred = predictions[g.id];
+                      const chipColor = pred.on_track === null ? Colors.secondary
+                        : pred.on_track ? "#10B981" : "#F59E0B";
+                      const chipLabel = pred.on_track === true ? `✅ Dans les temps`
+                        : pred.on_track === false
+                          ? `⚠️ +${pred.delay_months}m de retard`
+                          : pred.predicted_months_remaining
+                            ? `~${pred.predicted_months_remaining} mois`
+                            : null;
+                      return chipLabel ? (
+                        <TouchableOpacity
+                          onPress={() => router.push(`/savings/analytics?id=${g.id}` as any)}
+                          style={[styles.predChip, { backgroundColor: chipColor + "18", borderColor: chipColor + "55" }]}
+                        >
+                          <TrendingUp size={11} color={chipColor} />
+                          <Text style={[styles.predChipText, { color: chipColor }]}>{chipLabel}</Text>
+                        </TouchableOpacity>
+                      ) : null;
+                    })()}
                     {g.target_amount > 0 && (() => {
                       const goalPct = Math.min((g.current_amount / g.target_amount) * 100, 100);
                       const barColor = goalPct >= 100 ? Colors.accent : goalPct >= 80 ? Colors.gold : Colors.secondary;
@@ -184,4 +219,6 @@ const styles = StyleSheet.create({
   goalProgress: { height: 8, backgroundColor: Colors.surfaceAlt, borderRadius: 4, overflow: "hidden", marginTop: 4 },
   goalProgressFill: { height: "100%", borderRadius: 4 },
   goalProgressText: { color: Colors.textMuted, fontSize: 11, fontWeight: "600", marginTop: 4 },
+  predChip: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", marginTop: 8, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, borderWidth: 1 },
+  predChipText: { fontSize: 11, fontWeight: "700" },
 });

@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Plus, Users, Building2, Network, Wallet, ChevronRight } from "lucide-react-native";
+import { Plus, Users, Building2, Network, Wallet, ChevronRight, Globe } from "lucide-react-native";
 
 import { api, formatXAF } from "@/src/api";
 import { Card, EmptyState, Button } from "@/src/ui";
@@ -107,6 +107,27 @@ export default function Groups() {
       </ScrollView>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        {/* Public directory banner — tontines tab only */}
+        {tab === "tontines" ? (
+          <View style={{ paddingHorizontal: Spacing.xl, marginBottom: 8 }}>
+            <TouchableOpacity
+              testID="groups-directory-tontines"
+              activeOpacity={0.85}
+              onPress={() => router.push("/tontines/directory" as any)}
+              style={[styles.joinCta, Shadow.card, { backgroundColor: Colors.secondaryLight, borderColor: Colors.secondary, borderWidth: 1 }]}
+            >
+              <View style={[styles.joinIcon, { backgroundColor: Colors.secondary }]}>
+                <Globe color="#fff" size={18} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.joinTitle, { color: Colors.secondary }]}>Annuaire Public</Text>
+                <Text style={styles.joinSub}>Découvrez et rejoignez des tontines publiques</Text>
+              </View>
+              <ChevronRight color={Colors.secondary} size={18} />
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
         {joinRoute ? (
           <View style={{ paddingHorizontal: Spacing.xl, marginBottom: 12 }}>
             <TouchableOpacity

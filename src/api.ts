@@ -53,11 +53,30 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"   && s[0] === "users" && s[1] === "me" && s[2] === "kyc")      return (await db.getKycStatus()) as T;
 
     // ── Tontines
-    if (method === "GET"  && s[0] === "tontines" && !s[1])                              return (await db.listTontines()) as T;
-    if (method === "POST" && s[0] === "tontines" && !s[1])                              return (await db.createTontine(body)) as T;
-    if (method === "POST" && s[0] === "tontines" && s[1] === "join")                   return (await db.joinTontine(body?.invite_code)) as T;
-    if (method === "GET"  && s[0] === "tontines" && s[1] && !s[2])                     return (await db.getTontine(s[1])) as T;
-    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "contribute")     return (await db.contributeTontine(s[1], Number(body?.amount))) as T;
+    if (method === "GET"  && s[0] === "tontines" && !s[1])                                    return (await db.listTontines()) as T;
+    if (method === "POST" && s[0] === "tontines" && !s[1])                                    return (await db.createTontineSecure(body)) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] === "join")                          return (await db.joinTontineSecure(body?.invite_code)) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] === "directory")                     return (await db.listPublicTontines()) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "profile")               return (await db.getPublicTontineProfile(s[1])) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] === "request-join")                  return (await db.requestJoinTontine(body?.tontine_id)) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] && !s[2])                            return (await db.getTontine(s[1])) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "contribute")            return (await db.contributeTontineSecure(s[1], Number(body?.amount))) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "leaderboard")           return (await db.getTontineLeaderboard(s[1])) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "escrow")                return (await db.getEscrowStatus(s[1])) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "escrow-dispute")        return (await db.reportEscrowDispute(s[1], body?.reason ?? "")) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "reserve")               return (await db.getTontineReserveFund(s[1])) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "overdue")               return (await db.getOverdueMembers(s[1])) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "vote-exclusion")        return (await db.voteExclusion(s[1], body?.user_id, body?.reason ?? "")) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "exclusion-votes")       return (await db.getExclusionVotes(s[1])) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "rate-creator")          return (await db.rateCreator(s[1], Number(body?.rating), body?.comment)) as T;
+    if (method === "GET"  && s[0] === "creator-reputation" && s[1])                           return (await db.getCreatorReputation(s[1])) as T;
+    if (method === "POST" && s[0] === "security" && s[1] === "device-fingerprint")            return (await db.registerDeviceFingerprint(body?.fingerprint)) as T;
+    if (method === "POST" && s[0] === "security" && s[1] === "flag-user")                     return (await db.flagUserAsFraud(body?.user_id, body?.reason)) as T;
+    if (method === "GET"  && s[0] === "security" && s[1] === "trust-flags" && s[2])           return (await db.getUserTrustFlags(s[2])) as T;
+
+    // ── Consent
+    if (method === "POST" && s[0] === "consent" && s[1] === "tontine")                        return (await db.recordTontineConsent(body?.version, body?.tontine_id)) as T;
+    if (method === "GET"  && s[0] === "consent" && s[1] === "tontine" && s[2] === "check")    return ({ signed: await db.hasSignedConsent(body?.version ?? "1.0") }) as T;
 
     // ── Associations
     if (method === "GET"  && s[0] === "associations" && !s[1])                         return (await db.listAssociations()) as T;
@@ -99,6 +118,23 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"  && s[0] === "notifications")                                 return (await db.listNotifications()) as T;
     if (method === "POST" && s[0] === "notifications" && s[1] === "push-token")        return (await db.savePushToken(body?.token)) as T;
 
+    // ── Credit score
+    if (method === "GET"  && s[0] === "credit-score" && !s[1])                         return (await db.getCreditScore()) as T;
+    if (method === "GET"  && s[0] === "credit-score" && s[1] === "history")            return (await db.getCreditScoreHistory()) as T;
+
+    // ── Savings analytics
+    if (method === "GET" && s[0] === "savings" && s[1] === "analytics" && !s[2])       return (await db.getAllSavingsAnalytics()) as T;
+    if (method === "GET" && s[0] === "savings" && s[1] && s[2] === "analytics")        return (await db.getSavingsAnalytics(s[1])) as T;
+
+    // ── Wallet
+    if (method === "GET"  && s[0] === "wallet" && !s[1])                               return (await db.getWallet()) as T;
+    if (method === "GET"  && s[0] === "wallet" && s[1] === "transactions")             return (await db.getWalletTransactions()) as T;
+    if (method === "GET"  && s[0] === "wallet" && s[1] === "rates")                    return (await db.getExchangeRates()) as T;
+    if (method === "POST" && s[0] === "wallet" && s[1] === "topup")                    return (await db.topupWallet(body)) as T;
+    if (method === "POST" && s[0] === "wallet" && s[1] === "withdraw")                 return (await db.withdrawWallet(body)) as T;
+    if (method === "POST" && s[0] === "wallet" && s[1] === "transfer")                 return (await db.transferWallet(body)) as T;
+    if (method === "POST" && s[0] === "wallet" && s[1] === "pay-contribution")         return (await db.payContributionWallet(body)) as T;
+
     // ── KYC
     if (method === "POST" && s[0] === "kyc" && s[1] === "submit")                      return (await db.submitKyc()) as T;
 
@@ -108,6 +144,27 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     // ── Analytics (simplified chart series from existing data)
     if (method === "GET" && s[0] === "analytics" && s[1] === "savings-series")  return (await db.getSavingsSeries(14)) as T;
     if (method === "GET" && s[0] === "analytics" && s[1] === "users-series")    return (await db.getUsersSeries(14)) as T;
+    if (method === "GET" && s[0] === "financial-analytics")  return (await db.getFinancialAnalytics()) as T;
+
+    // ── Streaks
+    if (method === "GET"  && s[0] === "streaks")                                          return (await db.getStreakData()) as T;
+
+    // ── Leaderboard / Ranking
+    if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "leaderboard")      return (await db.getTontineLeaderboard(s[1])) as T;
+    if (method === "GET"  && s[0] === "ranking" && s[1] === "regional")                  return (await db.getRegionalRanking(body?.country ?? "CM")) as T;
+
+    // ── Family accounts
+    if (method === "POST" && s[0] === "family" && s[1] === "link")                       return (await db.linkFamilyMember(body?.email, body?.relationship)) as T;
+    if (method === "GET"  && s[0] === "family" && s[1] === "overview")                   return (await db.getFamilyOverview()) as T;
+
+    // ── Smart alerts
+    if (method === "GET"  && s[0] === "alerts")                                           return (await db.getSmartAlerts()) as T;
+
+    // ── NFT certificates
+    if (method === "POST" && s[0] === "certificates" && s[1] === "mint")                 return (await db.mintCertificateHash(body?.doc_id, body?.doc_type)) as T;
+
+    // ── Exchange rates (extended)
+    if (method === "GET"  && s[0] === "exchange-rates")                                   return (await import("@/src/exchange-rates").then(m => m.getRates())) as T;
 
     // ── Admin
     if (method === "GET" && s[0] === "admin" && s[1] === "stats")                      return (await db.getAdminStats()) as T;
@@ -121,6 +178,8 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"   && s[0] === "admin" && s[1] === "kyc")                               return (await db.adminListKyc()) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "kyc" && s[2] === "approve")         return (await db.adminHandleKyc(body?.user_id, true)) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "kyc" && s[2] === "reject")          return (await db.adminHandleKyc(body?.user_id, false)) as T;
+    if (method === "POST" && s[0] === "promotion-requests" && !s[1])                            return (await db.createPromotionRequest(body?.reason)) as T;
+    if (method === "GET"  && s[0] === "promotion-requests" && s[1] === "me")                   return (await db.getMyPromotionRequest()) as T;
     if (method === "GET"   && s[0] === "admin" && s[1] === "promotion-requests")                return (await db.adminListPromotionRequests()) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "promotion" && s[2] === "approve")   return (await db.adminHandlePromotion(body?.user_id, true)) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "promotion" && s[2] === "reject")    return (await db.adminHandlePromotion(body?.user_id, false)) as T;

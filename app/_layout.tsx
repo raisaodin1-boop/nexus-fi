@@ -24,6 +24,7 @@ import { ToastProvider } from "@/src/toast";
 import { api } from "@/src/api";
 import { OfflineBanner } from "@/src/offline";
 import { useFirstLaunch } from "@/src/use-first-launch";
+import { useDeviceFingerprint } from "@/src/device-fingerprint";
 
 if (Platform.OS !== "web") {
   SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -91,6 +92,7 @@ function FirstLaunchGuard() {
 
 function RootLayoutInner() {
   const [loaded, error] = useIconFonts();
+  useDeviceFingerprint();
 
   useEffect(() => {
     if (Platform.OS !== "web" && (loaded || error)) {
