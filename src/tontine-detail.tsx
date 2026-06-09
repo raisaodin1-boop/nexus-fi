@@ -21,7 +21,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowLeft, ArrowDown, ArrowUp, Award, CheckCircle, ChevronRight,
-  Copy, Crown, MessageSquare, RefreshCw, Shuffle, Trophy, Users as UsersIcon,
+  Copy, Crown, MessageSquare, RefreshCw, Shield, Shuffle, Trophy, Users as UsersIcon,
   Wallet, X,
 } from "lucide-react-native";
 
@@ -577,6 +577,24 @@ export function TontineDetailView({ id }: { id: string }) {
                 <Text style={styles.disbBtnText}>Classement</Text>
                 <ChevronRight color="#fff" size={16} />
               </LinearGradient>
+            </TouchableOpacity>
+
+            {/* Security CTA */}
+            <TouchableOpacity
+              onPress={() => router.push(`/tontines/security?id=${id}` as any)}
+              style={{ marginBottom: 12 }}
+              activeOpacity={0.85}
+              testID="tontine-security-btn"
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14,
+                backgroundColor: "#FEF3C7", borderRadius: 14, borderWidth: 1, borderColor: "#F59E0B44" }}>
+                <Shield size={20} color="#F59E0B" />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: "#92400E", fontWeight: "800", fontSize: 13 }}>Sécurité & Garanties</Text>
+                  <Text style={{ color: "#B45309", fontSize: 11, marginTop: 1 }}>Escrow · Fonds de réserve · Votes d'exclusion</Text>
+                </View>
+                <Text style={{ color: "#F59E0B", fontSize: 20, fontWeight: "300" }}>›</Text>
+              </View>
             </TouchableOpacity>
 
             {/* Admin: Record disbursement */}

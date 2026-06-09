@@ -12,6 +12,7 @@ import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Rect, Text as SvgText } from "react-native-svg";
 import { ChevronLeft, Clock, Globe, Shield, Star, Users } from "lucide-react-native";
+import { VerifiedBadge } from "@/src/fraud-badge";
 
 import { api, formatXAF } from "@/src/api";
 import { Button, Card } from "@/src/ui";
@@ -41,6 +42,7 @@ interface ProfileData {
     max_members: number;
     language?: string | null;
     country?: string | null;
+    creator_id?: string | null;
   };
   members: Member[];
   compliance_rate: number | null;
@@ -48,6 +50,10 @@ interface ProfileData {
   monthly_history: MonthlyEntry[];
   contribution_count: number;
   total_collected: number;
+  creator_reputation?: {
+    avg_rating: number | null;
+    rating_count: number;
+  } | null;
 }
 
 /* ── Constants ─────────────────────────────────────────────── */
@@ -178,7 +184,7 @@ export default function TontineProfile() {
     );
   }
 
-  const { tontine, members, compliance_rate, reliability_score, monthly_history, total_collected } = data;
+  const { tontine, members, compliance_rate, reliability_score, monthly_history, total_collected, creator_reputation } = data;
   const rColor = reliabilityColor(reliability_score);
 
   return (
@@ -219,6 +225,18 @@ export default function TontineProfile() {
               <Text style={styles.ringLabel}>fiabilité</Text>
             </View>
           </View>
+
+          {/* Creator rating */}
+          {creator_reputation?.avg_rating != null && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
+              <Text style={{ fontSize: 15, color: Colors.warning, letterSpacing: 1 }}>
+                {"★".repeat(Math.round(creator_reputation.avg_rating))}{"☆".repeat(5 - Math.round(creator_reputation.avg_rating))}
+              </Text>
+              <Text style={{ fontSize: 12, color: Colors.textMuted, fontWeight: "600" }}>
+                {creator_reputation.avg_rating.toFixed(1)} ({creator_reputation.rating_count} avis créateur)
+              </Text>
+            </View>
+          )}
 
           {/* Compliance */}
           {compliance_rate !== null && (
