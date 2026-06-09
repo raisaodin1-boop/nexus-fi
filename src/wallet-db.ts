@@ -89,6 +89,9 @@ export interface WalletTx {
   mobile_money_provider: string | null;
   mobile_money_number: string | null;
   created_at: string;
+  tontine_id?: string | null;
+  reference_id?: string | null;
+  balance_after?: number | null;
 }
 
 export async function getWalletTransactions(limit = 50): Promise<WalletTx[]> {

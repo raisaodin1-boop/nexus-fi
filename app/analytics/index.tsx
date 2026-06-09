@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -15,7 +15,7 @@ import Svg, { Circle, Polyline, Rect, Text as SvgText } from "react-native-svg";
 import { Download, BarChart2, PieChart, TrendingUp, Target } from "lucide-react-native";
 import { api, formatXAF } from "@/src/api";
 import { Card } from "@/src/ui";
-import { Colors, Spacing } from "@/src/theme";
+import { Colors, Shadow, Spacing } from "@/src/theme";
 
 interface CashFlowItem { label: string; inflow: number; outflow: number }
 interface DonutData { saved: number; contributed: number; total: number }
@@ -142,6 +142,76 @@ function TrustLineChart({ data }: { data: TrustHistoryItem[] }) {
   );
 }
 
+/* ── KPI Card ──────────────────────────────────────────────── */
+interface KPI {
+  label: string;
+  value: string;
+  delta?: string;
+  deltaPositive?: boolean;
+  icon: string;
+  color: string;
+}
+
+function KPICard({ kpi }: { kpi: KPI }) {
+  return (
+    <View style={styles.kpiCard}>
+      <Text style={{ fontSize: 22 }}>{kpi.icon}</Text>
+      <Text style={styles.kpiValue}>{kpi.value}</Text>
+      {kpi.delta && (
+        <Text style={[styles.kpiDelta, { color: kpi.deltaPositive ? "#10B981" : "#EF4444" }]}>
+          {kpi.delta}
+        </Text>
+      )}
+      <Text style={styles.kpiLabel}>{kpi.label}</Text>
+    </View>
+  );
+}
+
+/* ── Projection Chart ──────────────────────────────────────── */
+function ProjectionChart({ cashFlow }: { cashFlow: { label: string; inflow: number; outflow: number }[] }) {
+  const W = Dimensions.get("window").width - Spacing.xl * 2 - 32;
+  const H = 100;
+  let cum = 0;
+  const points = cashFlow.map(m => { cum += m.inflow - m.outflow; return Math.max(0, cum); });
+  const last2 = points.slice(-2);
+  const slope = last2.length === 2 ? last2[1] - last2[0] : 0;
+  const projPoints = [1, 2, 3].map(i => Math.max(0, (points[points.length - 1] ?? 0) + slope * i));
+  const allPoints = [...points, ...projPoints];
+  const maxVal = Math.max(...allPoints, 1);
+  const allLabels = [...cashFlow.map(m => m.label), "+1m", "+2m", "+3m"];
+
+  const W_PER_PT = W / (allPoints.length - 1);
+  const histPts = points.map((v, i) => `${i * W_PER_PT},${H - (v / maxVal) * H}`).join(" ");
+  const projStartX = (points.length - 1) * W_PER_PT;
+  const projPts = [points[points.length - 1], ...projPoints].map((v, i) =>
+    `${projStartX + i * W_PER_PT},${H - (v / maxVal) * H}`
+  ).join(" ");
+
+  return (
+    <View>
+      <Svg width={W} height={H + 20}>
+        <Polyline points={histPts} fill="none" stroke={Colors.secondary} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+        <Polyline points={projPts} fill="none" stroke={Colors.secondary} strokeWidth={2} strokeLinecap="round" strokeDasharray="6,4" opacity={0.6} />
+        {[0, Math.floor(points.length / 2), points.length - 1, allPoints.length - 1].map(i => (
+          <SvgText key={i} x={i * W_PER_PT} y={H + 14} fontSize={9} fill={i >= points.length ? Colors.secondary : Colors.textMuted} textAnchor="middle">
+            {allLabels[i]}
+          </SvgText>
+        ))}
+      </Svg>
+      <View style={{ flexDirection: "row", gap: 16, marginTop: 4 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <View style={{ width: 16, height: 2, backgroundColor: Colors.secondary }} />
+          <Text style={{ fontSize: 10, color: Colors.textMuted }}>Historique</Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <View style={{ width: 16, height: 2, backgroundColor: Colors.secondary, opacity: 0.5 }} />
+          <Text style={{ fontSize: 10, color: Colors.textMuted }}>Projection</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 /* ── CSV Export ────────────────────────────────────────────── */
 function exportCSV(rawRows: AnalyticsData["raw_rows"]) {
   const header = "Date,Type,Montant,Catégorie\n";
@@ -157,6 +227,51 @@ export default function FinancialAnalyticsScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<AnalyticsData | null>(null);
+
+  const kpis: KPI[] = useMemo(() => {
+    if (!data) return [];
+    const { cash_flow, donut } = data;
+    const totalIn = cash_flow.reduce((s, m) => s + m.inflow, 0);
+    const totalOut = cash_flow.reduce((s, m) => s + m.outflow, 0);
+    const lastMonth = cash_flow[cash_flow.length - 1];
+    const prevMonth = cash_flow[cash_flow.length - 2];
+    const growthRate = prevMonth?.inflow > 0
+      ? ((lastMonth.inflow - prevMonth.inflow) / prevMonth.inflow * 100)
+      : 0;
+    const savingsRate = totalIn + totalOut > 0
+      ? (donut.saved / (donut.saved + donut.contributed + totalIn) * 100)
+      : 0;
+    return [
+      {
+        label: "AUM Total",
+        value: formatXAF(donut.saved + donut.contributed),
+        icon: "💼",
+        color: Colors.secondary,
+      },
+      {
+        label: "Croissance/mois",
+        value: `${growthRate >= 0 ? "+" : ""}${growthRate.toFixed(1)}%`,
+        delta: growthRate >= 0 ? "↑ vs mois préc." : "↓ vs mois préc.",
+        deltaPositive: growthRate >= 0,
+        icon: "📈",
+        color: growthRate >= 0 ? "#10B981" : "#EF4444",
+      },
+      {
+        label: "Taux d'épargne",
+        value: `${savingsRate.toFixed(0)}%`,
+        icon: "🎯",
+        color: "#F59E0B",
+      },
+      {
+        label: "Flux entrants",
+        value: formatXAF(totalIn),
+        delta: "6 derniers mois",
+        deltaPositive: true,
+        icon: "💰",
+        color: "#3B82F6",
+      },
+    ];
+  }, [data]);
 
   const load = useCallback(async () => {
     try {
@@ -187,6 +302,13 @@ export default function FinancialAnalyticsScreen() {
           <Download color={Colors.secondary} size={20} />
         </TouchableOpacity>
       </View>
+
+      {/* KPI Cards */}
+      {kpis.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingHorizontal: Spacing.xl, paddingVertical: 8 }}>
+          {kpis.map((k, i) => <KPICard key={i} kpi={k} />)}
+        </ScrollView>
+      )}
 
       {loading ? (
         <View style={styles.center}>
@@ -280,6 +402,18 @@ export default function FinancialAnalyticsScreen() {
               </Card>
             )}
           </View>
+          {/* Projection de rendement */}
+          {data?.cash_flow && data.cash_flow.length > 1 && (
+            <View style={{ paddingHorizontal: Spacing.xl, marginBottom: 24 }}>
+              <Card style={{ padding: 16 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <Text style={{ fontSize: 16 }}>📊</Text>
+                  <Text style={styles.sectionTitle}>Projection de rendement</Text>
+                </View>
+                <ProjectionChart cashFlow={data.cash_flow} />
+              </Card>
+            </View>
+          )}
         </ScrollView>
       )}
     </SafeAreaView>
@@ -322,4 +456,11 @@ const styles = StyleSheet.create({
   projFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   projAmount: { color: Colors.textMuted, fontSize: 11, fontWeight: "600" },
   projEta: { color: Colors.textMuted, fontSize: 11, fontWeight: "600" },
+  kpiCard: {
+    width: 130, padding: 14, backgroundColor: Colors.surface, borderRadius: 16,
+    alignItems: "flex-start", gap: 4, ...Shadow.card,
+  },
+  kpiValue: { fontSize: 18, fontWeight: "900", color: Colors.text, letterSpacing: -0.5 },
+  kpiDelta: { fontSize: 11, fontWeight: "600" },
+  kpiLabel: { fontSize: 11, color: Colors.textMuted, fontWeight: "600" },
 });

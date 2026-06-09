@@ -29,6 +29,7 @@ export interface ScoreTier {
   label: string;
   color: string;
   min: number;
+  gradientColors: readonly [string, string, string];
 }
 
 export interface MonthlySnapshot {
@@ -39,15 +40,19 @@ export interface MonthlySnapshot {
 // ─── Tier config ──────────────────────────────────────────────────────────────
 
 export const TIERS: ScoreTier[] = [
-  { label: "Platine",  color: "#8B5CF6", min: 850 },
-  { label: "Or",       color: "#D4AF37", min: 650 },
-  { label: "Argent",   color: "#8B9EB0", min: 450 },
-  { label: "Bronze",   color: "#CD7F32", min: 200 },
-  { label: "Débutant", color: "#94A3B8", min: 0   },
+  { label: "Platine",  color: "#8B5CF6", min: 850, gradientColors: ["#1a0533", "#3b1a6e", "#8B5CF6"] as const },
+  { label: "Or",       color: "#D4AF37", min: 650, gradientColors: ["#1a1200", "#3d2e00", "#D4AF37"] as const },
+  { label: "Argent",   color: "#8B9EB0", min: 450, gradientColors: ["#0d1a26", "#1e3a52", "#8B9EB0"] as const },
+  { label: "Bronze",   color: "#CD7F32", min: 200, gradientColors: ["#1a0d00", "#3d2600", "#CD7F32"] as const },
+  { label: "Débutant", color: "#94A3B8", min: 0,   gradientColors: ["#0f172a", "#1e293b", "#94A3B8"] as const },
 ];
 
 export function getTier(score: number): ScoreTier {
   return TIERS.find(t => score >= t.min) ?? TIERS[TIERS.length - 1];
+}
+
+export function getTierGradient(score: number): readonly [string, string, string] {
+  return getTier(score).gradientColors;
 }
 
 // ─── Component calculators ────────────────────────────────────────────────────

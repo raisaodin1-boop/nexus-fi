@@ -10,12 +10,12 @@ import {
   Award, CheckCircle2, ChevronLeft, Download, Share2,
   TrendingUp, Users, Clock, Wallet, ShieldCheck,
 } from "lucide-react-native";
-import Svg, { Polyline, Line, Circle, Text as SvgText } from "react-native-svg";
+import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop, Polyline, Line, Text as SvgText } from "react-native-svg";
 
 import { api } from "@/src/api";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { SkeletonBox } from "@/src/ui";
-import { getTier, TIERS, type CreditScoreResult, type MonthlySnapshot } from "@/src/credit-score";
+import { getTier, getTierGradient, TIERS, type CreditScoreResult, type MonthlySnapshot, type ScoreTier } from "@/src/credit-score";
 import { generateCreditReportHtml } from "@/src/credit-report-html";
 
 // ─── Mini sparkline chart ──────────────────────────────────────────────────────
@@ -51,17 +51,97 @@ function ScoreChart({ data }: { data: MonthlySnapshot[] }) {
   );
 }
 
-// ─── Score ring ────────────────────────────────────────────────────────────────
+// ─── CountUp ──────────────────────────────────────────────────────────────────
 
-function ScoreRing({ score, color }: { score: number; color: string }) {
+function CountUp({ target, duration = 1200 }: { target: number; duration?: number }) {
   const anim = useRef(new Animated.Value(0)).current;
+  const [display, setDisplay] = useState(0);
+
   useEffect(() => {
-    Animated.spring(anim, { toValue: 1, useNativeDriver: true, damping: 12, stiffness: 80 }).start();
+    anim.setValue(0);
+    const listener = anim.addListener(({ value }) => setDisplay(Math.round(value)));
+    Animated.timing(anim, { toValue: target, duration, useNativeDriver: false, delay: 300 }).start();
+    return () => anim.removeListener(listener);
+  }, [target]);
+
+  return <Text style={styles.ringScore}>{display}</Text>;
+}
+
+// ─── ShimmerText ──────────────────────────────────────────────────────────────
+
+function ShimmerText({ text, color }: { text: string; color: string }) {
+  const shimmer = useRef(new Animated.Value(-1)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(shimmer, { toValue: 1, duration: 2000, useNativeDriver: true, delay: 800 })
+    ).start();
   }, []);
+
+  const translateX = shimmer.interpolate({ inputRange: [-1, 1], outputRange: [-80, 80] });
   return (
-    <Animated.View style={[styles.ring, { borderColor: color, transform: [{ scale: anim }] }]}>
-      <Text style={[styles.ringScore, { color }]}>{score}</Text>
-      <Text style={styles.ringMax}>/1000</Text>
+    <View style={{ overflow: "hidden" }}>
+      <Text style={[styles.tierLabel, { color }]}>{text}</Text>
+      <Animated.View style={[StyleSheet.absoluteFill, {
+        transform: [{ translateX }],
+        backgroundColor: "rgba(255,255,255,0.25)",
+        width: 60,
+      }]} />
+    </View>
+  );
+}
+
+// ─── BreathingScoreCard ───────────────────────────────────────────────────────
+
+function BreathingScoreCard({ score, tier }: { score: number; tier: ScoreTier }) {
+  const breathe = useRef(new Animated.Value(1)).current;
+  const CIRCUMFERENCE = 2 * Math.PI * 70;
+  const strokeDashoffset = CIRCUMFERENCE * (1 - Math.min(score / 1000, 1));
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(breathe, { toValue: 1.025, duration: 2000, useNativeDriver: true }),
+        Animated.timing(breathe, { toValue: 1, duration: 2000, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  return (
+    <Animated.View style={[{ alignItems: "center" }, { transform: [{ scale: breathe }] }]}>
+      <LinearGradient colors={tier.gradientColors as any} style={styles.heroCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+        <View style={{ alignItems: "center", justifyContent: "center", height: 180 }}>
+          {/* SVG Ring */}
+          <View style={StyleSheet.absoluteFill}>
+            <Svg width="100%" height="100%" viewBox="0 0 160 160" style={{ position: "absolute", top: 10, alignSelf: "center" }}>
+              <Defs>
+                <SvgLinearGradient id="rg" x1="0" y1="0" x2="1" y2="0">
+                  <Stop offset="0%" stopColor={tier.color} />
+                  <Stop offset="100%" stopColor="#ffffff" stopOpacity="0.7" />
+                </SvgLinearGradient>
+              </Defs>
+              <Circle cx={80} cy={80} r={70} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={10} />
+              <Circle
+                cx={80} cy={80} r={70} fill="none"
+                stroke="url(#rg)"
+                strokeWidth={10}
+                strokeLinecap="round"
+                strokeDasharray={`${CIRCUMFERENCE}`}
+                strokeDashoffset={strokeDashoffset}
+                rotation={-90}
+                origin="80,80"
+              />
+            </Svg>
+          </View>
+          {/* Centered score */}
+          <View style={{ alignItems: "center" }}>
+            <CountUp target={score} />
+            <Text style={styles.ringMax}>/1000</Text>
+          </View>
+        </View>
+        <ShimmerText text={tier.label} color={tier.color} />
+        <Text style={styles.heroSubtitle}>Score de crédit HODIX</Text>
+      </LinearGradient>
     </Animated.View>
   );
 }
@@ -188,12 +268,7 @@ export default function CreditScoreScreen() {
           <Text style={styles.heroTitle}>Score de Crédit</Text>
           <Text style={styles.heroSub}>Hodix Financial Identity™</Text>
 
-          <ScoreRing score={data.score} color={tier.color} />
-
-          <View style={[styles.tierBadge, { backgroundColor: tier.color + "33", borderColor: tier.color }]}>
-            <Award size={14} color={tier.color} />
-            <Text style={[styles.tierLabel, { color: tier.color }]}>{tier.label}</Text>
-          </View>
+          <BreathingScoreCard score={data.score} tier={tier} />
 
           {data.is_loan_eligible && (
             <View style={styles.eligibleBadge}>
@@ -301,19 +376,18 @@ const styles = StyleSheet.create({
   back: { alignSelf: "flex-start", marginBottom: 4 },
   heroTitle: { fontSize: 22, fontWeight: "800", color: "#fff", letterSpacing: -0.5 },
   heroSub: { fontSize: 12, color: "rgba(255,255,255,0.6)", marginTop: -6 },
-  ring: {
-    width: 140, height: 140, borderRadius: 70,
-    borderWidth: 6, alignItems: "center", justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.05)", marginVertical: 8,
+  heroCard: {
+    borderRadius: 24,
+    padding: 24,
+    alignItems: "center",
+    width: "100%",
+    ...Shadow.card,
+    overflow: "hidden",
   },
-  ringScore: { fontSize: 44, fontWeight: "900", letterSpacing: -2 },
-  ringMax: { fontSize: 13, color: "rgba(255,255,255,0.5)", marginTop: -4 },
-  tierBadge: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    paddingHorizontal: 14, paddingVertical: 6,
-    borderRadius: Radius.full, borderWidth: 1,
-  },
-  tierLabel: { fontSize: 13, fontWeight: "700" },
+  ringScore: { color: "#fff", fontSize: 56, fontWeight: "900", letterSpacing: -2 },
+  ringMax: { color: "rgba(255,255,255,0.6)", fontSize: 16, fontWeight: "600", marginTop: -4 },
+  tierLabel: { fontSize: 22, fontWeight: "900", letterSpacing: 2, textTransform: "uppercase", marginTop: 8 },
+  heroSubtitle: { color: "rgba(255,255,255,0.6)", fontSize: 12, fontWeight: "600", marginTop: 4 },
   eligibleBadge: {
     flexDirection: "row", alignItems: "center", gap: 6,
     backgroundColor: "rgba(16,185,129,0.15)",

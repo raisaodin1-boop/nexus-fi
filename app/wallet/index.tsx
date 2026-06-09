@@ -8,7 +8,7 @@ import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowDownLeft, ArrowUpRight, ArrowLeftRight,
-  RefreshCw, TrendingUp, Wallet as WalletIcon,
+  RefreshCw, Wallet as WalletIcon,
 } from "lucide-react-native";
 
 import { api } from "@/src/api";
@@ -29,33 +29,78 @@ function currencyBalance(wallet: WalletBalance, cur: Currency) {
 
 // ─── Transaction row ──────────────────────────────────────────────────────────
 
-const TX_ICONS: Record<string, { icon: any; color: string; sign: string }> = {
-  topup:         { icon: ArrowDownLeft,  color: "#10B981", sign: "+" },
-  transfer_in:   { icon: ArrowDownLeft,  color: "#10B981", sign: "+" },
-  withdraw:      { icon: ArrowUpRight,   color: "#EF4444", sign: "-" },
-  transfer_out:  { icon: ArrowUpRight,   color: "#EF4444", sign: "-" },
-  contribution:  { icon: TrendingUp,     color: "#F59E0B", sign: "-" },
-};
+interface TxMeta {
+  emoji: string;
+  categoryLabel: string;
+  categoryColor: string;
+  sign: "+" | "-" | "";
+}
 
-function TxRow({ tx }: { tx: WalletTx }) {
-  const cfg = TX_ICONS[tx.type] ?? { icon: ArrowLeftRight, color: Colors.textMuted, sign: "" };
-  const Icon = cfg.icon;
-  const date = new Date(tx.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
+function getTxMeta(tx: WalletTx): TxMeta {
+  switch (tx.type) {
+    case "topup":
+      return { emoji: "💳", categoryLabel: "Rechargement", categoryColor: "#10B981", sign: "+" };
+    case "transfer_in":
+      return { emoji: "💸", categoryLabel: "Virement reçu", categoryColor: "#10B981", sign: "+" };
+    case "transfer_out":
+      return { emoji: "🤝", categoryLabel: "Virement envoyé", categoryColor: "#EF4444", sign: "-" };
+    case "withdraw":
+      return { emoji: "🏧", categoryLabel: "Retrait Mobile", categoryColor: "#EF4444", sign: "-" };
+    case "contribution":
+      return { emoji: "🤝", categoryLabel: "Cotisation tontine", categoryColor: "#F59E0B", sign: "-" };
+    case "deposit":
+      return { emoji: "💰", categoryLabel: "Épargne", categoryColor: "#3B82F6", sign: "-" };
+    case "bonus":
+      return { emoji: "🏆", categoryLabel: "Bonus / Récompense", categoryColor: "#8B5CF6", sign: "+" };
+    default:
+      return { emoji: "💱", categoryLabel: tx.type, categoryColor: "#94A3B8", sign: "" };
+  }
+}
+
+function TxRow({ tx, router }: { tx: WalletTx; router: ReturnType<typeof useRouter> }) {
+  const meta = getTxMeta(tx);
+  const date = new Date(tx.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  const hasGroupLink = !!tx.tontine_id || !!tx.reference_id;
 
   return (
-    <View style={styles.txRow}>
-      <View style={[styles.txIcon, { backgroundColor: cfg.color + "22" }]}>
-        <Icon size={18} color={cfg.color} strokeWidth={2.5} />
+    <TouchableOpacity
+      activeOpacity={hasGroupLink ? 0.75 : 1}
+      onPress={() => {
+        if (tx.tontine_id) router.push(`/tontines/${tx.tontine_id}` as any);
+      }}
+      style={styles.txRow}
+    >
+      {/* Emoji avatar */}
+      <View style={[styles.txEmoji, { backgroundColor: meta.categoryColor + "18" }]}>
+        <Text style={{ fontSize: 20 }}>{meta.emoji}</Text>
       </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.txLabel} numberOfLines={1}>{tx.note ?? tx.type}</Text>
-        {tx.counterpart_name ? <Text style={styles.txSub}>{tx.counterpart_name}</Text> : null}
-        <Text style={styles.txDate}>{date}</Text>
+
+      {/* Main content */}
+      <View style={{ flex: 1, gap: 2 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <View style={[styles.catBadge, { backgroundColor: meta.categoryColor + "22" }]}>
+            <Text style={[styles.catLabel, { color: meta.categoryColor }]}>{meta.categoryLabel}</Text>
+          </View>
+          {hasGroupLink && <Text style={{ fontSize: 10, color: "#94A3B8" }}>›</Text>}
+        </View>
+        <Text style={styles.txLabel} numberOfLines={1}>
+          {tx.note ?? (tx.counterpart_name ? `Avec ${tx.counterpart_name}` : meta.categoryLabel)}
+        </Text>
+        <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+          <Text style={styles.txDate}>{date}</Text>
+          {tx.balance_after != null && (
+            <Text style={styles.txBalance}>
+              Solde : {formatAmount(tx.balance_after, tx.currency as any)}
+            </Text>
+          )}
+        </View>
       </View>
-      <Text style={[styles.txAmount, { color: cfg.color }]}>
-        {cfg.sign}{formatAmount(tx.amount, tx.currency as Currency)}
+
+      {/* Amount */}
+      <Text style={[styles.txAmount, { color: meta.categoryColor }]}>
+        {meta.sign}{formatAmount(tx.amount, tx.currency as any)}
       </Text>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -110,7 +155,7 @@ export default function WalletScreen() {
       <FlatList
         data={txs}
         keyExtractor={t => t.id}
-        renderItem={({ item }) => <TxRow tx={item} />}
+        renderItem={({ item }) => <TxRow tx={item} router={router} />}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={Colors.secondary} />}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 60 }}
@@ -255,10 +300,13 @@ const styles = StyleSheet.create({
   ratesNote: { fontSize: 10, color: Colors.textSubtle, marginTop: 8, textAlign: "center" },
   histTitle: { fontSize: 17, fontWeight: "800", color: Colors.text, marginBottom: Spacing.md, letterSpacing: -0.3 },
   txRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10 },
-  txIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  txEmoji: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  catBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
+  catLabel: { fontSize: 10, fontWeight: "700" },
   txLabel: { fontSize: 13, fontWeight: "600", color: Colors.text },
   txSub: { fontSize: 11, color: Colors.textMuted },
   txDate: { fontSize: 11, color: Colors.textSubtle },
+  txBalance: { fontSize: 10, color: Colors.textMuted, fontWeight: "500" },
   txAmount: { fontSize: 14, fontWeight: "800" },
   sep: { height: 1, backgroundColor: Colors.border, marginLeft: 52 },
   empty: { alignItems: "center", paddingVertical: 40 },
