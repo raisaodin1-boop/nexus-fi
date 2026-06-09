@@ -1,5 +1,5 @@
 // GROUPS - Tontines, Associations, Cooperatives, Funds
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -53,21 +53,17 @@ export default function Groups() {
     setLoading(false);
   }, [tab]);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
-
-  // Real-time subscription: reload list when tontines/members change
-  useEffect(() => {
+  // Real-time: subscribe only while screen is focused, auto-cleanup on blur
+  useFocusEffect(useCallback(() => {
+    load();
     if (tab !== "tontines") return;
-    const table = "tontines";
     const ch = supabase
-      .channel(`rt-groups-${table}`)
-      .on("postgres_changes", { event: "*", schema: "public", table }, () => {
-        load();
-      })
+      .channel(`rt-groups-tontines`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "tontines" }, () => { load(); })
       .subscribe();
     channelRef.current = ch;
     return () => { supabase.removeChannel(ch); };
-  }, [tab, load]);
+  }, [tab, load]));
 
   const tabs: { key: Tab; label: string; icon: any; color: string }[] = [
     { key: "tontines", label: "Tontines", icon: Users, color: Colors.accent },

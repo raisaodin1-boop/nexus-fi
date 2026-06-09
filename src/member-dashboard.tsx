@@ -65,20 +65,19 @@ export function MemberDashboard() {
     setLoading(false);
   }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
-
-  // Real-time: refresh dashboard when savings or contributions change
-  useEffect(() => {
+  // Real-time: subscribe only while screen is focused, auto-cleanup on blur
+  useFocusEffect(useCallback(() => {
+    load();
     const userId = user?.id;
     if (!userId) return;
     const ch = supabase
-      .channel("rt-dashboard-member")
-      .on("postgres_changes", { event: "*", schema: "public", table: "savings_transactions" }, () => { load(); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "savings_goals" }, () => { load(); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "tontine_contributions" }, () => { load(); })
+      .channel(`rt-dashboard-member-${userId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "savings_transactions", filter: `user_id=eq.${userId}` }, () => { load(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "savings_goals", filter: `user_id=eq.${userId}` }, () => { load(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "tontine_contributions", filter: `user_id=eq.${userId}` }, () => { load(); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [user?.id, load]);
+  }, [load, user?.id]));
 
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 

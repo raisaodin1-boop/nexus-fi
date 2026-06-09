@@ -432,10 +432,9 @@ export function TontineDetailView({ id }: { id: string }) {
     setLoading(false);
   }, [id]);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
-
-  // Real-time: reload when contributions or members change for this tontine
-  useEffect(() => {
+  // Real-time: subscribe only while screen is focused
+  useFocusEffect(useCallback(() => {
+    load();
     if (!id) return;
     const ch = supabase
       .channel(`rt-tontine-${id}`)
@@ -444,7 +443,7 @@ export function TontineDetailView({ id }: { id: string }) {
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "tontines", filter: `id=eq.${id}` }, () => { load(); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [id, load]);
+  }, [id, load]));
 
   const advanceCycle = async () => {
     setAdvanceBusy(true);
