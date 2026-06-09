@@ -155,7 +155,7 @@ export default function SavingsAnalyticsScreen() {
 
         {/* ── Progress + prediction hero ── */}
         <View style={[styles.section, { marginTop: -1 }]}>
-          <LinearGradient colors={[statusColor + "18", Colors.background]} style={[styles.card, { borderColor: statusColor + "55" }]}>
+          <LinearGradient colors={[statusColor + "18", Colors.bg]} style={[styles.card, { borderColor: statusColor + "55" }]}>
             <View style={styles.heroRow}>
               <ProgressRing pct={p.progress_pct} color={statusColor} />
               <View style={{ flex: 1, gap: 8 }}>
@@ -318,7 +318,7 @@ function PeerBar({ label, amount, max, color }: { label: string; amount: number;
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.background },
+  safe: { flex: 1, backgroundColor: Colors.bg },
   header: { flexDirection: "row", alignItems: "center", gap: 12, padding: Spacing.xl, paddingBottom: 20 },
   back: { padding: 4 },
   headerTitle: { fontSize: 18, fontWeight: "800", color: "#fff" },

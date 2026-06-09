@@ -262,7 +262,7 @@ function RateChip({ label, value, fixed }: { label: string; value: string; fixed
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.background },
+  safe: { flex: 1, backgroundColor: Colors.bg },
   balanceCard: {
     borderRadius: Radius.xxl, padding: Spacing.xl, margin: Spacing.xl,
     marginBottom: Spacing.md, gap: 8,

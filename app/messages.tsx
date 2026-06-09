@@ -106,7 +106,7 @@ export default function MessagesScreen() {
   // ── Thread view ──────────────────────────────────────────────
   if (activeThread) {
     return (
-      <SafeAreaView style={styles.safe} edges={["top"]}>
+      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <LinearGradient colors={["#0D0F1A", "#1A1B2E"]} style={styles.threadHeader}>
           <TouchableOpacity onPress={() => setActiveThread(null)} style={styles.iconBtn}>
             <ArrowLeft color="#fff" size={20} />

@@ -36,7 +36,7 @@ export default function DocumentsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.background },
+  safe: { flex: 1, backgroundColor: Colors.bg },
   scroll: { padding: Spacing.xl, paddingBottom: 60 },
   heading: { fontSize: 26, fontWeight: "800", color: Colors.text, letterSpacing: -0.5 },
   sub: { fontSize: 14, color: Colors.textMuted, marginTop: 4, marginBottom: 8, lineHeight: 20 },

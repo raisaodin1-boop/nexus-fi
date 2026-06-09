@@ -183,7 +183,7 @@ export default function TransferScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.background },
+  safe: { flex: 1, backgroundColor: Colors.bg },
   header: { flexDirection: "row", alignItems: "center", gap: 12, padding: Spacing.xl, paddingBottom: 20 },
   back: { padding: 4 },
   headerTitle: { fontSize: 18, fontWeight: "800", color: "#fff" },
