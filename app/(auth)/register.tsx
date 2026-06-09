@@ -18,6 +18,7 @@ import { ApiError } from "@/src/api";
 import { HodixLogo } from "@/src/logo";
 import { getSupabase } from "@/src/supabase";
 import { sendWelcomeMessage, applyReferralBonus } from "@/src/db";
+import { useAuth } from "@/src/auth-context";
 
 type RoleChoice = "member" | "tontine_manager";
 type Step = "form" | "otp" | "done";
@@ -62,6 +63,8 @@ function Checkbox({ checked, onPress, label, linkLabel, onLink, testID }: {
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const { loginWithGoogle } = useAuth();
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [step, setStep] = useState<Step>("form");
   const [role, setRole] = useState<RoleChoice>("member");
   const [fullName, setFullName] = useState("");
@@ -483,6 +486,35 @@ export default function RegisterScreen() {
             <Text style={styles.consentWarning}>⚠️ Acceptez les 3 conditions pour activer l'inscription.</Text>
           ) : null}
 
+                  {/* Google Sign-Up */}
+          <View style={styles.googleDividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.googleDividerText}>ou s'inscrire avec</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.googleBtn, googleLoading && { opacity: 0.7 }]}
+            disabled={googleLoading}
+            activeOpacity={0.8}
+            onPress={async () => {
+              setGoogleLoading(true);
+              try {
+                await loginWithGoogle();
+                router.replace("/");
+              } catch (e: any) {
+                setError(e?.detail || "Erreur Google Sign-In");
+              } finally { setGoogleLoading(false); }
+            }}
+          >
+            {googleLoading
+              ? <ActivityIndicator color={Colors.text} />
+              : <>
+                  <Text style={styles.googleIcon}>G</Text>
+                  <Text style={styles.googleText}>Continuer avec Google</Text>
+                </>}
+          </TouchableOpacity>
+
           <View style={styles.divider} />
           <Text style={styles.bottomQ}>Vous avez déjà un compte ?</Text>
           <Link href="/(auth)/login" asChild>
@@ -605,6 +637,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#FEE2E2", color: Colors.danger, padding: 12,
     borderRadius: 12, fontSize: 13, fontWeight: "600", marginBottom: 12,
   },
+  googleDividerRow: { flexDirection: "row", alignItems: "center", gap: 10, marginVertical: 16 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
+  googleDividerText: { fontSize: 12, color: Colors.textMuted, fontWeight: "600" },
+  googleBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 10, borderRadius: Radius.lg, borderWidth: 1.5, borderColor: Colors.border,
+    backgroundColor: Colors.surface, paddingVertical: 14,
+  },
+  googleIcon: { fontSize: 18, fontWeight: "900", color: "#4285F4" },
+  googleText: { fontSize: 15, fontWeight: "700", color: Colors.text },
   divider: { height: 1, backgroundColor: Colors.border, marginVertical: Spacing.xxl },
   bottomQ: { textAlign: "center", color: Colors.textMuted, marginBottom: 6 },
   bottomLink: { textAlign: "center", color: Colors.primary, fontWeight: "800", fontSize: 15 },
