@@ -357,6 +357,107 @@ export async function getTrustScore() {
   });
 }
 
+/* ── Credit score (0-1000 weighted model) ────────────────────────────────── */
+
+import {
+  scoreRegularity, scoreSavingsVolume, scoreSeniority, scoreNetwork, scoreKyc,
+  computeScore, generateTips, getTier,
+  type CreditScoreResult, type MonthlySnapshot,
+} from "@/src/credit-score";
+
+export async function getCreditScore(): Promise<CreditScoreResult> {
+  const me = await uid();
+  return cached(`credit-score-${me}`, 90_000, async () => {
+    const sb = getSupabase();
+
+    const [
+      profileRes,
+      contribRes,
+      savingsRes,
+      tontineMemRes,
+      assocMemRes,
+      coopMemRes,
+      createdTontinesRes,
+      createdAssocRes,
+      createdCoopRes,
+      kycRes,
+    ] = await Promise.all([
+      sb.from("profiles").select("created_at, kyc_status").eq("id", me).single(),
+      sb.from("tontine_contributions").select("created_at, tontine_id").eq("user_id", me).order("created_at", { ascending: true }),
+      sb.from("savings_goals").select("current_amount").eq("user_id", me),
+      sb.from("tontine_members").select("tontine_id, joined_at").eq("user_id", me),
+      sb.from("association_members").select("association_id").eq("user_id", me),
+      sb.from("cooperative_members").select("cooperative_id").eq("user_id", me),
+      sb.from("tontines").select("id").eq("owner_id", me),
+      sb.from("associations").select("id").eq("owner_id", me),
+      sb.from("cooperatives").select("id").eq("owner_id", me),
+      sb.from("kyc_submissions").select("status").eq("user_id", me).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    ]);
+
+    const profile = profileRes.data ?? {};
+    const contributions = contribRes.data ?? [];
+    const totalSavings = (savingsRes.data ?? []).reduce((s: number, g: any) => s + Number(g.current_amount), 0);
+    const groupsJoined = (tontineMemRes.data?.length ?? 0) + (assocMemRes.data?.length ?? 0) + (coopMemRes.data?.length ?? 0);
+    const groupsCreated = (createdTontinesRes.data?.length ?? 0) + (createdAssocRes.data?.length ?? 0) + (createdCoopRes.data?.length ?? 0);
+    const kycStatus = kycRes.data?.status ?? (profile as any).kyc_status ?? null;
+    const createdAt = (profile as any).created_at ?? new Date().toISOString();
+
+    // Earliest tontine membership for regularity window
+    const memberSince = (tontineMemRes.data ?? []).reduce((earliest: string, m: any) => {
+      const d = m.joined_at ?? createdAt;
+      return d < earliest ? d : earliest;
+    }, createdAt);
+
+    const breakdown = {
+      regularity:     scoreRegularity(contributions, memberSince, 30),
+      savings_volume: scoreSavingsVolume(totalSavings),
+      seniority:      scoreSeniority(createdAt),
+      network:        scoreNetwork(groupsJoined, groupsCreated),
+      kyc:            scoreKyc(kycStatus),
+    };
+
+    const score = computeScore(breakdown);
+    const tier  = getTier(score);
+
+    // Persist snapshot in identity_events so history is available
+    try {
+      await sb.from("identity_events").insert({
+        user_id: me,
+        event_type: "credit_score_snapshot",
+        points_delta: score,
+        created_at: new Date().toISOString(),
+      });
+    } catch { /* non-blocking */ }
+
+    return {
+      score,
+      breakdown,
+      tier,
+      is_loan_eligible: score >= 700,
+      tips: generateTips(breakdown),
+      computed_at: new Date().toISOString(),
+    } as CreditScoreResult & { tips: string[] };
+  });
+}
+
+export async function getCreditScoreHistory(): Promise<MonthlySnapshot[]> {
+  const me = await uid();
+  const { data } = await getSupabase()
+    .from("identity_events")
+    .select("points_delta, created_at")
+    .eq("user_id", me)
+    .eq("event_type", "credit_score_snapshot")
+    .order("created_at", { ascending: true });
+
+  // Collapse to one snapshot per month (latest of that month)
+  const byMonth: Record<string, number> = {};
+  for (const row of data ?? []) {
+    const month = (row.created_at as string).slice(0, 7);
+    byMonth[month] = row.points_delta;
+  }
+  return Object.entries(byMonth).map(([month, score]) => ({ month, score }));
+}
+
 export async function getInsights() {
   const me = await uid();
   return cached(`insights-${me}`, 120_000, async () => {

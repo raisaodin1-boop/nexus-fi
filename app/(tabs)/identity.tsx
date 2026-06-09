@@ -254,6 +254,26 @@ export default function Identity() {
           </Card>
         </View>
 
+        {/* Credit Score CTA */}
+        <View style={{ paddingHorizontal: Spacing.xl, marginTop: 4 }}>
+          <TouchableOpacity
+            onPress={() => router.push("/credit-score")}
+            activeOpacity={0.85}
+            style={creditStyles.cta}
+          >
+            <LinearGradient colors={["#0B1F3A", "#1D4ED8"]} style={creditStyles.ctaGrad}>
+              <View style={creditStyles.ctaLeft}>
+                <Award color="#D4AF37" size={22} />
+                <View>
+                  <Text style={creditStyles.ctaTitle}>Score de crédit détaillé</Text>
+                  <Text style={creditStyles.ctaSub}>Régularité · Épargne · Réseau · KYC · Ancienneté</Text>
+                </View>
+              </View>
+              <Text style={creditStyles.ctaArrow}>›</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+
         {/* Components — /1000 system */}
         <SectionTitle>Composantes du score</SectionTitle>
         <View style={{ paddingHorizontal: Spacing.xl, gap: 10 }}>
@@ -571,4 +591,16 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     flex: 1,
   },
+});
+
+const creditStyles = StyleSheet.create({
+  cta: { borderRadius: Radius.xl, overflow: "hidden", marginBottom: 4 },
+  ctaGrad: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    padding: 16, gap: 12,
+  },
+  ctaLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
+  ctaTitle: { fontSize: 14, fontWeight: "800", color: "#fff" },
+  ctaSub: { fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 2 },
+  ctaArrow: { fontSize: 24, color: "#fff", fontWeight: "300" },
 });

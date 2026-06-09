@@ -99,6 +99,10 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"  && s[0] === "notifications")                                 return (await db.listNotifications()) as T;
     if (method === "POST" && s[0] === "notifications" && s[1] === "push-token")        return (await db.savePushToken(body?.token)) as T;
 
+    // ── Credit score
+    if (method === "GET"  && s[0] === "credit-score" && !s[1])                         return (await db.getCreditScore()) as T;
+    if (method === "GET"  && s[0] === "credit-score" && s[1] === "history")            return (await db.getCreditScoreHistory()) as T;
+
     // ── KYC
     if (method === "POST" && s[0] === "kyc" && s[1] === "submit")                      return (await db.submitKyc()) as T;
 
