@@ -1867,7 +1867,7 @@ export async function createTontineSecure(body: Record<string, any>) {
 
   // Fetch user role for admin bypass
   const { data: profileData } = await sb.from("profiles").select("role").eq("id", me).single();
-  const isAdmin = profileData?.role === "admin" || profileData?.role === "superadmin";
+  const isAdmin = profileData?.role === "admin" || profileData?.role === "super_admin";
 
   const amountPerCycle = Number(body.amount_per_cycle ?? 0);
 
@@ -1892,29 +1892,45 @@ export async function createTontineSecure(body: Record<string, any>) {
   }
 
   const code = inviteCode();
+
+  // Build a clean insert object with only confirmed tontines columns.
+  // Spreading raw body risks sending unknown columns → schema cache errors.
+  const insertRow: Record<string, any> = {
+    name: body.name,
+    description: body.description ?? null,
+    amount_per_cycle: amountPerCycle,
+    frequency: body.frequency ?? "monthly",
+    max_members: Number(body.max_members ?? 12),
+    is_public: body.is_public ?? false,
+    owner_id: me,
+    invite_code: code,
+  };
+  // Optional columns — only include if the value is meaningful
+  if (body.language) insertRow.language = body.language;
+  if (body.country) insertRow.country = body.country;
+
   const { data, error } = await sb.from("tontines")
-    .insert({
-      ...body,
-      owner_id: me,
-      invite_code: code,
-      reserve_fund: 0,
-      security_level: amountPerCycle >= HIGH_VALUE_THRESHOLD ? "high" : "standard",
-    })
+    .insert(insertRow)
     .select()
     .single();
   throwSb(error);
 
-  // ── RULE: Creator goes LAST (position = max_members)
-  // We don't know how many will join, so we set a sentinel value.
-  // When all members have joined, the creator's position is updated to max.
   const maxMembers = Number(body.max_members ?? 12);
-  await sb.from("tontine_members").insert({
+
+  // Creator is inserted as admin; rotation_position sentinel = max so they receive funds last.
+  // is_creator is optional — skip if column doesn't exist on older schemas.
+  const memberRow: Record<string, any> = {
     tontine_id: data.id,
     user_id: me,
     role: "admin",
-    rotation_position: maxMembers, // creator always last
-    is_creator: true,
-  });
+    rotation_position: maxMembers,
+  };
+  const { error: memErr } = await sb.from("tontine_members").insert(memberRow);
+  // Non-fatal: if member insert fails, log but don't block — tontine is already created
+  if (memErr) console.warn("tontine_members insert:", memErr.message);
+
+  invalidateCache("tontines");
+  invalidateCache(`identity-${me}`);
 
   return data;
 }
@@ -1975,6 +1991,9 @@ export async function joinTontineSecure(invite_code: string) {
     metadata: { tontine_id: tontine.id },
   });
 
+  invalidateCache("tontines");
+  invalidateCache(`identity-${me}`);
+
   return { tontine_id: tontine.id };
 }
 
@@ -1996,21 +2015,23 @@ export async function contributeTontineSecure(id: string, amount: number) {
   const reserveAmount = Math.round(amount * RESERVE_FUND_PCT);
   const netAmount = amount - reserveAmount;
 
-  // Insert contribution
+  // Insert contribution — only use confirmed base columns
   const { error } = await sb.from("tontine_contributions").insert({
     tontine_id: id, user_id: me, amount: netAmount, cycle,
-    gross_amount: amount, reserve_amount: reserveAmount,
   });
   throwSb(error);
 
-  // Increment reserve fund on tontine
+  // Increment reserve fund on tontine (optional column — ignore if fails)
   const currentReserve = Number(tontine.reserve_fund ?? 0);
-  await sb.from("tontines").update({ reserve_fund: currentReserve + reserveAmount }).eq("id", id);
+  await sb.from("tontines").update({ reserve_fund: currentReserve + reserveAmount }).eq("id", id).then(() => {});
 
-  // Mark member as up-to-date
+  // Mark member as up-to-date (optional columns — ignore if fails)
   await sb.from("tontine_members")
     .update({ status: "a_jour", last_paid_cycle: cycle })
-    .eq("tontine_id", id).eq("user_id", me);
+    .eq("tontine_id", id).eq("user_id", me).then(() => {});
+
+  invalidateCache("tontines");
+  invalidateCache(`identity-${me}`);
 
   // If first cycle: create escrow record (hold disbursement for 72h)
   if (isFirstCycle) {

@@ -54,11 +54,9 @@ export function GroupCreateForm({ title, subtitle, endpoint, showContribution, s
     if (showContribution) {
       const amt = parseFloat(contribution);
       if (!amt || amt <= 0) { setError("Montant de contribution invalide"); return null; }
-      body.contribution_amount = amt;
       body.amount_per_cycle = amt;
       body.frequency = frequency;
       body.max_members = parseInt(maxMembers) || 10;
-      if (showRotationMode) body.rotation_mode = rotationMode;
       if (showRotationMode) body.is_public = isPublic;
     } else {
       body.membership_fee = parseFloat(fee) || 0;
