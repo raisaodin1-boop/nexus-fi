@@ -779,7 +779,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: Spacing.xl,
-    paddingBottom: 40,
+    paddingBottom: 100,
     gap: 12,
   },
   modalHandle: {

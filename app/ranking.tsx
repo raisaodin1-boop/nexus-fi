@@ -92,7 +92,7 @@ export default function RankingScreen() {
           <Text style={styles.emptyText}>Classement indisponible</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
           {/* Pillar banner */}
           {data.is_pillar && (
             <View style={{ paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg }}>

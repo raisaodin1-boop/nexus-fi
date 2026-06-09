@@ -100,7 +100,7 @@ export function GroupCreateForm({ title, subtitle, endpoint, showContribution, s
         />
       )}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 100 }} keyboardShouldPersistTaps="handled">
           <TouchableOpacity onPress={() => router.back()} testID={`${testIDPrefix}-back`}><Text style={styles.back}>← Retour</Text></TouchableOpacity>
           <Text style={styles.h1}>{title}</Text>
           <Text style={styles.sub}>{subtitle}</Text>

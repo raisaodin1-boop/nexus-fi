@@ -97,7 +97,7 @@ export default function FeeConfigScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-      <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 100 }}>
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.back}>← Retour</Text>
         </TouchableOpacity>

@@ -89,7 +89,7 @@ export default function TontineLeaderboard() {
           <Text style={styles.emptySubtext}>Les épargnants apparaîtront ici</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
           {/* Podium */}
           {top3.length > 0 && (
             <View style={styles.podiumSection}>

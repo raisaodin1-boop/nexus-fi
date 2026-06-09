@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -125,6 +125,7 @@ export default function WithdrawScreen() {
         <Text style={styles.headerTitle}>Retirer vers Mobile Money</Text>
       </LinearGradient>
 
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
 
         {/* Balance info */}
@@ -176,6 +177,7 @@ export default function WithdrawScreen() {
         <Button label={`Retirer ${amount ? formatAmount(parseFloat(amount) || 0, currency) : ""}`}
           onPress={submit} loading={loading} variant="danger" />
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -185,7 +187,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: 12, padding: Spacing.xl, paddingBottom: 20 },
   back: { padding: 4 },
   headerTitle: { fontSize: 18, fontWeight: "800", color: "#fff" },
-  body: { padding: Spacing.xl, gap: 4 },
+  body: { padding: Spacing.xl, gap: 4, paddingBottom: 100 },
   balInfo: {
     backgroundColor: Colors.surfaceAlt, borderRadius: Radius.xl,
     padding: Spacing.lg, marginBottom: 16, flexDirection: "row",

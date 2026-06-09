@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 26, fontWeight: "900", color: "#fff", marginTop: 8, letterSpacing: -0.5 },
   subtitle: { fontSize: 14, color: "rgba(255,255,255,0.75)", textAlign: "center" },
-  form: { padding: Spacing.xl, gap: 16, paddingBottom: 40 },
+  form: { padding: Spacing.xl, gap: 16, paddingBottom: 100 },
   fieldGroup: { gap: 6 },
   label: { fontSize: 13, fontWeight: "600", color: Colors.text },
   inputRow: {

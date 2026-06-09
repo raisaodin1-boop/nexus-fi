@@ -498,7 +498,7 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bg },
-  content: { padding: Spacing.xxl, paddingBottom: 40 },
+  content: { padding: Spacing.xxl, paddingBottom: 100 },
   back: { marginBottom: 4 },
   backText: { color: Colors.textMuted, fontWeight: "600" },
   title: { color: Colors.primary, fontSize: 22, fontWeight: "900", marginTop: 10, letterSpacing: -0.5 },

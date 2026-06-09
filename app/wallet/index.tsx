@@ -158,7 +158,7 @@ export default function WalletScreen() {
         renderItem={({ item }) => <TxRow tx={item} router={router} />}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={Colors.secondary} />}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 60 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
         ListHeaderComponent={
           <Animated.View style={{ opacity: fadeAnim }}>
             {/* ── Balance card ── */}

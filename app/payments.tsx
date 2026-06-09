@@ -48,7 +48,7 @@ export default function PaymentsScreen() {
         <FlatList
           data={payments}
           keyExtractor={(p) => p.id}
-          contentContainerStyle={{ padding: Spacing.xl, gap: 10, paddingBottom: 40 }}
+          contentContainerStyle={{ padding: Spacing.xl, gap: 10, paddingBottom: 100 }}
           renderItem={({ item: p }) => {
             const isIn = p.type === "credit" || p.type === "deposit";
             return (

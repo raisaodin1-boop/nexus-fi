@@ -165,7 +165,7 @@ export default function CompleteProfile() {
       <PickerModal visible={modal === "year"} title="Année" options={YEARS} onSelect={setBirthYear} onClose={() => setModal(null)} />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
           {/* Header */}
           <LinearGradient colors={[Colors.primary, Colors.gradMid]} style={styles.header}>
             <Text style={styles.headerTitle}>Complétez votre profil</Text>

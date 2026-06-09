@@ -64,7 +64,7 @@ export function ManagerDashboard() {
           cta: "Découvrir",
         }}
       />
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <View>
             <View style={styles.rolePill}><Text style={styles.rolePillText}>TONTINE MANAGER</Text></View>

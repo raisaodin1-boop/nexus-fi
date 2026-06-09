@@ -148,7 +148,7 @@ export default function StreaksScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       {showConfetti && <Confetti />}
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.back}>

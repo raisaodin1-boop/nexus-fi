@@ -62,7 +62,7 @@ export default function PromotionRequest() {
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 100 }} keyboardShouldPersistTaps="handled">
           <TouchableOpacity onPress={() => router.back()} testID="promo-back"><Text style={styles.back}>← Retour</Text></TouchableOpacity>
 
           <LinearGradient colors={[Colors.accent, Colors.accentDark]} style={[styles.hero, Shadow.cardDark]}>

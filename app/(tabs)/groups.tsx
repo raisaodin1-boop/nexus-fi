@@ -106,7 +106,7 @@ export default function Groups() {
         })}
       </ScrollView>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
         {/* Public directory banner — tontines tab only */}
         {tab === "tontines" ? (
           <View style={{ paddingHorizontal: Spacing.xl, marginBottom: 8 }}>

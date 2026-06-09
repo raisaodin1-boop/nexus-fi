@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -123,6 +123,7 @@ export default function TransferScreen() {
         <Text style={styles.headerTitle}>Virement membre à membre</Text>
       </LinearGradient>
 
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
 
         {/* Info banner */}
@@ -178,6 +179,7 @@ export default function TransferScreen() {
           loading={loading}
         />
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -187,7 +189,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: 12, padding: Spacing.xl, paddingBottom: 20 },
   back: { padding: 4 },
   headerTitle: { fontSize: 18, fontWeight: "800", color: "#fff" },
-  body: { padding: Spacing.xl, gap: 4 },
+  body: { padding: Spacing.xl, gap: 4, paddingBottom: 100 },
   infoBanner: {
     flexDirection: "row", alignItems: "center", gap: 10,
     backgroundColor: Colors.secondary + "15", borderRadius: Radius.lg,

@@ -291,7 +291,7 @@ export default function PayContribution() {
   if (stage === "select") {
     return (
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-        <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 40 }}>
+        <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 100 }}>
           <TouchableOpacity onPress={() => router.back()}>
             <Text style={styles.back}>← Retour</Text>
           </TouchableOpacity>
@@ -345,7 +345,7 @@ export default function PayContribution() {
   if (stage === "form") {
     return (
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-        <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 40 }}>
+        <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 100 }}>
           <TouchableOpacity onPress={() => { setStage("select"); setError(null); }}>
             <Text style={styles.back}>← Changer de méthode</Text>
           </TouchableOpacity>
@@ -425,7 +425,7 @@ export default function PayContribution() {
   if (stage === "processing" && method !== "stripe") {
     return (
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-        <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 40 }}>
+        <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 100 }}>
           <Animated.View style={[styles.processingHero, { transform: [{ scale: pulse }] }]}>
             <LinearGradient
               colors={[selectedMethod?.color || Colors.secondary, selectedMethod?.dark || Colors.secondary]}

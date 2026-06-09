@@ -71,7 +71,7 @@ export function MemberDashboard() {
   if (loading) {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
-        <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
           <View style={styles.header}>
             <View style={{ gap: 8 }}>
               <SkeletonBox width={80} height={14} />
@@ -102,7 +102,7 @@ export function MemberDashboard() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScrollView
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.secondary} />}
         showsVerticalScrollIndicator={false}
       >
