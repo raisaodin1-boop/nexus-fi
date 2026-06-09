@@ -1,5 +1,5 @@
 // GROUPS - Tontines, Associations, Cooperatives, Funds
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -15,6 +15,7 @@ import { Plus, Users, Building2, Network, Wallet, ChevronRight, Globe } from "lu
 import { api, formatXAF } from "@/src/api";
 import { Card, EmptyState, Button } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
+import { supabase } from "@/src/supabase";
 
 type Tab = "tontines" | "associations" | "cooperatives" | "funds";
 
@@ -36,6 +37,7 @@ export default function Groups() {
   const [tab, setTab] = useState<Tab>("tontines");
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,7 +53,17 @@ export default function Groups() {
     setLoading(false);
   }, [tab]);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  // Real-time: subscribe only while screen is focused, auto-cleanup on blur
+  useFocusEffect(useCallback(() => {
+    load();
+    if (tab !== "tontines") return;
+    const ch = supabase
+      .channel(`rt-groups-tontines`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "tontines" }, () => { load(); })
+      .subscribe();
+    channelRef.current = ch;
+    return () => { supabase.removeChannel(ch); };
+  }, [tab, load]));
 
   const tabs: { key: Tab; label: string; icon: any; color: string }[] = [
     { key: "tontines", label: "Tontines", icon: Users, color: Colors.accent },

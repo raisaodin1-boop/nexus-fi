@@ -1,5 +1,5 @@
 // Member dashboard — premium personal fintech home.
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Image,
   RefreshControl,
@@ -16,6 +16,7 @@ import { Bell, ChevronRight, PiggyBank, Trophy, Users, Wallet, TrendingUp, Spark
 
 import { useAuth } from "@/src/auth-context";
 import { api, formatXAF } from "@/src/api";
+import { supabase } from "@/src/supabase";
 import { Card, SectionTitle, StatCard, SkeletonBox, SkeletonCard } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { TrustGauge } from "@/src/trust-gauge";
@@ -64,7 +65,19 @@ export function MemberDashboard() {
     setLoading(false);
   }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  // Real-time: subscribe only while screen is focused, auto-cleanup on blur
+  useFocusEffect(useCallback(() => {
+    load();
+    const userId = user?.id;
+    if (!userId) return;
+    const ch = supabase
+      .channel(`rt-dashboard-member-${userId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "savings_transactions", filter: `user_id=eq.${userId}` }, () => { load(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "savings_goals", filter: `user_id=eq.${userId}` }, () => { load(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "tontine_contributions", filter: `user_id=eq.${userId}` }, () => { load(); })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [load, user?.id]));
 
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 

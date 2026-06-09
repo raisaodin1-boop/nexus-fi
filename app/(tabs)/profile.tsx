@@ -42,7 +42,29 @@ export default function ProfileScreen() {
     country: user?.country ?? "",
     city: user?.city ?? "",
     occupation: user?.occupation ?? "",
+    date_of_birth: user?.date_of_birth ?? "",
+    birth_place: user?.birth_place ?? "",
+    neighborhood: user?.neighborhood ?? "",
+    address: user?.address ?? "",
   });
+
+  // Sync form when user context updates (after refresh)
+  useEffect(() => {
+    if (user) {
+      setForm({
+        full_name: user.full_name ?? "",
+        phone: user.phone ?? "",
+        gender: user.gender ?? "",
+        country: user.country ?? "",
+        city: user.city ?? "",
+        occupation: user.occupation ?? "",
+        date_of_birth: user.date_of_birth ?? "",
+        birth_place: user.birth_place ?? "",
+        neighborhood: user.neighborhood ?? "",
+        address: user.address ?? "",
+      });
+    }
+  }, [user]);
 
   useEffect(() => {
     SecureStore.getItemAsync("bio_enabled")
@@ -132,8 +154,10 @@ export default function ProfileScreen() {
             <Card>
               <InfoRow icon={<Mail size={16} color={Colors.secondary} />} label="Email" value={user?.email ?? ""} txtColor={txt} txtMuted={txtMuted} borderColor={borderColor} />
               <InfoRow icon={<Phone size={16} color={Colors.secondary} />} label="Téléphone" value={user?.phone || "—"} txtColor={txt} txtMuted={txtMuted} borderColor={borderColor} />
-              <InfoRow icon={<MapPin size={16} color={Colors.secondary} />} label="Localisation" value={[user?.city, user?.country].filter(Boolean).join(", ") || "—"} txtColor={txt} txtMuted={txtMuted} borderColor={borderColor} />
-              <InfoRow icon={<Briefcase size={16} color={Colors.secondary} />} label="Profession" value={user?.occupation || "—"} last txtColor={txt} txtMuted={txtMuted} borderColor={borderColor} />
+              <InfoRow icon={<MapPin size={16} color={Colors.secondary} />} label="Localisation" value={[user?.neighborhood, user?.city, user?.country].filter(Boolean).join(", ") || "—"} txtColor={txt} txtMuted={txtMuted} borderColor={borderColor} />
+              <InfoRow icon={<Briefcase size={16} color={Colors.secondary} />} label="Profession" value={user?.occupation || "—"} txtColor={txt} txtMuted={txtMuted} borderColor={borderColor} />
+              {user?.date_of_birth ? <InfoRow icon={<Shield size={16} color={Colors.secondary} />} label="Né(e) le" value={new Date(user.date_of_birth).toLocaleDateString("fr-FR")} txtColor={txt} txtMuted={txtMuted} borderColor={borderColor} /> : null}
+              <InfoRow icon={<ShieldCheck size={16} color={user?.kyc_status === "approved" ? Colors.accent : Colors.textMuted} />} label="KYC" value={user?.kyc_status === "approved" ? "✓ Vérifié" : user?.kyc_status === "pending" ? "En attente" : "Non soumis"} last txtColor={txt} txtMuted={txtMuted} borderColor={borderColor} />
             </Card>
           </View>
 
@@ -188,6 +212,27 @@ export default function ProfileScreen() {
                 editable={editing}
                 onChangeText={(t) => setForm({ ...form, occupation: t })}
               />
+              <Field
+                testID="profile-address"
+                label="Adresse"
+                value={form.address}
+                editable={editing}
+                onChangeText={(t) => setForm({ ...form, address: t })}
+              />
+              <Field
+                testID="profile-neighborhood"
+                label="Quartier"
+                value={form.neighborhood}
+                editable={editing}
+                onChangeText={(t) => setForm({ ...form, neighborhood: t })}
+              />
+              <Field
+                testID="profile-birth-place"
+                label="Lieu de naissance"
+                value={form.birth_place}
+                editable={editing}
+                onChangeText={(t) => setForm({ ...form, birth_place: t })}
+              />
               {error ? <Text style={styles.error}>{error}</Text> : null}
               {editing ? (
                 <Button
@@ -209,6 +254,9 @@ export default function ProfileScreen() {
               <SettingRow icon={<Bell color={Colors.secondary} size={18} />} label="Notifications" onPress={() => router.push("/notifications")} testID="profile-go-notifs" borderColor={borderColor} txtColor={txt} />
               <SettingRow icon={<ShieldCheck color={Colors.accent} size={18} />} label="Vérification KYC" onPress={() => router.push("/kyc")} testID="profile-go-kyc" borderColor={borderColor} txtColor={txt} />
               <SettingRow icon={<CreditCard color={Colors.primary} size={18} />} label="Mes Paiements" onPress={() => router.push("/payments")} testID="profile-go-payments" borderColor={borderColor} txtColor={txt} />
+              <SettingRow icon={<Shield color="#7C3AED" size={18} />} label="Mes données & droits" onPress={() => router.push("/data-rights" as any)} testID="profile-go-data-rights" borderColor={borderColor} txtColor={txt} />
+              <SettingRow icon={<Shield color={Colors.secondary} size={18} />} label="Politique de confidentialité" onPress={() => router.push("/privacy" as any)} testID="profile-go-privacy" borderColor={borderColor} txtColor={txt} />
+              <SettingRow icon={<Shield color={Colors.textMuted} size={18} />} label="Conditions d'utilisation (CGU)" onPress={() => router.push("/cgu" as any)} testID="profile-go-cgu" borderColor={borderColor} txtColor={txt} />
               {user?.role === "member" ? (
                 <SettingRow icon={<Sparkles color={Colors.accent} size={18} />} label="Demander une promotion Manager" onPress={() => router.push("/promotion-request")} testID="profile-promotion" borderColor={borderColor} txtColor={txt} />
               ) : null}

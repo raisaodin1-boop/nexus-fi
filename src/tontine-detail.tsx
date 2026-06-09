@@ -1,5 +1,5 @@
 // Tontine detail — cycle dashboard, rotation order, disbursement history.
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -26,6 +26,7 @@ import {
 } from "lucide-react-native";
 
 import { api, ApiError, formatXAF } from "@/src/api";
+import { supabase } from "@/src/supabase";
 import { Button, Card, Field, SkeletonBox, SkeletonCard } from "@/src/ui";
 import { DocumentButton } from "@/src/document-button";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
@@ -431,7 +432,18 @@ export function TontineDetailView({ id }: { id: string }) {
     setLoading(false);
   }, [id]);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  // Real-time: subscribe only while screen is focused
+  useFocusEffect(useCallback(() => {
+    load();
+    if (!id) return;
+    const ch = supabase
+      .channel(`rt-tontine-${id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "tontine_contributions", filter: `tontine_id=eq.${id}` }, () => { load(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "tontine_members", filter: `tontine_id=eq.${id}` }, () => { load(); })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "tontines", filter: `id=eq.${id}` }, () => { load(); })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [id, load]));
 
   const advanceCycle = async () => {
     setAdvanceBusy(true);

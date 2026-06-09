@@ -68,9 +68,9 @@ export default function SavingsDetail() {
         </TouchableOpacity>
 
         <Text style={styles.title}>{goal.name}</Text>
-        {goal.type ? (
+        {(goal.savings_type || goal.type) ? (
           <View style={styles.typePill}>
-            <Text style={styles.typePillText}>{TYPE_LABELS[goal.type] ?? goal.type}</Text>
+            <Text style={styles.typePillText}>{TYPE_LABELS[goal.savings_type ?? goal.type] ?? (goal.savings_type ?? goal.type)}</Text>
           </View>
         ) : null}
 

@@ -22,6 +22,12 @@ export interface User {
   city?: string | null;
   occupation?: string | null;
   photo_base64?: string | null;
+  date_of_birth?: string | null;
+  birth_place?: string | null;
+  neighborhood?: string | null;
+  address?: string | null;
+  kyc_status?: string | null;
+  trust_score?: number | null;
   created_at: string;
 }
 
@@ -43,7 +49,7 @@ async function fetchProfile(userId: string): Promise<Partial<User>> {
     const timeout = new Promise<null>((res) => setTimeout(() => res(null), 8000));
     const query = supabase
       .from("profiles")
-      .select("full_name,role,phone,gender,country,city,occupation")
+      .select("full_name,role,phone,gender,country,city,occupation,date_of_birth,birth_place,neighborhood,address,kyc_status,trust_score")
       .eq("id", userId)
       .single();
     const result = await Promise.race([query, timeout]);
@@ -69,6 +75,12 @@ async function buildUser(sbUser: any): Promise<User> {
     country: profile.country ?? null,
     city: profile.city ?? null,
     occupation: profile.occupation ?? null,
+    date_of_birth: profile.date_of_birth ?? null,
+    birth_place: profile.birth_place ?? null,
+    neighborhood: profile.neighborhood ?? null,
+    address: profile.address ?? null,
+    kyc_status: profile.kyc_status ?? null,
+    trust_score: profile.trust_score ?? null,
     created_at: sbUser.created_at ?? new Date().toISOString(),
   };
 }

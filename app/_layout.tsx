@@ -17,6 +17,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import Constants from "expo-constants";
 
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
+import { ErrorBoundary } from "@/src/error-boundary";
 import { AuthProvider, useAuth } from "@/src/auth-context";
 import { ThemeProvider } from "@/src/theme-context";
 import { I18nProvider } from "@/src/i18n";
@@ -116,16 +117,18 @@ function RootLayoutInner() {
 
 export default function RootLayout() {
   return (
-    <SafeAreaProvider>
-      <ThemeProvider>
-        <I18nProvider>
-          <AuthProvider>
-            <ToastProvider>
-              <RootLayoutInner />
-            </ToastProvider>
-          </AuthProvider>
-        </I18nProvider>
-      </ThemeProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <I18nProvider>
+            <AuthProvider>
+              <ToastProvider>
+                <RootLayoutInner />
+              </ToastProvider>
+            </AuthProvider>
+          </I18nProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
