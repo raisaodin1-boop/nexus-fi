@@ -1,16 +1,28 @@
 /**
- * Real-time exchange rates for XAF / EUR / USD.
+ * Real-time exchange rates — XAF, NGN, GHS, KES, ZAR, USD, EUR.
  *
- * XAF (CFA franc BEAC) is legally pegged to EUR at exactly 655.957 XAF = 1 EUR.
- * EUR/USD rate is fetched live from frankfurter.app (free, no API key).
- * All derived rates are computed from those two facts.
+ * XAF (CFA franc BEAC) is legally pegged to EUR at exactly 655.957.
+ * All other rates fetched from ExchangeRate-API (free, USD base, no key required).
  */
 
+export type Currency = "XAF" | "NGN" | "GHS" | "KES" | "ZAR" | "USD" | "EUR";
+
+export const CURRENCY_META: Record<Currency, { name: string; symbol: string; flag: string; decimals: number }> = {
+  XAF: { name: "Franc CFA", symbol: "FCFA", flag: "🇨🇲", decimals: 0 },
+  NGN: { name: "Naira nigérian", symbol: "₦", flag: "🇳🇬", decimals: 0 },
+  GHS: { name: "Cedi ghanéen", symbol: "GH₵", flag: "🇬🇭", decimals: 2 },
+  KES: { name: "Shilling kényan", symbol: "KSh", flag: "🇰🇪", decimals: 2 },
+  ZAR: { name: "Rand sud-africain", symbol: "R", flag: "🇿🇦", decimals: 2 },
+  USD: { name: "Dollar américain", symbol: "$", flag: "🇺🇸", decimals: 2 },
+  EUR: { name: "Euro", symbol: "€", flag: "🇪🇺", decimals: 2 },
+};
+
+export const ALL_CURRENCIES: Currency[] = ["XAF", "NGN", "GHS", "KES", "ZAR", "USD", "EUR"];
+
+// USD-based rates (1 USD = N units of currency)
 export interface Rates {
-  XAF_PER_EUR: number;   // always 655.957
-  XAF_PER_USD: number;   // derived
-  USD_PER_EUR: number;   // live
-  EUR_PER_USD: number;   // live inverse
+  base: "USD";
+  rates: Record<Currency, number>;
   fetched_at: string;
 }
 
@@ -18,56 +30,67 @@ const XAF_PER_EUR = 655.957;
 
 let _cache: Rates | null = null;
 let _cacheAt = 0;
-const TTL_MS = 5 * 60 * 1000; // 5 min
+const TTL_MS = 5 * 60 * 1000;
+
+// Fallback rates (approximate, updated 2024)
+const FALLBACK_USD: Record<Currency, number> = {
+  USD: 1,
+  EUR: 0.926,
+  XAF: 608,
+  NGN: 1580,
+  GHS: 15.5,
+  KES: 130,
+  ZAR: 18.5,
+};
 
 export async function getRates(): Promise<Rates> {
   if (_cache && Date.now() - _cacheAt < TTL_MS) return _cache;
 
   try {
-    const res = await fetch("https://api.frankfurter.app/latest?from=EUR&to=USD");
+    // ExchangeRate-API free endpoint — USD base, 170+ currencies, no key required
+    const res = await fetch("https://open.er-api.com/v6/latest/USD");
     const json = await res.json();
-    const usdPerEur: number = json?.rates?.USD ?? 1.08;
-    const rates: Rates = {
-      XAF_PER_EUR,
-      XAF_PER_USD: XAF_PER_EUR / usdPerEur,
-      USD_PER_EUR: usdPerEur,
-      EUR_PER_USD: 1 / usdPerEur,
-      fetched_at: new Date().toISOString(),
+    if (json?.result !== "success") throw new Error("API error");
+
+    const r = json.rates;
+    const rates: Record<Currency, number> = {
+      USD: 1,
+      EUR: r.EUR ?? FALLBACK_USD.EUR,
+      // XAF: legally pegged, override API value for accuracy
+      XAF: XAF_PER_EUR * (r.EUR ?? FALLBACK_USD.EUR),
+      NGN: r.NGN ?? FALLBACK_USD.NGN,
+      GHS: r.GHS ?? FALLBACK_USD.GHS,
+      KES: r.KES ?? FALLBACK_USD.KES,
+      ZAR: r.ZAR ?? FALLBACK_USD.ZAR,
     };
-    _cache = rates;
+
+    _cache = { base: "USD", rates, fetched_at: new Date().toISOString() };
     _cacheAt = Date.now();
-    return rates;
+    return _cache;
   } catch {
-    // Fallback to approximate rates if network fails
     return {
-      XAF_PER_EUR,
-      XAF_PER_USD: 608,
-      USD_PER_EUR: 1.08,
-      EUR_PER_USD: 0.926,
+      base: "USD",
+      rates: { ...FALLBACK_USD },
       fetched_at: new Date().toISOString(),
     };
   }
 }
 
-export type Currency = "XAF" | "EUR" | "USD";
-
-/** Convert amount from one currency to another */
+/** Convert amount between any two supported currencies */
 export function convert(amount: number, from: Currency, to: Currency, rates: Rates): number {
   if (from === to) return amount;
-  // Normalise to XAF first
-  let xaf: number;
-  if (from === "XAF") xaf = amount;
-  else if (from === "EUR") xaf = amount * rates.XAF_PER_EUR;
-  else xaf = amount * rates.XAF_PER_USD;
-  // Convert from XAF to target
-  if (to === "XAF") return xaf;
-  if (to === "EUR") return xaf / rates.XAF_PER_EUR;
-  return xaf / rates.XAF_PER_USD;
+  const inUSD = amount / rates.rates[from];
+  return inUSD * rates.rates[to];
 }
 
 export function formatAmount(amount: number, currency: Currency): string {
-  const locale = "fr-FR";
-  if (currency === "XAF") return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(amount) + " XAF";
-  if (currency === "EUR") return new Intl.NumberFormat(locale, { style: "currency", currency: "EUR", maximumFractionDigits: 2 }).format(amount);
-  return new Intl.NumberFormat(locale, { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(amount);
+  const meta = CURRENCY_META[currency];
+  const decimals = meta?.decimals ?? 2;
+  const formatted = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: decimals }).format(amount);
+  return `${formatted} ${meta?.symbol ?? currency}`;
+}
+
+// Legacy compat for existing screens
+export function formatXAFAmount(amount: number): string {
+  return `${Math.round(amount).toLocaleString("fr-FR")} FCFA`;
 }

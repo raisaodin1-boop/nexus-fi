@@ -21,7 +21,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowLeft, ArrowDown, ArrowUp, Award, CheckCircle, ChevronRight,
-  Copy, Crown, MessageSquare, RefreshCw, Shuffle, Users as UsersIcon,
+  Copy, Crown, MessageSquare, RefreshCw, Shuffle, Trophy, Users as UsersIcon,
   Wallet, X,
 } from "lucide-react-native";
 
@@ -568,6 +568,15 @@ export function TontineDetailView({ id }: { id: string }) {
             <View style={{ marginTop: 16 }}>
               <DocumentButton kind="tontine_certificate" refId={id} compact />
             </View>
+
+            {/* Leaderboard CTA */}
+            <TouchableOpacity onPress={() => router.push(`/tontines/leaderboard?id=${id}`)} style={[styles.disbBtn, Shadow.card]} testID="tontine-leaderboard-btn">
+              <LinearGradient colors={[Colors.secondary, Colors.gradEnd]} style={styles.disbBtnGrad}>
+                <Trophy color="#fff" size={18} />
+                <Text style={styles.disbBtnText}>Classement</Text>
+                <ChevronRight color="#fff" size={16} />
+              </LinearGradient>
+            </TouchableOpacity>
 
             {/* Admin: Record disbursement */}
             {is_admin && (

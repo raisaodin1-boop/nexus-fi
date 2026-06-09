@@ -274,6 +274,30 @@ export default function Identity() {
           </TouchableOpacity>
         </View>
 
+        {/* Streaks CTA */}
+        <TouchableOpacity onPress={() => router.push("/streaks" as any)} activeOpacity={0.85} style={{ marginHorizontal: Spacing.xl, marginBottom: 12 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14, backgroundColor: Colors.surface, borderRadius: 14, borderWidth: 1, borderColor: Colors.border }}>
+            <Text style={{ fontSize: 24 }}>🔥</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: Colors.text, fontWeight: "800", fontSize: 13 }}>Mes Streaks</Text>
+              <Text style={{ color: Colors.textMuted, fontSize: 11, marginTop: 1 }}>Séries de cotisations · Badges · Récompenses</Text>
+            </View>
+            <Text style={{ color: Colors.textMuted, fontSize: 20 }}>›</Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* QR Payment CTA */}
+        <TouchableOpacity onPress={() => router.push("/qr-payment" as any)} activeOpacity={0.85} style={{ marginHorizontal: Spacing.xl, marginBottom: 12 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14, backgroundColor: Colors.surface, borderRadius: 14, borderWidth: 1, borderColor: Colors.border }}>
+            <Text style={{ fontSize: 24 }}>📲</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: Colors.text, fontWeight: "800", fontSize: 13 }}>Mon QR de paiement</Text>
+              <Text style={{ color: Colors.textMuted, fontSize: 11, marginTop: 1 }}>Recevoir de l'argent · Partager sur WhatsApp</Text>
+            </View>
+            <Text style={{ color: Colors.textMuted, fontSize: 20 }}>›</Text>
+          </View>
+        </TouchableOpacity>
+
         {/* Components — /1000 system */}
         <SectionTitle>Composantes du score</SectionTitle>
         <View style={{ paddingHorizontal: Spacing.xl, gap: 10 }}>

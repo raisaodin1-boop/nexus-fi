@@ -130,6 +130,26 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET" && s[0] === "analytics" && s[1] === "users-series")    return (await db.getUsersSeries(14)) as T;
     if (method === "GET" && s[0] === "financial-analytics")  return (await db.getFinancialAnalytics()) as T;
 
+    // ── Streaks
+    if (method === "GET"  && s[0] === "streaks")                                          return (await db.getStreakData()) as T;
+
+    // ── Leaderboard / Ranking
+    if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "leaderboard")      return (await db.getTontineLeaderboard(s[1])) as T;
+    if (method === "GET"  && s[0] === "ranking" && s[1] === "regional")                  return (await db.getRegionalRanking(body?.country ?? "CM")) as T;
+
+    // ── Family accounts
+    if (method === "POST" && s[0] === "family" && s[1] === "link")                       return (await db.linkFamilyMember(body?.email, body?.relationship)) as T;
+    if (method === "GET"  && s[0] === "family" && s[1] === "overview")                   return (await db.getFamilyOverview()) as T;
+
+    // ── Smart alerts
+    if (method === "GET"  && s[0] === "alerts")                                           return (await db.getSmartAlerts()) as T;
+
+    // ── NFT certificates
+    if (method === "POST" && s[0] === "certificates" && s[1] === "mint")                 return (await db.mintCertificateHash(body?.doc_id, body?.doc_type)) as T;
+
+    // ── Exchange rates (extended)
+    if (method === "GET"  && s[0] === "exchange-rates")                                   return (await import("@/src/exchange-rates").then(m => m.getRates())) as T;
+
     // ── Admin
     if (method === "GET" && s[0] === "admin" && s[1] === "stats")                      return (await db.getAdminStats()) as T;
     if (method === "GET"   && s[0] === "admin" && s[1] === "analytics")                         return (await db.getAdminAnalytics()) as T;

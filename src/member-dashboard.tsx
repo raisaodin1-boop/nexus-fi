@@ -12,7 +12,7 @@ import {
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { Bell, ChevronRight, PiggyBank, Users, Wallet, TrendingUp, Sparkles, QrCode, BarChart2 } from "lucide-react-native";
+import { Bell, ChevronRight, PiggyBank, Trophy, Users, Wallet, TrendingUp, Sparkles, QrCode, BarChart2 } from "lucide-react-native";
 
 import { useAuth } from "@/src/auth-context";
 import { api, formatXAF } from "@/src/api";
@@ -40,24 +40,27 @@ export function MemberDashboard() {
   const [trust, setTrust] = useState<TrustScore | null>(null);
   const [insights, setInsights] = useState<Insight[]>([]);
   const [unread, setUnread] = useState(0);
+  const [alertCount, setAlertCount] = useState(0);
   const [savingsSeries, setSavingsSeries] = useState<Series | null>(null);
 
   const load = useCallback(async () => {
     const safe = async <T>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch { return null; }
     };
-    const [s, t, i, n, ss] = await Promise.all([
+    const [s, t, i, n, ss, al] = await Promise.all([
       safe(() => api.get<Summary>("/savings/summary")),
       safe(() => api.get<TrustScore>("/trust-score")),
       safe(() => api.get<{ items: Insight[] }>("/insights")),
       safe(() => api.get<{ unread_count: number }>("/notifications")),
       safe(() => api.get<Series>("/analytics/me/savings?days=14")),
+      safe(() => api.get<any[]>("/alerts")),
     ]);
     if (s) setSummary(s);
     if (t) setTrust(t);
     if (i) setInsights(i.items ?? []);
     if (n) setUnread(n.unread_count ?? 0);
     if (ss) setSavingsSeries(ss);
+    if (al) setAlertCount(Array.isArray(al) ? al.length : 0);
     setLoading(false);
   }, []);
 
@@ -114,6 +117,25 @@ export function MemberDashboard() {
             {unread > 0 ? <View style={styles.bellDot}><Text style={styles.bellDotText}>{unread > 9 ? "9+" : unread}</Text></View> : null}
           </TouchableOpacity>
         </View>
+
+        {/* Alerts row */}
+        <TouchableOpacity
+          onPress={() => router.push("/alerts" as any)}
+          activeOpacity={0.85}
+          style={styles.alertsRow}
+          testID="home-alerts-btn"
+        >
+          <Bell color={alertCount > 0 ? Colors.warning : Colors.textMuted} size={16} />
+          <Text style={[styles.alertsRowText, alertCount > 0 && { color: Colors.warning }]}>
+            Alertes intelligentes
+          </Text>
+          {alertCount > 0 ? (
+            <View style={styles.alertsBadge}>
+              <Text style={styles.alertsBadgeText}>{alertCount}</Text>
+            </View>
+          ) : null}
+          <Text style={{ color: Colors.textMuted, fontSize: 14, marginLeft: "auto" }}>›</Text>
+        </TouchableOpacity>
 
         {/* Trust Score card */}
         <View style={{ paddingHorizontal: Spacing.xl }}>
@@ -177,6 +199,10 @@ export function MemberDashboard() {
         </View>
         <View style={styles.qaRow}>
           <QuickAction icon={<BarChart2 color={Colors.secondary} size={22} />} label="Tableau de bord" onPress={() => router.push("/analytics")} testID="home-action-analytics" />
+          <QuickAction icon={<Users color={Colors.primary} size={22} />} label="Famille" onPress={() => router.push("/family")} testID="home-action-family" />
+        </View>
+        <View style={styles.qaRow}>
+          <QuickAction icon={<Trophy color={Colors.accent} size={22} />} label="Classement" onPress={() => router.push("/ranking")} testID="home-action-ranking" />
           <View style={{ flex: 1 }} />
         </View>
 
@@ -244,6 +270,29 @@ const styles = StyleSheet.create({
   bellWrap: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border },
   bellDot: { position: "absolute", top: 6, right: 6, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: Colors.danger, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   bellDotText: { color: "#fff", fontSize: 10, fontWeight: "800" },
+  alertsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: Spacing.xl,
+    marginBottom: Spacing.sm,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  alertsRowText: { color: Colors.textMuted, fontSize: 13, fontWeight: "700" },
+  alertsBadge: {
+    backgroundColor: Colors.warning,
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    minWidth: 20,
+    alignItems: "center",
+  },
+  alertsBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800" },
   scoreCard: { borderRadius: Radius.xxl, padding: 24, overflow: "hidden" },
   scoreHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
   scoreLabel: { color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: "700", letterSpacing: 1 },
