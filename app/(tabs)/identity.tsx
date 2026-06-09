@@ -23,7 +23,7 @@ import { Card, SectionTitle } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { TrustGauge } from "@/src/trust-gauge";
 import { useAuth } from "@/src/auth-context";
-import { sharePdfCertificate } from "@/src/share";
+import { useDocument } from "@/src/hooks/use-document";
 
 interface TS {
   score: number; level: string; risk: string; color: string;
@@ -56,6 +56,7 @@ interface IdentityProfile {
 export default function Identity() {
   const router = useRouter();
   const { user } = useAuth();
+  const { generateAndDownload, generating } = useDocument();
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [profile, setProfile] = useState<IdentityProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,11 +79,8 @@ export default function Identity() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const openPDF = async (kind: "identity" | "trust-score" | "savings") => {
-    try {
-      await sharePdfCertificate(kind);
-    } catch (e: any) {
-      Alert.alert("Partage indisponible", e?.message ?? "Une erreur est survenue.");
-    }
+    const docKind = kind === "savings" ? "savings_summary" : "trust_score";
+    await generateAndDownload({ kind: docKind, freeDoc: true });
   };
 
   const downloadCertified = async (kind: "identity" | "trust-score" | "savings") => {
@@ -341,8 +339,8 @@ export default function Identity() {
         {/* FREE certificates */}
         <SectionTitle>Documents gratuits</SectionTitle>
         <View style={{ paddingHorizontal: Spacing.xl, gap: 10 }}>
-          <PDFButton testID="pdf-identity" icon={<ShieldCheck color={Colors.accent} size={20} />} title="Identité Financière" subtitle="Profil complet et vérifié" onPress={() => openPDF("identity")} />
-          <PDFButton testID="pdf-savings" icon={<FileText color={Colors.primary} size={20} />} title="Résumé d'épargne" subtitle="Total et engagement" onPress={() => openPDF("savings")} />
+          <PDFButton testID="pdf-identity" icon={<ShieldCheck color={Colors.accent} size={20} />} title="Identité Financière" subtitle="Profil complet et vérifié" onPress={() => openPDF("identity")} loading={generating} />
+          <PDFButton testID="pdf-savings" icon={<FileText color={Colors.primary} size={20} />} title="Résumé d'épargne" subtitle="Total et engagement" onPress={() => openPDF("savings")} loading={generating} />
           <Text style={styles.shareHint}>📱 Partagez par WhatsApp, Email, ou enregistrez-les directement.</Text>
         </View>
 
@@ -440,19 +438,19 @@ function Component({ label, value, max, color, hint }: { label: string; value: n
 }
 
 function PDFButton({
-  icon, title, subtitle, onPress, testID,
-}: { icon: React.ReactNode; title: string; subtitle: string; onPress: () => void; testID?: string }) {
+  icon, title, subtitle, onPress, testID, loading,
+}: { icon: React.ReactNode; title: string; subtitle: string; onPress: () => void; testID?: string; loading?: boolean }) {
   return (
-    <TouchableOpacity activeOpacity={0.85} onPress={onPress} testID={testID}>
-      <Card style={{ flexDirection: "row", alignItems: "center", padding: 16, gap: 12 }}>
+    <TouchableOpacity activeOpacity={0.85} onPress={onPress} testID={testID} disabled={loading}>
+      <Card style={{ flexDirection: "row", alignItems: "center", padding: 16, gap: 12, opacity: loading ? 0.7 : 1 }}>
         <View style={{ width: 42, height: 42, borderRadius: 10, backgroundColor: Colors.surfaceAlt, alignItems: "center", justifyContent: "center" }}>
-          {icon}
+          {loading ? <ActivityIndicator size={18} color={Colors.secondary} /> : icon}
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: Colors.text, fontWeight: "800", fontSize: 14 }}>{title}</Text>
-          <Text style={{ color: Colors.textMuted, fontSize: 12, marginTop: 2 }}>{subtitle}</Text>
+          <Text style={{ color: Colors.text, fontWeight: "800", fontSize: 14 }}>{loading ? "Génération en cours…" : title}</Text>
+          <Text style={{ color: Colors.textMuted, fontSize: 12, marginTop: 2 }}>{loading ? "Veuillez patienter" : subtitle}</Text>
         </View>
-        <Share2 color={Colors.textMuted} size={18} />
+        {!loading && <Share2 color={Colors.textMuted} size={18} />}
       </Card>
     </TouchableOpacity>
   );

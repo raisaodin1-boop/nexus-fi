@@ -208,14 +208,18 @@ export function useDocument() {
   const [error, setError] = useState<string | null>(null);
 
   const generateAndDownload = useCallback(
-    async (params: { kind: DocKind; ref_id?: string }, _baseUrl?: string) => {
+    async (params: { kind: DocKind; ref_id?: string; freeDoc?: boolean }, _baseUrl?: string) => {
       setGenerating(true);
       setError(null);
       try {
         // KYC gate
         const kyc = await checkKyc();
         if (!kyc.ok) {
-          if (kyc.level === 1) {
+          // Free docs only require Level 1 (profile complete), not KYC approval
+          const needsBlock = params.freeDoc ? kyc.level === 1 : true;
+          if (!needsBlock) {
+            // freeDoc with only level-2 failure → proceed
+          } else if (kyc.level === 1) {
             Alert.alert(
               "Profil incomplet",
               "Vous devez compléter vos informations personnelles (nom, téléphone, date de naissance, adresse) avant d'accéder aux certificats.",
@@ -224,6 +228,7 @@ export function useDocument() {
                 { text: "Compléter mon profil →", onPress: () => router.push("/complete-profile") },
               ]
             );
+            return;
           } else {
             Alert.alert(
               "Vérification KYC requise",
@@ -233,8 +238,8 @@ export function useDocument() {
                 { text: "Vérifier mon identité →", onPress: () => router.push("/kyc") },
               ]
             );
+            return;
           }
-          return;
         }
 
         // Fetch relevant data
