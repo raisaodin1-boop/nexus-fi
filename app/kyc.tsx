@@ -3,14 +3,14 @@ import { Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View }
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, ShieldCheck, CheckCircle, Clock, XCircle } from "lucide-react-native";
+import { ArrowLeft, ShieldCheck, CheckCircle, Clock, XCircle, User } from "lucide-react-native";
 
 import { api, ApiError } from "@/src/api";
 import { Button, Card } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { useToast } from "@/src/toast";
 
-interface KycStatus { kyc_status: string; submitted_at?: string }
+interface KycStatus { kyc_status: string; submitted_at?: string; full_name?: string; phone?: string; date_of_birth?: string; address?: string }
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: any; desc: string }> = {
   not_submitted: { label: "Non soumis", color: Colors.textMuted, icon: ShieldCheck, desc: "Vérifiez votre identité pour accéder aux fonctionnalités premium." },
@@ -26,7 +26,7 @@ export default function KycScreen() {
   const [submitting, setSubmitting] = useState(false);
 
   useFocusEffect(useCallback(() => {
-    api.get<KycStatus>("/users/me/kyc").then(setStatus).catch(() => {});
+    api.get<KycStatus>("/users/me").then(setStatus).catch(() => {});
   }, []));
 
   const handleSubmit = async () => {
@@ -76,18 +76,38 @@ export default function KycScreen() {
 
         <Card style={{ padding: 20, gap: 12 }}>
           <Text style={styles.sectionTitle}>Niveaux de vérification</Text>
-          {[
-            { level: "Niveau 1", desc: "Email vérifié — automatique à l'inscription", done: true },
-            { level: "Niveau 2", desc: "Pièce d'identité + selfie — accès aux virements", done: status?.kyc_status === "approved" },
-          ].map((item) => (
-            <View key={item.level} style={styles.levelRow}>
-              <CheckCircle color={item.done ? Colors.accent : Colors.textMuted} size={18} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.levelTitle}>{item.level}</Text>
-                <Text style={styles.levelDesc}>{item.desc}</Text>
+          {(() => {
+            const profileComplete = !!(status?.full_name && status?.phone && status?.date_of_birth && status?.address);
+            return [
+              {
+                level: "Niveau 1",
+                desc: profileComplete
+                  ? "Informations personnelles complètes ✓"
+                  : "Niveau 1 — à compléter (nom, téléphone, date de naissance, adresse)",
+                done: profileComplete,
+                action: !profileComplete ? () => router.push("/complete-profile") : undefined,
+                actionLabel: "Compléter le profil →",
+              },
+              {
+                level: "Niveau 2",
+                desc: "Pièce d'identité vérifiée — accès aux virements",
+                done: status?.kyc_status === "approved",
+              },
+            ].map((item) => (
+              <View key={item.level} style={styles.levelRow}>
+                <CheckCircle color={item.done ? Colors.accent : Colors.textMuted} size={18} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.levelTitle}>{item.level}</Text>
+                  <Text style={styles.levelDesc}>{item.desc}</Text>
+                  {item.action && (
+                    <TouchableOpacity onPress={item.action} style={{ marginTop: 6 }}>
+                      <Text style={{ color: Colors.primary, fontWeight: "700", fontSize: 13 }}>{item.actionLabel}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
-            </View>
-          ))}
+            ));
+          })()}
         </Card>
 
         {(status?.kyc_status === "not_submitted" || status?.kyc_status === "rejected") && (
