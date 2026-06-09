@@ -1,7 +1,14 @@
 // AuthContext — Supabase Auth, stable, no loop
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { Platform } from "react-native";
 import { supabase } from "@/src/supabase";
 import { sendWelcomeMessage, applyReferralBonus } from "@/src/db";
+
+// Complete auth session on mobile (no-op on web)
+if (Platform.OS !== "web") {
+  // Dynamic import to avoid expo-crypto web build failure
+  import("expo-web-browser").then((m) => m.maybeCompleteAuthSession()).catch(() => {});
+}
 
 export interface User {
   id: string;
@@ -24,6 +31,7 @@ interface AuthCtx {
   isAuthed: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, full_name: string, referralCode?: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -124,6 +132,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const loginWithGoogle = useCallback(async () => {
+    if (Platform.OS === "web") {
+      // On web: Supabase handles the full redirect — no expo-auth-session needed
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: window.location.origin + "/auth/callback" },
+      });
+      if (error) throw { detail: error.message };
+      return; // Browser will redirect
+    }
+
+    // On native: use expo-auth-session + expo-web-browser
+    const { makeRedirectUri } = await import("expo-auth-session");
+    const WebBrowser = await import("expo-web-browser");
+    const redirectTo = makeRedirectUri({ scheme: "hodix", path: "auth/callback" });
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo, skipBrowserRedirect: true },
+    });
+    if (error) throw { detail: error.message };
+    if (!data.url) throw { detail: "Impossible d'ouvrir Google Sign-In." };
+
+    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+    if (result.type !== "success") return;
+
+    const url = result.url;
+    const params = new URLSearchParams(url.includes("#") ? url.split("#")[1] : url.split("?")[1] ?? "");
+    const accessToken = params.get("access_token");
+    const refreshToken = params.get("refresh_token");
+
+    if (accessToken) {
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken ?? "",
+      });
+      if (sessionError) throw { detail: sessionError.message };
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     // Clear local state immediately — no waiting for network
     setUser(null);
@@ -141,7 +189,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <Ctx.Provider value={{ user, loading, isAuthed: !!user, login, register, logout, refresh }}>
+    <Ctx.Provider value={{ user, loading, isAuthed: !!user, login, register, loginWithGoogle, logout, refresh }}>
       {children}
     </Ctx.Provider>
   );

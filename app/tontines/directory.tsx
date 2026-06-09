@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 12, fontWeight: "600", color: Colors.text },
   chipTextActive: { color: "#fff" },
   divider: { width: 1, height: 24, backgroundColor: Colors.border, marginHorizontal: 4 },
-  list: { paddingHorizontal: Spacing.xl, gap: 12 },
+  list: { paddingHorizontal: Spacing.xl, gap: 12, paddingBottom: 100 },
   card: { padding: 16, gap: 10 },
   cardHeader: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   cardName: { fontSize: 16, fontWeight: "700", color: Colors.text, marginBottom: 4 },

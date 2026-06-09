@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -8,7 +8,8 @@ import { ChevronLeft, CheckCircle2 } from "lucide-react-native";
 import { api } from "@/src/api";
 import { Button, Field } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
-import type { Currency, MobileMoneyProvider } from "@/src/wallet-db";
+import type { MobileMoneyProvider } from "@/src/wallet-db";
+import type { Currency } from "@/src/exchange-rates";
 
 const PROVIDERS: MobileMoneyProvider[] = ["MTN MoMo", "Orange Money", "Moov Money", "Wave"];
 const CURRENCIES: Currency[] = ["XAF", "EUR", "USD"];
@@ -61,6 +62,7 @@ export default function TopupScreen() {
         <Text style={styles.headerTitle}>Recharger le wallet</Text>
       </LinearGradient>
 
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
 
         {/* Currency */}
@@ -101,16 +103,17 @@ export default function TopupScreen() {
           Confirmez sur votre téléphone pour finaliser.
         </Text>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.background },
+  safe: { flex: 1, backgroundColor: Colors.bg },
   header: { flexDirection: "row", alignItems: "center", gap: 12, padding: Spacing.xl, paddingBottom: 20 },
   back: { padding: 4 },
   headerTitle: { fontSize: 18, fontWeight: "800", color: "#fff" },
-  body: { padding: Spacing.xl, gap: 4 },
+  body: { padding: Spacing.xl, gap: 4, paddingBottom: 100 },
   label: { fontSize: 13, fontWeight: "600", color: Colors.text, marginBottom: 8, marginTop: 8 },
   chipRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
   providerGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 16 },

@@ -472,8 +472,8 @@ export default function WelcomeScreen() {
   const startPulse = useCallback(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(btnPulse, { toValue: 1.04, duration: 900, easing: Easing.inOut(Easing.sine), useNativeDriver: true }),
-        Animated.timing(btnPulse, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.sine), useNativeDriver: true }),
+        Animated.timing(btnPulse, { toValue: 1.04, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(btnPulse, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ])
     ).start();
   }, []);

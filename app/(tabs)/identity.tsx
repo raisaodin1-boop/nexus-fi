@@ -154,7 +154,7 @@ export default function Identity() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.h1}>Identité Financière</Text>
           <Text style={styles.subtitle}>Votre histoire vérifiable</Text>

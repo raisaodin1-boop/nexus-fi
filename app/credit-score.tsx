@@ -371,7 +371,7 @@ export default function CreditScoreScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.background },
+  safe: { flex: 1, backgroundColor: Colors.bg },
   hero: { padding: Spacing.xl, paddingTop: 12, paddingBottom: 32, alignItems: "center", gap: 10 },
   back: { alignSelf: "flex-start", marginBottom: 4 },
   heroTitle: { fontSize: 22, fontWeight: "800", color: "#fff", letterSpacing: -0.5 },

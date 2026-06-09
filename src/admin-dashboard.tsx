@@ -36,7 +36,7 @@ export function AdminDashboard() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const safe = async <T>(fn: () => Promise<T>): Promise<T | null> => {
+    const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch { return null; }
     };
     const [a, s, u, p] = await Promise.all([
@@ -57,7 +57,7 @@ export function AdminDashboard() {
   if (loading || !analytics) {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
-        <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
           <View style={styles.header}>
             <View style={{ gap: 8 }}>
               <SkeletonBox width={120} height={12} />
@@ -99,7 +99,7 @@ export function AdminDashboard() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <View>
             <View style={styles.rolePill}>

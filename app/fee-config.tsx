@@ -97,7 +97,7 @@ export default function FeeConfigScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-      <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 100 }}>
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.back}>← Retour</Text>
         </TouchableOpacity>
@@ -230,7 +230,7 @@ export default function FeeConfigScreen() {
             <Button
               testID="fee-reload"
               label="Recharger"
-              variant="outline"
+              variant="ghost"
               onPress={load}
               icon={<RefreshCw color={Colors.secondary} size={16} />}
             />

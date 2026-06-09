@@ -106,7 +106,7 @@ export default function MessagesScreen() {
   // ── Thread view ──────────────────────────────────────────────
   if (activeThread) {
     return (
-      <SafeAreaView style={styles.safe} edges={["top"]}>
+      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <LinearGradient colors={["#0D0F1A", "#1A1B2E"]} style={styles.threadHeader}>
           <TouchableOpacity onPress={() => setActiveThread(null)} style={styles.iconBtn}>
             <ArrowLeft color="#fff" size={20} />
@@ -191,7 +191,7 @@ export default function MessagesScreen() {
       {loadingConv ? (
         <View style={styles.center}><ActivityIndicator color={Colors.primary} size="large" /></View>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
           <Text style={styles.sectionLabel}>Support</Text>
           <TouchableOpacity style={styles.convRow} onPress={() => openThread({ type: "admin", name: "Administration HODIX" })}>
             <View style={[styles.convIcon, { backgroundColor: Colors.accent + "20" }]}>

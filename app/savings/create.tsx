@@ -16,6 +16,7 @@ import { api, ApiError, formatXAF } from "@/src/api";
 import { Button, Field } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { useToast } from "@/src/toast";
+import { DatePicker } from "@/src/date-picker";
 
 type SavingsType = "flexible" | "locked" | "recurring";
 
@@ -31,7 +32,7 @@ export default function SavingsCreate() {
 
   const [name, setName] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
-  const [deadline, setDeadline] = useState("");
+  const [deadline, setDeadline] = useState<Date | null>(null);
   const [type, setType] = useState<SavingsType>("flexible");
   const [saving, setSaving] = useState(false);
 
@@ -45,7 +46,7 @@ export default function SavingsCreate() {
         name: name.trim(),
         target_amount: amount,
         savings_type: type,
-        deadline: deadline || null,
+        deadline: deadline ? deadline.toISOString().slice(0, 10) : null,
         currency: "XAF",
       });
       show("Objectif créé avec succès !", "success");
@@ -87,11 +88,11 @@ export default function SavingsCreate() {
             testID="savings-target"
           />
 
-          <Field
-            label="Date limite (optionnel, YYYY-MM-DD)"
+          <DatePicker
+            label="Date limite (optionnel)"
             value={deadline}
-            onChangeText={setDeadline}
-            placeholder="2025-12-31"
+            onChange={setDeadline}
+            minimumDate={new Date()}
             testID="savings-deadline"
           />
 
@@ -137,7 +138,7 @@ const styles = StyleSheet.create({
   },
   backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.surface, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border },
   title: { fontSize: 20, fontWeight: "900", color: Colors.primary, letterSpacing: -0.5 },
-  form: { padding: Spacing.xl, gap: 16, paddingBottom: 40 },
+  form: { padding: Spacing.xl, gap: 16, paddingBottom: 100 },
   typeLabel: { fontSize: 13, fontWeight: "700", color: Colors.text, marginBottom: -8 },
   typeRow: { gap: 10 },
   typeCard: {

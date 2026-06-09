@@ -94,7 +94,7 @@ export default function ReferralScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <Toast visible={toastVisible} message="Code copié !" />
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
         {/* Header gradient */}
         <LinearGradient colors={[Colors.gold, Colors.goldDark]} style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>

@@ -108,7 +108,7 @@ export default function WithdrawScreen() {
         </View>
       </Modal>
 
-      <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 100 }}>
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.back}>← Retour</Text>
         </TouchableOpacity>

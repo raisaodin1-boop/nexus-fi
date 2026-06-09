@@ -60,7 +60,7 @@ export default function AdminConsole() {
 
   if (user?.role !== "super_admin") {
     return (
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.center}>
           <ShieldAlert color={Colors.danger} size={40} />
           <Text style={styles.denied}>Accès refusé</Text>
@@ -230,7 +230,7 @@ export default function AdminConsole() {
           <FlatList
             data={filteredUsers}
             keyExtractor={(u) => u.id}
-            contentContainerStyle={{ padding: Spacing.xl, gap: 10, paddingBottom: 40 }}
+            contentContainerStyle={{ padding: Spacing.xl, gap: 10, paddingBottom: 100 }}
             renderItem={({ item: u }) => (
               <Card style={{ padding: 14 }}>
                 <Text style={styles.userName}>{u.full_name}</Text>
@@ -267,7 +267,7 @@ export default function AdminConsole() {
         <FlatList
           data={kyc}
           keyExtractor={(k) => k.user_id}
-          contentContainerStyle={{ padding: Spacing.xl, gap: 10, paddingBottom: 40 }}
+          contentContainerStyle={{ padding: Spacing.xl, gap: 10, paddingBottom: 100 }}
           renderItem={({ item: k }) => (
             <Card style={{ padding: 14 }}>
               <Text style={styles.userName}>{k.full_name}</Text>
@@ -293,7 +293,7 @@ export default function AdminConsole() {
         <FlatList
           data={promos}
           keyExtractor={(p) => p.id}
-          contentContainerStyle={{ padding: Spacing.xl, gap: 10, paddingBottom: 40 }}
+          contentContainerStyle={{ padding: Spacing.xl, gap: 10, paddingBottom: 100 }}
           renderItem={({ item: p }) => (
             <Card style={{ padding: 14 }}>
               <Text style={styles.userName}>{p.full_name}</Text>
@@ -319,7 +319,7 @@ export default function AdminConsole() {
         <FlatList
           data={tontines}
           keyExtractor={(t) => t.id}
-          contentContainerStyle={{ padding: Spacing.xl, gap: 10, paddingBottom: 40 }}
+          contentContainerStyle={{ padding: Spacing.xl, gap: 10, paddingBottom: 100 }}
           renderItem={({ item: t }) => (
             <Card style={{ padding: 14 }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -337,7 +337,7 @@ export default function AdminConsole() {
           ListEmptyComponent={<Text style={styles.empty}>Aucune tontine</Text>}
         />
       ) : (
-        <ScrollView contentContainerStyle={{ padding: Spacing.xl, gap: 16, paddingBottom: 40 }}>
+        <ScrollView contentContainerStyle={{ padding: Spacing.xl, gap: 16, paddingBottom: 100 }}>
           <Card style={{ padding: 20, gap: 14 }}>
             <Text style={styles.broadcastTitle}>Notification à tous les membres</Text>
             <Text style={styles.broadcastDesc}>Envoyez une notification push à l'ensemble de la communauté Hodix.</Text>

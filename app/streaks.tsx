@@ -148,7 +148,7 @@ export default function StreaksScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       {showConfetti && <Confetti />}
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.back}>
@@ -167,7 +167,7 @@ export default function StreaksScreen() {
 
           {/* Streak ring */}
           <View style={styles.ringWrap}>
-            <StreakRing streak={current_streak} best={best_streak} />
+            <StreakRing streak={current_streak} />
           </View>
 
           {/* Stats row */}

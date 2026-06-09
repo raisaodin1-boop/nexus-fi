@@ -24,7 +24,7 @@ import { useToast } from "@/src/toast";
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const { show } = useToast();
 
   const [email, setEmail] = useState("");
@@ -32,6 +32,7 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [forgotLoading, setForgotLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   async function handleLogin() {
     if (!email.trim() || !password) {
@@ -46,6 +47,18 @@ export default function LoginScreen() {
       show(e?.detail || e?.message || "Identifiants incorrects", "error");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleGoogle() {
+    setGoogleLoading(true);
+    try {
+      await loginWithGoogle();
+      router.replace("/");
+    } catch (e: any) {
+      show(e?.detail || "Erreur Google Sign-In", "error");
+    } finally {
+      setGoogleLoading(false);
     }
   }
 
@@ -144,6 +157,28 @@ export default function LoginScreen() {
             </LinearGradient>
           </TouchableOpacity>
 
+          {/* Divider */}
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>ou</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Google Sign-In */}
+          <TouchableOpacity
+            style={[styles.googleBtn, googleLoading && styles.btnDisabled]}
+            onPress={handleGoogle}
+            disabled={googleLoading}
+            activeOpacity={0.8}
+          >
+            {googleLoading
+              ? <ActivityIndicator color={Colors.text} />
+              : <>
+                  <Text style={styles.googleIcon}>G</Text>
+                  <Text style={styles.googleText}>Continuer avec Google</Text>
+                </>}
+          </TouchableOpacity>
+
           {/* Register link */}
           <View style={styles.registerRow}>
             <Text style={styles.registerLabel}>Pas encore de compte ? </Text>
@@ -171,7 +206,7 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 26, fontWeight: "900", color: "#fff", marginTop: 8, letterSpacing: -0.5 },
   subtitle: { fontSize: 14, color: "rgba(255,255,255,0.75)", textAlign: "center" },
-  form: { padding: Spacing.xl, gap: 16, paddingBottom: 40 },
+  form: { padding: Spacing.xl, gap: 16, paddingBottom: 100 },
   fieldGroup: { gap: 6 },
   label: { fontSize: 13, fontWeight: "600", color: Colors.text },
   inputRow: {
@@ -204,6 +239,16 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   btnText: { fontSize: 16, fontWeight: "700", color: "#fff" },
+  dividerRow: { flexDirection: "row", alignItems: "center", gap: 10, marginVertical: 4 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
+  dividerText: { fontSize: 12, color: Colors.textMuted, fontWeight: "600" },
+  googleBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 10, borderRadius: Radius.lg, borderWidth: 1.5, borderColor: Colors.border,
+    backgroundColor: Colors.surface, paddingVertical: 14,
+  },
+  googleIcon: { fontSize: 18, fontWeight: "900", color: "#4285F4" },
+  googleText: { fontSize: 15, fontWeight: "700", color: Colors.text },
   registerRow: { flexDirection: "row", justifyContent: "center", marginTop: 8 },
   registerLabel: { fontSize: 14, color: Colors.textMuted },
   registerLink: { fontSize: 14, color: Colors.secondary, fontWeight: "700" },

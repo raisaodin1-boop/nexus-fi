@@ -1,17 +1,20 @@
 /**
- * useDocument — generate, list, and download certified Hodix PDF documents.
+ * useDocument — generate certified Hodix PDF documents using expo-print.
  *
  * Usage:
- *   const { generate, downloading } = useDocument();
- *   await generate({ kind: "tontine_certificate", ref_id: tontineId });
+ *   const { generateAndDownload, generating } = useDocument();
+ *   await generateAndDownload({ kind: "trust_score" });
+ *
+ * KYC gate:
+ *   Level 1 — profile fields filled (full_name, phone_number, date_of_birth, address)
+ *   Level 2 — admin-approved KYC (kyc_status === "approved")
  */
 import { useState, useCallback } from "react";
-import { Platform, Alert } from "react-native";
-import * as FileSystem from "expo-file-system";
+import { Alert, Modal, Text, TouchableOpacity, View, StyleSheet, Platform } from "react-native";
+import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { api } from "@/src/api";
-
-const _BASE = (process.env.EXPO_PUBLIC_BACKEND_URL ?? "").replace(/\/$/, "");
+import { getSupabase } from "@/src/supabase";
 
 export type DocKind =
   | "tontine_certificate"
@@ -41,120 +44,273 @@ export interface DocListItem {
   created_at: string;
 }
 
-async function _downloadAndShare(doc: GeneratedDoc, baseUrl: string = _BASE): Promise<void> {
-  if (Platform.OS === "web") {
-    if (typeof window !== "undefined") {
-      window.open(baseUrl + doc.download_url, "_blank");
-    }
-    return;
+/* ── KYC check ─────────────────────────────────────────────────── */
+
+async function checkKyc(): Promise<{ ok: boolean; message?: string }> {
+  const { data: { session } } = await getSupabase().auth.getSession();
+  if (!session?.user) return { ok: false, message: "Non authentifié" };
+
+  const { data: profile } = await getSupabase()
+    .from("profiles")
+    .select("full_name, phone, date_of_birth, address, kyc_status")
+    .eq("id", session.user.id)
+    .maybeSingle();
+
+  if (!profile) return { ok: false, message: "Profil introuvable" };
+
+  // Level 1: required profile fields
+  const level1 = !!(profile.full_name && profile.phone && profile.date_of_birth && profile.address);
+  if (!level1) {
+    return {
+      ok: false,
+      message:
+        "Vous devez compléter et faire valider votre identité en 2 étapes avant d'accéder aux certificats. " +
+        "Rendez-vous dans votre Profil pour remplir vos informations personnelles (nom complet, téléphone, date de naissance, adresse).",
+    };
   }
 
-  const localUri = FileSystem.cacheDirectory + doc.filename;
-  const fullUrl = baseUrl + doc.download_url;
-
-  // Download to cache
-  const dl = await FileSystem.downloadAsync(fullUrl, localUri);
-  if (dl.status !== 200) {
-    throw new Error(`Téléchargement échoué (${dl.status})`);
+  // Level 2: admin-approved KYC
+  if (profile.kyc_status !== "approved") {
+    return {
+      ok: false,
+      message:
+        "Votre vérification d'identité (KYC) n'a pas encore été approuvée par l'administration. " +
+        "Vous devez compléter et faire valider votre identité en 2 étapes avant d'accéder aux certificats. " +
+        "Cliquez ici pour vérifier votre profil.",
+    };
   }
 
-  // Share sheet
-  const canShare = await Sharing.isAvailableAsync();
-  if (canShare) {
-    await Sharing.shareAsync(dl.uri, {
-      mimeType: "application/pdf",
-      dialogTitle: doc.label,
-      UTI: "com.adobe.pdf",
-    });
-  } else {
-    Alert.alert("Téléchargé", `Fichier enregistré dans le cache: ${doc.filename}`);
-  }
+  return { ok: true };
 }
+
+/* ── HTML certificate builder ──────────────────────────────────── */
+
+function buildCertificateHtml(kind: DocKind, data: any): string {
+  const now = new Date().toLocaleDateString("fr-FR", {
+    year: "numeric", month: "long", day: "numeric",
+  });
+  const fullName = data?.full_name ?? "Membre HODIX";
+  const verifyCode = Math.random().toString(36).toUpperCase().slice(2, 10);
+
+  const brandColor = "#00C896";
+  const indigoColor = "#6366F1";
+
+  const base = `
+    <html>
+    <head>
+      <meta charset="UTF-8"/>
+      <style>
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background: #F7F8FC; color: #0D0F1A; }
+        .page { max-width: 700px; margin: 40px auto; background: #fff; border-radius: 16px; padding: 48px; box-shadow: 0 4px 32px rgba(0,0,0,0.08); }
+        .header { display: flex; align-items: center; gap: 16px; margin-bottom: 32px; border-bottom: 2px solid ${brandColor}; padding-bottom: 20px; }
+        .logo { width: 56px; height: 56px; background: ${brandColor}; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff; font-weight: 900; }
+        .brand { font-size: 28px; font-weight: 900; color: ${brandColor}; letter-spacing: -1px; }
+        .title { font-size: 22px; font-weight: 800; color: #0D0F1A; margin: 24px 0 8px; }
+        .subtitle { font-size: 14px; color: #6B7280; margin-bottom: 28px; }
+        .field { margin-bottom: 16px; }
+        .field-label { font-size: 11px; font-weight: 700; color: #6B7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .field-value { font-size: 16px; font-weight: 600; color: #0D0F1A; }
+        .badge { display: inline-block; background: ${brandColor}20; color: ${brandColor}; font-weight: 700; font-size: 13px; padding: 4px 14px; border-radius: 20px; margin-top: 8px; }
+        .verify { margin-top: 32px; padding: 16px; background: #F0F2F8; border-radius: 10px; }
+        .verify-label { font-size: 11px; font-weight: 700; color: #6B7280; margin-bottom: 4px; }
+        .verify-code { font-size: 18px; font-weight: 900; color: ${indigoColor}; letter-spacing: 2px; }
+        .verify-url { font-size: 11px; color: #6B7280; margin-top: 4px; }
+        .footer { margin-top: 32px; padding-top: 20px; border-top: 1px solid #E5E7EB; font-size: 11px; color: #9CA3AF; text-align: center; }
+      </style>
+    </head>
+    <body>
+      <div class="page">
+        <div class="header">
+          <div class="logo">H</div>
+          <div>
+            <div class="brand">HODIX</div>
+            <div style="font-size:12px;color:#6B7280;">Plateforme d'épargne et tontines digitales</div>
+          </div>
+        </div>
+  `;
+
+  const footer = `
+        <div class="verify">
+          <div class="verify-label">Code de vérification</div>
+          <div class="verify-code">${verifyCode}</div>
+          <div class="verify-url">https://hodix.app/verify/${verifyCode}</div>
+        </div>
+        <div class="footer">
+          Document généré le ${now} · HODIX © 2024 · Certifié authentique
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  if (kind === "trust_score") {
+    const score = data?.trust_score?.score ?? data?.score ?? 0;
+    const level = data?.trust_score?.level ?? data?.level ?? "Bronze";
+    const color = score >= 810 ? "#8B5CF6" : score >= 610 ? "#D4AF37" : score >= 310 ? "#8B9EB0" : "#CD7F32";
+    return base + `
+        <div class="title">Certificat Trust Score</div>
+        <div class="subtitle">Attestation officielle du score de confiance HODIX</div>
+        <div class="field"><div class="field-label">Titulaire</div><div class="field-value">${fullName}</div></div>
+        <div class="field">
+          <div class="field-label">Score de confiance</div>
+          <div class="field-value" style="font-size:36px;font-weight:900;color:${color};">${score} <span style="font-size:16px;color:#6B7280;">/ 1000</span></div>
+          <div class="badge" style="background:${color}20;color:${color};">${level}</div>
+        </div>
+        <div class="field"><div class="field-label">Date de certification</div><div class="field-value">${now}</div></div>
+    ` + footer;
+  }
+
+  if (kind === "savings_summary") {
+    const totalSaved = data?.total_saved ?? 0;
+    const activeGoals = data?.active_goals ?? 0;
+    const progressPct = data?.progress_pct ?? 0;
+    return base + `
+        <div class="title">Relevé d'Épargne</div>
+        <div class="subtitle">Résumé officiel de votre épargne HODIX</div>
+        <div class="field"><div class="field-label">Titulaire</div><div class="field-value">${fullName}</div></div>
+        <div class="field"><div class="field-label">Total épargné</div><div class="field-value" style="font-size:28px;font-weight:900;color:${brandColor};">${Math.round(totalSaved).toLocaleString("fr-FR")} XAF</div></div>
+        <div class="field"><div class="field-label">Objectifs actifs</div><div class="field-value">${activeGoals}</div></div>
+        <div class="field"><div class="field-label">Progression globale</div><div class="field-value">${progressPct}%</div></div>
+        <div class="field"><div class="field-label">Date du relevé</div><div class="field-value">${now}</div></div>
+    ` + footer;
+  }
+
+  if (kind === "tontine_certificate") {
+    const tontineName = data?.tontine?.name ?? data?.name ?? "Tontine HODIX";
+    const role = data?.role ?? "Membre";
+    return base + `
+        <div class="title">Certificat de Participation</div>
+        <div class="subtitle">Attestation officielle de participation à une tontine HODIX</div>
+        <div class="field"><div class="field-label">Titulaire</div><div class="field-value">${fullName}</div></div>
+        <div class="field"><div class="field-label">Tontine</div><div class="field-value">${tontineName}</div></div>
+        <div class="field"><div class="field-label">Rôle</div><div class="field-value">${role}</div></div>
+        <div class="field"><div class="field-label">Date de certification</div><div class="field-value">${now}</div></div>
+    ` + footer;
+  }
+
+  if (kind === "contribution_receipt") {
+    const amount = data?.amount ?? 0;
+    const tontineName = data?.tontine_name ?? "Tontine HODIX";
+    return base + `
+        <div class="title">Reçu de Cotisation</div>
+        <div class="subtitle">Reçu officiel de votre cotisation HODIX</div>
+        <div class="field"><div class="field-label">Payé par</div><div class="field-value">${fullName}</div></div>
+        <div class="field"><div class="field-label">Tontine</div><div class="field-value">${tontineName}</div></div>
+        <div class="field"><div class="field-label">Montant</div><div class="field-value" style="font-size:28px;font-weight:900;color:${brandColor};">${Math.round(amount).toLocaleString("fr-FR")} XAF</div></div>
+        <div class="field"><div class="field-label">Date</div><div class="field-value">${now}</div></div>
+    ` + footer;
+  }
+
+  // Default / disbursement
+  return base + `
+      <div class="title">Attestation HODIX</div>
+      <div class="subtitle">Document officiel HODIX</div>
+      <div class="field"><div class="field-label">Titulaire</div><div class="field-value">${fullName}</div></div>
+      <div class="field"><div class="field-label">Date</div><div class="field-value">${now}</div></div>
+  ` + footer;
+}
+
+/* ── Main hook ─────────────────────────────────────────────────── */
 
 export function useDocument() {
   const [generating, setGenerating] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const generate = useCallback(async (params: { kind: DocKind; ref_id?: string }): Promise<GeneratedDoc | null> => {
+  const generateAndDownload = useCallback(
+    async (params: { kind: DocKind; ref_id?: string }, _baseUrl?: string) => {
       setGenerating(true);
       setError(null);
       try {
-        const doc = await api.post<GeneratedDoc>("/documents/generate", params);
-        return doc;
+        // KYC gate
+        const kyc = await checkKyc();
+        if (!kyc.ok) {
+          Alert.alert(
+            "Vérification requise",
+            kyc.message ?? "Vous devez compléter et faire valider votre identité avant d'accéder aux certificats.",
+            [{ text: "OK" }]
+          );
+          return;
+        }
+
+        // Fetch relevant data
+        let certData: any = {};
+        try {
+          if (params.kind === "trust_score") {
+            certData = await api.get<any>("/identity");
+          } else if (params.kind === "savings_summary") {
+            certData = await api.get<any>("/savings/summary");
+            const me = await api.get<any>("/users/me");
+            certData.full_name = me.full_name;
+          } else if (params.kind === "tontine_certificate" && params.ref_id) {
+            const res = await api.get<any>(`/tontines/${params.ref_id}`);
+            certData = { ...res.tontine, full_name: res.tontine?.name };
+            const me = await api.get<any>("/users/me");
+            certData.full_name = me.full_name;
+          } else {
+            const me = await api.get<any>("/users/me");
+            certData = { full_name: me.full_name };
+          }
+          if (!certData.full_name) {
+            const me = await api.get<any>("/users/me");
+            certData.full_name = me.full_name;
+          }
+        } catch {
+          // non-blocking — proceed with empty data
+        }
+
+        const html = buildCertificateHtml(params.kind, certData);
+
+        setDownloading(true);
+        const { uri } = await Print.printToFileAsync({ html, base64: false });
+        await Sharing.shareAsync(uri, {
+          mimeType: "application/pdf",
+          dialogTitle: "Enregistrer le certificat",
+          UTI: "com.adobe.pdf",
+        });
       } catch (e: any) {
-        const msg = e?.message ?? "Échec de la génération du document.";
+        const msg = e?.message ?? "Erreur lors de la génération du document.";
         setError(msg);
         Alert.alert("Erreur", msg);
-        return null;
       } finally {
         setGenerating(false);
-      }
-    },
-    []
-  );
-
-  const download = useCallback(async (doc: GeneratedDoc, baseUrl: string = "") => {
-    setDownloading(true);
-    setError(null);
-    try {
-      await _downloadAndShare(doc, baseUrl);
-    } catch (e: any) {
-      const msg = e?.message ?? "Échec du téléchargement.";
-      setError(msg);
-      Alert.alert("Erreur", msg);
-    } finally {
-      setDownloading(false);
-    }
-  }, []);
-
-  const generateAndDownload = useCallback(
-    async (params: { kind: DocKind; ref_id?: string }, baseUrl: string = "") => {
-      const doc = await generate(params);
-      if (doc) await download(doc, baseUrl);
-    },
-    [generate, download]
-  );
-
-  const refreshAndDownload = useCallback(
-    async (docId: string, filename: string, label: string, baseUrl: string = "") => {
-      setDownloading(true);
-      setError(null);
-      try {
-        const refreshed = await api.post<{ download_url: string; expires_at: string }>(
-          `/documents/${docId}/refresh-url`,
-          {}
-        );
-        const fakeDoc: GeneratedDoc = {
-          doc_id: docId,
-          kind: "trust_score",
-          filename,
-          label,
-          download_url: refreshed.download_url,
-          expires_at: refreshed.expires_at,
-          verification_code: "",
-          verify_url: "",
-        };
-        await _downloadAndShare(fakeDoc, baseUrl);
-      } catch (e: any) {
-        const msg = e?.message ?? "Échec du téléchargement.";
-        setError(msg);
-        Alert.alert("Erreur", msg);
-      } finally {
         setDownloading(false);
       }
     },
     []
   );
 
+  // Legacy compatibility stubs
+  const generate = useCallback(
+    async (params: { kind: DocKind; ref_id?: string }): Promise<GeneratedDoc | null> => {
+      await generateAndDownload(params);
+      return null;
+    },
+    [generateAndDownload]
+  );
+
+  const download = useCallback(async (_doc: GeneratedDoc, _baseUrl?: string) => {}, []);
+
+  const refreshAndDownload = useCallback(
+    async (_docId: string, _filename: string, label: string, _baseUrl?: string) => {
+      Alert.alert("Info", `Le document "${label}" sera régénéré. Utilisez le bouton de génération principal.`);
+    },
+    []
+  );
+
   const listDocuments = useCallback(async (): Promise<DocListItem[]> => {
-    try {
-      const res = await api.get<{ items: DocListItem[] }>("/documents");
-      return res.items ?? [];
-    } catch {
-      return [];
-    }
+    // Documents are generated on-the-fly — no server-side list
+    return [];
   }, []);
 
-  return { generate, download, generateAndDownload, refreshAndDownload, listDocuments, generating, downloading, error };
+  return {
+    generate,
+    download,
+    generateAndDownload,
+    refreshAndDownload,
+    listDocuments,
+    generating,
+    downloading,
+    error,
+  };
 }

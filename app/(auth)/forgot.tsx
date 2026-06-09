@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -39,7 +39,8 @@ export default function ForgotScreen() {
         <Text style={styles.subtitle}>Entrez votre email pour recevoir un lien de réinitialisation</Text>
       </LinearGradient>
 
-      <View style={styles.form}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+        <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
         {sent ? (
           <View style={styles.sentBox}>
             <Text style={styles.sentTitle}>Email envoyé !</Text>
@@ -90,7 +91,8 @@ export default function ForgotScreen() {
             </TouchableOpacity>
           </>
         )}
-      </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -104,7 +106,7 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 24, fontWeight: "900", color: "#fff", marginTop: 8, letterSpacing: -0.5 },
   subtitle: { fontSize: 13, color: "rgba(255,255,255,0.75)", textAlign: "center", lineHeight: 18 },
-  form: { padding: Spacing.xl, gap: 16, marginTop: 8 },
+  form: { padding: Spacing.xl, gap: 16, marginTop: 8, paddingBottom: 60 },
   fieldGroup: { gap: 6 },
   label: { fontSize: 13, fontWeight: "600", color: Colors.text },
   inputRow: {

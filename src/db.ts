@@ -62,9 +62,9 @@ export async function updateMe(body: Record<string, any>) {
     .update({ ...body, updated_at: new Date().toISOString() })
     .eq("id", me)
     .select()
-    .single();
+    .maybeSingle();
   throwSb(error);
-  return data;
+  return data ?? { id: me, ...body };
 }
 
 /* ── TONTINES ────────────────────────────────────────────── */
@@ -1864,24 +1864,30 @@ export async function createTontineSecure(body: Record<string, any>) {
   if ((profile?.trust_flags ?? []).includes("blacklisted"))
     throw { status: 403, detail: "Votre compte est suspendu pour fraude. Contactez le support." };
 
+  // Fetch user role for admin bypass
+  const { data: profileData } = await sb.from("profiles").select("role").eq("id", me).single();
+  const isAdmin = profileData?.role === "admin" || profileData?.role === "superadmin";
+
   const amountPerCycle = Number(body.amount_per_cycle ?? 0);
 
-  // Trust Score gate for public tontines
-  if (body.is_public) {
-    const tsRes = await sb.from("identity_scores").select("score").eq("user_id", me).maybeSingle();
-    const score = tsRes?.data?.score ?? 0;
-    const required = amountPerCycle >= HIGH_VALUE_THRESHOLD
-      ? TRUST_SCORE_HIGH_VALUE
-      : TRUST_SCORE_PUBLIC_TONTINE;
-    if (score < required)
-      throw { status: 403, detail: `Trust Score insuffisant pour une tontine publique (requis: ${required}, votre score: ${score}). Participez à des tontines privées d'abord.` };
-  }
+  if (!isAdmin) {
+    // Trust Score gate for public tontines
+    if (body.is_public) {
+      const tsRes = await sb.from("identity_scores").select("score").eq("user_id", me).maybeSingle();
+      const score = tsRes?.data?.score ?? 0;
+      const required = amountPerCycle >= HIGH_VALUE_THRESHOLD
+        ? TRUST_SCORE_HIGH_VALUE
+        : TRUST_SCORE_PUBLIC_TONTINE;
+      if (score < required)
+        throw { status: 403, detail: `Trust Score insuffisant pour une tontine publique (requis: ${required}, votre score: ${score}). Participez à des tontines privées d'abord.` };
+    }
 
-  // KYC gate for high-value tontines
-  if (amountPerCycle >= KYC_REQUIRED_THRESHOLD) {
-    const kycStatus = profile?.kyc_status ?? null;
-    if (kycStatus !== "approved")
-      throw { status: 403, detail: `Vérification d'identité (KYC) obligatoire pour les tontines supérieures à ${KYC_REQUIRED_THRESHOLD.toLocaleString()} XAF/cycle.` };
+    // KYC gate for high-value tontines
+    if (amountPerCycle >= KYC_REQUIRED_THRESHOLD) {
+      const kycStatus = profile?.kyc_status ?? null;
+      if (kycStatus !== "approved")
+        throw { status: 403, detail: `Vérification d'identité (KYC) obligatoire pour les tontines supérieures à ${KYC_REQUIRED_THRESHOLD.toLocaleString()} XAF/cycle.` };
+    }
   }
 
   const code = inviteCode();
@@ -2373,4 +2379,307 @@ export async function hasSignedConsent(version: string): Promise<boolean> {
     .eq("user_id", me)
     .eq("version", version);
   return (count ?? 0) > 0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   WALLET SECURITY ENGINE — server-side enforcement
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Limits config ───────────────────────────────────────────── */
+const LIMITS = {
+  per_tx: 500_000,       // XAF max per single transaction
+  daily: 1_000_000,      // XAF max per day
+  weekly: 2_500_000,     // XAF max per week
+  new_recipient: 100_000, // XAF max for first transfer to new number
+  cooling_hours: 2,       // hours before first transfer to new recipient
+};
+const OTP_TTL_MIN = 10; // OTP valid for 10 minutes
+
+/* ── PIN management (server-side hash storage) ───────────────── */
+
+export async function setWalletPin(pinHash: string) {
+  const me = await uid();
+  await getSupabase().from("profiles").update({ wallet_pin_hash: pinHash }).eq("id", me);
+  // Log security event
+  await logSecurityEvent(me, "pin_set", {});
+  return { ok: true };
+}
+
+export async function verifyWalletPin(pinHash: string): Promise<{ valid: boolean }> {
+  const me = await uid();
+  const { data } = await getSupabase().from("profiles")
+    .select("wallet_pin_hash").eq("id", me).single();
+  const valid = !!data?.wallet_pin_hash && data.wallet_pin_hash === pinHash;
+  await logSecurityEvent(me, valid ? "pin_ok" : "pin_fail", {});
+  return { valid };
+}
+
+export async function hasWalletPin(): Promise<boolean> {
+  const me = await uid();
+  const { data } = await getSupabase().from("profiles")
+    .select("wallet_pin_hash").eq("id", me).single();
+  return !!data?.wallet_pin_hash;
+}
+
+/* ── OTP for sensitive transactions ─────────────────────────── */
+
+export async function generateTransactionOtp(): Promise<{ code: string; expires_at: string }> {
+  const me = await uid();
+  const code = String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
+  const expiresAt = new Date(Date.now() + OTP_TTL_MIN * 60_000).toISOString();
+
+  // Store in notifications table (re-using existing table, type = "otp")
+  await getSupabase().from("notifications").upsert({
+    user_id: me,
+    title: "Code de vérification HODIX",
+    body: `Votre code : ${code}. Valable ${OTP_TTL_MIN} min. Ne le communiquez jamais.`,
+    type: "otp",
+    metadata: { code, expires_at: expiresAt },
+    is_read: false,
+  });
+
+  await logSecurityEvent(me, "otp_generated", {});
+  return { code, expires_at: expiresAt };
+}
+
+export async function verifyTransactionOtp(inputCode: string): Promise<{ valid: boolean; reason?: string }> {
+  const me = await uid();
+  const { data } = await getSupabase().from("notifications")
+    .select("metadata, created_at")
+    .eq("user_id", me).eq("type", "otp")
+    .order("created_at", { ascending: false })
+    .limit(1).maybeSingle();
+
+  if (!data?.metadata) return { valid: false, reason: "Aucun OTP actif" };
+
+  const meta = data.metadata as any;
+  const expired = new Date() > new Date(meta.expires_at);
+  if (expired) return { valid: false, reason: "Code expiré. Demandez un nouveau code." };
+  if (meta.code !== inputCode.trim()) {
+    await logSecurityEvent(me, "otp_fail", {});
+    return { valid: false, reason: "Code incorrect" };
+  }
+
+  // Invalidate OTP after use
+  await getSupabase().from("notifications").update({ is_read: true, metadata: { ...meta, used: true } })
+    .eq("user_id", me).eq("type", "otp");
+
+  await logSecurityEvent(me, "otp_ok", {});
+  return { valid: true };
+}
+
+/* ── Transaction limits enforcement ─────────────────────────── */
+
+export async function checkTransactionLimits(amountXaf: number): Promise<{ allowed: boolean; reason?: string }> {
+  const me = await uid();
+  const sb = getSupabase();
+
+  if (amountXaf > LIMITS.per_tx)
+    return { allowed: false, reason: `Montant max par transaction : ${LIMITS.per_tx.toLocaleString()} XAF` };
+
+  const now = new Date();
+  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()).toISOString();
+
+  const [dayRes, weekRes] = await Promise.all([
+    sb.from("wallet_transactions")
+      .select("amount_xaf").eq("user_id", me)
+      .in("type", ["withdraw", "transfer_out"]).gte("created_at", dayStart),
+    sb.from("wallet_transactions")
+      .select("amount_xaf").eq("user_id", me)
+      .in("type", ["withdraw", "transfer_out"]).gte("created_at", weekStart),
+  ]);
+
+  const todayTotal = (dayRes.data ?? []).reduce((s: number, t: any) => s + Number(t.amount_xaf), 0);
+  const weekTotal = (weekRes.data ?? []).reduce((s: number, t: any) => s + Number(t.amount_xaf), 0);
+
+  if (todayTotal + amountXaf > LIMITS.daily)
+    return { allowed: false, reason: `Plafond journalier atteint (${LIMITS.daily.toLocaleString()} XAF/jour)` };
+  if (weekTotal + amountXaf > LIMITS.weekly)
+    return { allowed: false, reason: `Plafond hebdomadaire atteint (${LIMITS.weekly.toLocaleString()} XAF/semaine)` };
+
+  return { allowed: true };
+}
+
+/* ── Cooling period for new recipients ───────────────────────── */
+
+export async function checkCoolingPeriod(recipientPhone: string): Promise<{ allowed: boolean; wait_minutes?: number }> {
+  const me = await uid();
+  const { data } = await getSupabase().from("wallet_transactions")
+    .select("created_at").eq("user_id", me).eq("type", "transfer_out")
+    .eq("mobile_money_number", recipientPhone)
+    .order("created_at", { ascending: true }).limit(1).maybeSingle();
+
+  if (!data) {
+    // First ever transfer to this number — apply cooling period
+    const coolMs = LIMITS.cooling_hours * 3_600_000;
+    // Check if there's a "recipient registered" event within cooling window
+    const { data: regEvent } = await getSupabase().from("identity_events")
+      .select("created_at").eq("user_id", me)
+      .eq("event_type", `new_recipient:${recipientPhone}`)
+      .maybeSingle();
+
+    if (!regEvent) {
+      // Register new recipient + start cooling
+      await getSupabase().from("identity_events").insert({
+        user_id: me,
+        event_type: `new_recipient:${recipientPhone}`,
+        score_delta: 0,
+        metadata: { phone: recipientPhone, registered_at: new Date().toISOString() },
+      } as any);
+      return { allowed: false, wait_minutes: LIMITS.cooling_hours * 60 };
+    }
+
+    const elapsed = Date.now() - new Date(regEvent.created_at).getTime();
+    if (elapsed < coolMs) {
+      return { allowed: false, wait_minutes: Math.ceil((coolMs - elapsed) / 60000) };
+    }
+  }
+
+  return { allowed: true };
+}
+
+/* ── Anomaly detection ───────────────────────────────────────── */
+
+export interface AnomalyResult {
+  risk: "low" | "medium" | "high";
+  flags: string[];
+  should_freeze: boolean;
+}
+
+export async function detectTransactionAnomalies(amountXaf: number, deviceFp?: string): Promise<AnomalyResult> {
+  const me = await uid();
+  const sb = getSupabase();
+  const flags: string[] = [];
+
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+  const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
+
+  const [monthlyTxRes, hourlyTxRes, profileRes] = await Promise.all([
+    sb.from("wallet_transactions").select("amount_xaf").eq("user_id", me)
+      .in("type", ["withdraw", "transfer_out"]).gte("created_at", thirtyDaysAgo),
+    sb.from("wallet_transactions").select("id").eq("user_id", me)
+      .in("type", ["withdraw", "transfer_out"]).gte("created_at", oneHourAgo),
+    sb.from("profiles").select("device_fingerprint").eq("id", me).single(),
+  ]);
+
+  const monthlyAmounts = (monthlyTxRes.data ?? []).map((t: any) => Number(t.amount_xaf));
+  const avgMonthly = monthlyAmounts.length > 0
+    ? monthlyAmounts.reduce((s, a) => s + a, 0) / monthlyAmounts.length : 0;
+  const hourlyCount = hourlyTxRes.data?.length ?? 0;
+
+  // Flag: amount 3× above average
+  if (avgMonthly > 0 && amountXaf > avgMonthly * 3) flags.push("unusual_amount");
+  // Flag: more than 3 withdrawals in 1 hour
+  if (hourlyCount >= 3) flags.push("high_frequency");
+  // Flag: new device
+  if (deviceFp && profileRes.data?.device_fingerprint !== deviceFp) flags.push("new_device");
+  // Flag: very large amount
+  if (amountXaf >= 300_000) flags.push("large_amount");
+
+  // Auto-freeze if high frequency or (new device + large amount)
+  const shouldFreeze =
+    flags.includes("high_frequency") ||
+    (flags.includes("new_device") && flags.includes("large_amount"));
+
+  if (shouldFreeze) {
+    await sb.from("profiles").update({ wallet_frozen: true }).eq("id", me);
+    await sb.from("notifications").insert({
+      user_id: me,
+      title: "⚠️ Wallet temporairement gelé",
+      body: "Activité inhabituelle détectée sur votre wallet. Vérifiez vos transactions récentes ou contactez le support.",
+      type: "security_freeze",
+    });
+    await logSecurityEvent(me, "wallet_frozen", { flags, amount: amountXaf });
+  }
+
+  const risk = shouldFreeze || flags.length >= 3 ? "high"
+    : flags.length >= 1 ? "medium" : "low";
+
+  return { risk, flags, should_freeze: shouldFreeze };
+}
+
+/* ── Wallet freeze / unfreeze ────────────────────────────────── */
+
+export async function getWalletFreezeStatus(): Promise<{ frozen: boolean; reason?: string }> {
+  const me = await uid();
+  const { data } = await getSupabase().from("profiles")
+    .select("wallet_frozen, trust_flags").eq("id", me).single();
+  const frozen = !!(data?.wallet_frozen);
+  const blacklisted = (data?.trust_flags ?? []).includes("blacklisted");
+  return {
+    frozen: frozen || blacklisted,
+    reason: blacklisted ? "Compte suspendu pour fraude"
+      : frozen ? "Activité suspecte détectée" : undefined,
+  };
+}
+
+export async function unfreezeWallet(userId?: string) {
+  const me = userId ?? await uid();
+  await getSupabase().from("profiles").update({ wallet_frozen: false }).eq("id", me);
+  await logSecurityEvent(me, "wallet_unfrozen", {});
+  return { ok: true };
+}
+
+/* ── Security audit log ──────────────────────────────────────── */
+
+export async function logSecurityEvent(userId: string, eventType: string, metadata: Record<string, any>) {
+  // Re-use identity_events table — score_delta 0 for security events
+  await getSupabase().from("identity_events").insert({
+    user_id: userId,
+    event_type: `sec:${eventType}`,
+    score_delta: 0,
+    metadata,
+  } as any).throwOnError().then(() => {}).catch(() => {}); // fire-and-forget, never block
+}
+
+export async function getSecurityLog() {
+  const me = await uid();
+  const { data } = await getSupabase().from("identity_events")
+    .select("event_type, created_at, metadata")
+    .eq("user_id", me)
+    .like("event_type", "sec:%")
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  return (data ?? []).map((e: any) => ({
+    type: e.event_type.replace("sec:", ""),
+    at: e.created_at,
+    meta: e.metadata ?? {},
+  }));
+}
+
+/* ── Combined pre-transaction security gate ──────────────────── */
+
+export async function preTransactionCheck(amountXaf: number, recipientPhone?: string): Promise<{
+  allowed: boolean;
+  reason?: string;
+  requires_pin: boolean;
+  requires_otp: boolean;
+  risk: string;
+}> {
+  // 1. Freeze check
+  const freeze = await getWalletFreezeStatus();
+  if (freeze.frozen) return { allowed: false, reason: freeze.reason, requires_pin: false, requires_otp: false, risk: "blocked" };
+
+  // 2. Limits check
+  const limits = await checkTransactionLimits(amountXaf);
+  if (!limits.allowed) return { allowed: false, reason: limits.reason, requires_pin: false, requires_otp: false, risk: "blocked" };
+
+  // 3. Cooling period check
+  if (recipientPhone) {
+    const cooling = await checkCoolingPeriod(recipientPhone);
+    if (!cooling.allowed)
+      return { allowed: false, reason: `Nouveau bénéficiaire — délai de sécurité de ${cooling.wait_minutes} min requis`, requires_pin: false, requires_otp: false, risk: "cooling" };
+  }
+
+  // 4. Anomaly detection
+  const anomaly = await detectTransactionAnomalies(amountXaf);
+  if (anomaly.should_freeze) return { allowed: false, reason: "Activité suspecte — wallet gelé. Contactez le support.", requires_pin: false, requires_otp: false, risk: "high" };
+
+  // 5. Determine PIN/OTP requirement
+  const requiresPin = amountXaf >= 5_000;
+  const requiresOtp = amountXaf >= 100_000 || anomaly.risk === "high";
+
+  return { allowed: true, requires_pin: requiresPin, requires_otp: requiresOtp, risk: anomaly.risk };
 }

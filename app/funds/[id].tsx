@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { api, ApiError, formatXAF } from "@/src/api";
 import { Button, Card, Field } from "@/src/ui";
@@ -26,7 +27,7 @@ export default function FundDetail() {
 
   if (loading || !data) {
     return (
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.center}><ActivityIndicator color={Colors.secondary} /></View>
       </SafeAreaView>
     );
@@ -52,7 +53,7 @@ export default function FundDetail() {
     : 0;
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <TouchableOpacity onPress={() => router.back()} testID="fund-detail-back">
           <Text style={styles.back}>← Retour</Text>

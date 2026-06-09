@@ -479,7 +479,7 @@ export function TontineDetailView({ id }: { id: string }) {
             <ArrowLeft color={Colors.primary} size={22} />
           </TouchableOpacity>
         </View>
-        <ScrollView contentContainerStyle={{ padding: Spacing.xl, gap: 12 }}>
+        <ScrollView contentContainerStyle={{ padding: Spacing.xl, gap: 12, paddingBottom: 100 }}>
           <SkeletonBox height={200} borderRadius={20} />
           <SkeletonCard /><SkeletonCard />
         </ScrollView>

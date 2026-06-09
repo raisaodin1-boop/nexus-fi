@@ -1,14 +1,16 @@
-import React, { useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { ChevronLeft, CheckCircle2, Info } from "lucide-react-native";
 
-import { api } from "@/src/api";
+import { api, formatXAF } from "@/src/api";
 import { Button, Field } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { formatAmount, type Currency } from "@/src/exchange-rates";
+import { PinConfirmModal } from "@/src/pin-modal";
+import { OtpModal } from "@/src/otp-modal";
 
 const CURRENCIES: Currency[] = ["XAF", "EUR", "USD"];
 
@@ -21,12 +23,21 @@ export default function TransferScreen() {
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [success, setSuccess]     = useState<string | null>(null);
+  const [showPin, setShowPin]     = useState(false);
+  const [showOtp, setShowOtp]     = useState(false);
+  const [pendingOtp, setPendingOtp] = useState(false);
+  const [amountXaf, setAmountXaf] = useState(0);
+  const [userId, setUserId]       = useState("");
 
-  const submit = async () => {
-    setError(null);
+  useEffect(() => {
+    api.get<{ id: string }>("/users/me").then(me => setUserId(me.id)).catch(() => {});
+  }, []);
+
+  // Extract phone from recipient if it looks like a phone number
+  const recipientPhone = /^\+?\d[\d\s]{7,}$/.test(recipient.trim()) ? recipient.trim() : undefined;
+
+  const doTransfer = async () => {
     const amt = parseFloat(amount.replace(/\s/g, "").replace(",", "."));
-    if (!recipient.trim()) { setError("Entrez l'email ou le téléphone du destinataire."); return; }
-    if (!amt || amt <= 0) { setError("Entrez un montant valide."); return; }
     setLoading(true);
     try {
       await api.post("/wallet/transfer", {
@@ -36,6 +47,35 @@ export default function TransferScreen() {
         note: note.trim() || undefined,
       });
       setSuccess(`${formatAmount(amt, currency)} transféré avec succès.`);
+    } catch (e: any) {
+      setError(e?.detail ?? e?.message ?? "Erreur lors du transfert.");
+    } finally { setLoading(false); }
+  };
+
+  const submit = async () => {
+    setError(null);
+    const amt = parseFloat(amount.replace(/\s/g, "").replace(",", "."));
+    if (!recipient.trim()) { setError("Entrez l'email ou le téléphone du destinataire."); return; }
+    if (!amt || amt <= 0) { setError("Entrez un montant valide."); return; }
+    setLoading(true);
+    try {
+      const check = await api.post<{ allowed: boolean; reason?: string; requires_pin: boolean; requires_otp: boolean; risk: string }>(
+        "/wallet/check-tx",
+        { amount_xaf: amt, recipient_phone: recipientPhone }
+      );
+      if (!check.allowed) {
+        setError(check.reason ?? "Transaction non autorisée.");
+        return;
+      }
+      setAmountXaf(amt);
+      if (check.requires_pin) {
+        setPendingOtp(check.requires_otp);
+        setShowPin(true);
+      } else if (check.requires_otp) {
+        setShowOtp(true);
+      } else {
+        await doTransfer();
+      }
     } catch (e: any) {
       setError(e?.detail ?? e?.message ?? "Erreur lors du transfert.");
     } finally { setLoading(false); }
@@ -57,6 +97,25 @@ export default function TransferScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
+      {/* ── Security modals ── */}
+      <PinConfirmModal
+        visible={showPin}
+        userId={userId}
+        amount={amountXaf}
+        onSuccess={() => {
+          setShowPin(false);
+          if (pendingOtp) { setShowOtp(true); }
+          else { doTransfer(); }
+        }}
+        onCancel={() => { setShowPin(false); setLoading(false); }}
+      />
+      <OtpModal
+        visible={showOtp}
+        amountXaf={amountXaf}
+        onSuccess={() => { setShowOtp(false); doTransfer(); }}
+        onCancel={() => { setShowOtp(false); setLoading(false); }}
+      />
+
       <LinearGradient colors={["#0B1F3A", "#1D4ED8"]} style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.back}>
           <ChevronLeft color="#fff" size={24} />
@@ -64,6 +123,7 @@ export default function TransferScreen() {
         <Text style={styles.headerTitle}>Virement membre à membre</Text>
       </LinearGradient>
 
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
 
         {/* Info banner */}
@@ -119,16 +179,17 @@ export default function TransferScreen() {
           loading={loading}
         />
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.background },
+  safe: { flex: 1, backgroundColor: Colors.bg },
   header: { flexDirection: "row", alignItems: "center", gap: 12, padding: Spacing.xl, paddingBottom: 20 },
   back: { padding: 4 },
   headerTitle: { fontSize: 18, fontWeight: "800", color: "#fff" },
-  body: { padding: Spacing.xl, gap: 4 },
+  body: { padding: Spacing.xl, gap: 4, paddingBottom: 100 },
   infoBanner: {
     flexDirection: "row", alignItems: "center", gap: 10,
     backgroundColor: Colors.secondary + "15", borderRadius: Radius.lg,

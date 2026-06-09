@@ -65,7 +65,7 @@ export default function KycScreen() {
         <View style={{ width: 40 }} />
       </LinearGradient>
 
-      <ScrollView contentContainerStyle={{ padding: Spacing.xl, gap: 20 }}>
+      <ScrollView contentContainerStyle={{ padding: Spacing.xl, gap: 20, paddingBottom: 100 }}>
         <Card style={{ padding: 24, alignItems: "center", gap: 16 }}>
           <View style={[styles.iconBox, { backgroundColor: `${info.color}20` }]}>
             <Icon color={info.color} size={40} />

@@ -8,7 +8,7 @@ import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowDownLeft, ArrowUpRight, ArrowLeftRight,
-  RefreshCw, Wallet as WalletIcon,
+  RefreshCw, Wallet as WalletIcon, Shield,
 } from "lucide-react-native";
 
 import { api } from "@/src/api";
@@ -158,7 +158,7 @@ export default function WalletScreen() {
         renderItem={({ item }) => <TxRow tx={item} router={router} />}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={Colors.secondary} />}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 60 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
         ListHeaderComponent={
           <Animated.View style={{ opacity: fadeAnim }}>
             {/* ── Balance card ── */}
@@ -204,6 +204,7 @@ export default function WalletScreen() {
                 { label: "Recharger",  icon: ArrowDownLeft,  route: "/wallet/topup",    color: "#10B981" },
                 { label: "Retirer",    icon: ArrowUpRight,   route: "/wallet/withdraw",  color: "#EF4444" },
                 { label: "Transférer", icon: ArrowLeftRight, route: "/wallet/transfer",  color: "#1D4ED8" },
+                { label: "Sécurité",  icon: Shield,        route: "/wallet/security", color: "#8B5CF6" },
               ].map(({ label, icon: Icon, route, color }) => (
                 <TouchableOpacity
                   key={label}
@@ -224,9 +225,9 @@ export default function WalletScreen() {
               <View style={[styles.ratesCard, Shadow.card]}>
                 <Text style={styles.ratesTitle}>Taux de change en direct</Text>
                 <View style={styles.ratesRow}>
-                  <RateChip label="1 EUR" value={`${rates.XAF_PER_EUR.toFixed(3)} XAF`} fixed />
-                  <RateChip label="1 USD" value={`${rates.XAF_PER_USD.toFixed(1)} XAF`} />
-                  <RateChip label="1 EUR" value={`${rates.USD_PER_EUR.toFixed(4)} USD`} />
+                  <RateChip label="1 EUR" value={`${(rates.rates?.XAF ?? 655.957).toFixed(0)} XAF`} fixed />
+                  <RateChip label="1 USD" value={`${((rates.rates?.XAF ?? 655.957) / (rates.rates?.EUR ?? 1)).toFixed(0)} XAF`} />
+                  <RateChip label="1 EUR" value={`${(1 / (rates.rates?.EUR ?? 1)).toFixed(4)} USD`} />
                 </View>
                 <Text style={styles.ratesNote}>
                   XAF indexé à l'EUR · USD mis à jour le {new Date(rates.fetched_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
@@ -261,7 +262,7 @@ function RateChip({ label, value, fixed }: { label: string; value: string; fixed
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.background },
+  safe: { flex: 1, backgroundColor: Colors.bg },
   balanceCard: {
     borderRadius: Radius.xxl, padding: Spacing.xl, margin: Spacing.xl,
     marginBottom: Spacing.md, gap: 8,

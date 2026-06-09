@@ -125,7 +125,7 @@ export default function AlertsScreen() {
           />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 40, paddingTop: 8 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 100, paddingTop: 8 }} showsVerticalScrollIndicator={false}>
           <View style={{ paddingHorizontal: Spacing.xl, gap: 10 }}>
             {alerts.map((alert) => (
               <AlertCard key={alert.id} alert={alert} />
