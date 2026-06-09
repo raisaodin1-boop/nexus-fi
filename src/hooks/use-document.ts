@@ -13,6 +13,7 @@ import { useState, useCallback } from "react";
 import { Alert, Modal, Text, TouchableOpacity, View, StyleSheet, Platform } from "react-native";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
+import { router } from "expo-router";
 import { api } from "@/src/api";
 import { getSupabase } from "@/src/supabase";
 
@@ -46,9 +47,9 @@ export interface DocListItem {
 
 /* ── KYC check ─────────────────────────────────────────────────── */
 
-async function checkKyc(): Promise<{ ok: boolean; message?: string }> {
+async function checkKyc(): Promise<{ ok: boolean; level?: number; message?: string }> {
   const { data: { session } } = await getSupabase().auth.getSession();
-  if (!session?.user) return { ok: false, message: "Non authentifié" };
+  if (!session?.user) return { ok: false, level: 1, message: "Non authentifié" };
 
   const { data: profile } = await getSupabase()
     .from("profiles")
@@ -56,28 +57,17 @@ async function checkKyc(): Promise<{ ok: boolean; message?: string }> {
     .eq("id", session.user.id)
     .maybeSingle();
 
-  if (!profile) return { ok: false, message: "Profil introuvable" };
+  if (!profile) return { ok: false, level: 1, message: "Profil introuvable" };
 
   // Level 1: required profile fields
   const level1 = !!(profile.full_name && profile.phone && profile.date_of_birth && profile.address);
   if (!level1) {
-    return {
-      ok: false,
-      message:
-        "Vous devez compléter et faire valider votre identité en 2 étapes avant d'accéder aux certificats. " +
-        "Rendez-vous dans votre Profil pour remplir vos informations personnelles (nom complet, téléphone, date de naissance, adresse).",
-    };
+    return { ok: false, level: 1, message: "Profil incomplet" };
   }
 
   // Level 2: admin-approved KYC
   if (profile.kyc_status !== "approved") {
-    return {
-      ok: false,
-      message:
-        "Votre vérification d'identité (KYC) n'a pas encore été approuvée par l'administration. " +
-        "Vous devez compléter et faire valider votre identité en 2 étapes avant d'accéder aux certificats. " +
-        "Cliquez ici pour vérifier votre profil.",
-    };
+    return { ok: false, level: 2, message: "KYC non approuvé" };
   }
 
   return { ok: true };
