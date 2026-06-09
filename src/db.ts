@@ -641,6 +641,7 @@ export async function createSaving(body: Record<string, any>) {
     .insert({ ...body, user_id: me, current_amount: 0 })
     .select().single();
   throwSb(error);
+  invalidateCache(`savings-${me}`);
   return data;
 }
 

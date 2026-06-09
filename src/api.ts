@@ -110,7 +110,7 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "POST" && s[0] === "funds" && s[1] && s[2] === "contribute")        return (await db.contributeFund(s[1], Number(body?.amount))) as T;
 
     // ── Savings
-    if (method === "GET"  && s[0] === "savings" && !s[1])                              return (await db.listSavings()) as T;
+    if (method === "GET"  && s[0] === "savings" && (!s[1] || s[1] === "goals"))          return (await db.listSavings()) as T;
     if (method === "GET"  && s[0] === "savings" && s[1] === "summary")                 return (await db.getSavingsSummary()) as T;
     if (method === "POST" && s[0] === "savings" && (!s[1] || s[1] === "goals"))         return (await db.createSaving(body)) as T;
     if (method === "GET"  && s[0] === "savings" && s[1] && !s[2])                      return (await db.getSaving(s[1])) as T;
