@@ -713,7 +713,22 @@ export async function savePushToken(token: string) {
   return { detail: "Token enregistré" };
 }
 
-/* ── KYC ─────────────────────────────────────────────────── */
+/* ── Wallet ──────────────────────────────────────────────── */
+
+import * as walletDb from "@/src/wallet-db";
+import { getRates } from "@/src/exchange-rates";
+
+export async function getWallet() { return walletDb.getWallet(); }
+export async function getWalletTransactions() { return walletDb.getWalletTransactions(); }
+export async function getExchangeRates() { return getRates(); }
+export async function topupWallet(body: any) { return walletDb.topupFromMobileMoney(body); }
+export async function withdrawWallet(body: any) { return walletDb.withdrawToMobileMoney(body); }
+export async function transferWallet(body: any) { return walletDb.transferToMember(body); }
+export async function payContributionWallet(body: any) {
+  return walletDb.payContributionFromWallet(body?.tontine_id, Number(body?.amount), Number(body?.cycle));
+}
+
+/* ── KYC ──────────────────────────────────────────────────── */
 
 export async function getKycStatus() {
   const me = await uid();

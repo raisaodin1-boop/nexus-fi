@@ -173,6 +173,7 @@ export function MemberDashboard() {
         </View>
         <View style={styles.qaRow}>
           <QuickAction icon={<QrCode color="#7C3AED" size={22} />} label="Recevoir" onPress={() => router.push("/qr-receive")} testID="home-action-qr-receive" />
+          <QuickAction icon={<Wallet color="#10B981" size={22} />} label="Mon Wallet" onPress={() => router.push("/wallet")} testID="home-action-wallet" />
         </View>
 
         {/* Promotion CTA for members */}

@@ -103,6 +103,15 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"  && s[0] === "credit-score" && !s[1])                         return (await db.getCreditScore()) as T;
     if (method === "GET"  && s[0] === "credit-score" && s[1] === "history")            return (await db.getCreditScoreHistory()) as T;
 
+    // ── Wallet
+    if (method === "GET"  && s[0] === "wallet" && !s[1])                               return (await db.getWallet()) as T;
+    if (method === "GET"  && s[0] === "wallet" && s[1] === "transactions")             return (await db.getWalletTransactions()) as T;
+    if (method === "GET"  && s[0] === "wallet" && s[1] === "rates")                    return (await db.getExchangeRates()) as T;
+    if (method === "POST" && s[0] === "wallet" && s[1] === "topup")                    return (await db.topupWallet(body)) as T;
+    if (method === "POST" && s[0] === "wallet" && s[1] === "withdraw")                 return (await db.withdrawWallet(body)) as T;
+    if (method === "POST" && s[0] === "wallet" && s[1] === "transfer")                 return (await db.transferWallet(body)) as T;
+    if (method === "POST" && s[0] === "wallet" && s[1] === "pay-contribution")         return (await db.payContributionWallet(body)) as T;
+
     // ── KYC
     if (method === "POST" && s[0] === "kyc" && s[1] === "submit")                      return (await db.submitKyc()) as T;
 
