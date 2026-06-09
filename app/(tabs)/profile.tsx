@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -24,6 +25,12 @@ import { useTheme } from "@/src/theme-context";
 import { Button, Card, Field, SectionTitle } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { api, ApiError, User } from "@/src/api";
+import {
+  TITLES, COUNTRIES, getCities, getNeighborhoods,
+} from "@/src/profile-geo-data";
+import {
+  SelectPicker, ChipSelector, DatePicker, NameField, ManualField,
+} from "@/src/profile-selectors";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -35,34 +42,61 @@ export default function ProfileScreen() {
   const [error, setError] = useState<string | null>(null);
   const [bioEnabled, setBioEnabled] = useState(false);
 
+  // Split full_name into title + first + last
+  const parseName = (full: string) => {
+    const parts = (full ?? "").trim().split(" ");
+    const titleFound = TITLES.find((t) => parts[0] === t);
+    if (titleFound) {
+      const rest = parts.slice(1);
+      return { title: titleFound, firstName: rest.slice(0, -1).join(" "), lastName: rest[rest.length - 1] ?? "" };
+    }
+    return { title: "", firstName: parts.slice(0, -1).join(" "), lastName: parts[parts.length - 1] ?? "" };
+  };
+
+  const initName = parseName(user?.full_name ?? "");
+
   const [form, setForm] = useState({
-    full_name: user?.full_name ?? "",
+    title: initName.title,
+    first_name: initName.firstName,
+    last_name: initName.lastName,
     phone: user?.phone ?? "",
     gender: user?.gender ?? "",
     country: user?.country ?? "",
+    country_manual: "",
     city: user?.city ?? "",
-    occupation: user?.occupation ?? "",
-    date_of_birth: user?.date_of_birth ?? "",
-    birth_place: user?.birth_place ?? "",
+    city_manual: "",
     neighborhood: user?.neighborhood ?? "",
+    neighborhood_manual: "",
+    occupation: user?.occupation ?? "",
+    date_of_birth: (user as any)?.date_of_birth ?? "",
+    birth_place: (user as any)?.birth_place ?? "",
     address: user?.address ?? "",
   });
 
-  // Sync form when user context updates (after refresh)
+  // Derived: detect "Autres" selections
+  const countryIsOther = form.country === "OTHER";
+  const cityIsOther = form.city === "OTHER";
+  const neighborhoodIsOther = form.neighborhood === "OTHER";
+
+  // Sync form when user context updates
   useEffect(() => {
     if (user) {
-      setForm({
-        full_name: user.full_name ?? "",
+      const n = parseName(user.full_name ?? "");
+      setForm((prev) => ({
+        ...prev,
+        title: n.title,
+        first_name: n.firstName,
+        last_name: n.lastName,
         phone: user.phone ?? "",
         gender: user.gender ?? "",
         country: user.country ?? "",
         city: user.city ?? "",
-        occupation: user.occupation ?? "",
-        date_of_birth: user.date_of_birth ?? "",
-        birth_place: user.birth_place ?? "",
         neighborhood: user.neighborhood ?? "",
+        occupation: user.occupation ?? "",
+        date_of_birth: (user as any)?.date_of_birth ?? "",
+        birth_place: (user as any)?.birth_place ?? "",
         address: user.address ?? "",
-      });
+      }));
     }
   }, [user]);
 
@@ -75,7 +109,27 @@ export default function ProfileScreen() {
   const handleSave = async () => {
     setSaving(true); setError(null);
     try {
-      await api.patch<User>("/users/me", form);
+      // Reconstruct full_name from title + first + last
+      const nameParts = [form.title, form.first_name, form.last_name].filter(Boolean);
+      const full_name = nameParts.join(" ").trim();
+
+      // Resolve "Autres" → manual fields
+      const country = countryIsOther ? form.country_manual : form.country;
+      const city = cityIsOther ? form.city_manual : form.city;
+      const neighborhood = neighborhoodIsOther ? form.neighborhood_manual : form.neighborhood;
+
+      await api.patch<User>("/users/me", {
+        full_name,
+        phone: form.phone,
+        gender: form.gender,
+        country,
+        city,
+        neighborhood,
+        occupation: form.occupation,
+        date_of_birth: form.date_of_birth || null,
+        birth_place: form.birth_place,
+        address: form.address,
+      });
       await refresh();
       setEditing(false);
     } catch (e) {
@@ -142,7 +196,9 @@ export default function ProfileScreen() {
                 <Text style={styles.avatarLetter}>{user?.full_name?.[0]?.toUpperCase() ?? "?"}</Text>
               )}
             </View>
-            <Text style={styles.fullName}>{user?.full_name}</Text>
+            <Text style={styles.fullName}>
+              {[form.title, form.first_name, form.last_name].filter(Boolean).join(" ") || user?.full_name}
+            </Text>
             <Text style={styles.email}>{user?.email}</Text>
             <View style={styles.rolePill}>
               <Text style={styles.roleText}>{roleLabel(user?.role)}</Text>
@@ -175,73 +231,166 @@ export default function ProfileScreen() {
             Mes informations
           </SectionTitle>
           <View style={{ paddingHorizontal: Spacing.xl }}>
-            <Card>
-              <Field
-                testID="profile-fullname"
-                label="Nom complet"
-                value={form.full_name}
-                editable={editing}
-                onChangeText={(t) => setForm({ ...form, full_name: t })}
+            <Card style={{ padding: Spacing.xl }}>
+
+              {/* ── Identité : titre + prénom + nom ── */}
+              <NameField
+                titles={TITLES}
+                titleValue={form.title}
+                onTitleChange={(v) => setForm({ ...form, title: v })}
+                firstNameValue={form.first_name}
+                onFirstNameChange={(v) => setForm({ ...form, first_name: v })}
+                lastNameValue={form.last_name}
+                onLastNameChange={(v) => setForm({ ...form, last_name: v })}
+                disabled={!editing}
               />
-              <Field
-                testID="profile-phone"
-                label="Téléphone"
-                value={form.phone}
-                editable={editing}
-                onChangeText={(t) => setForm({ ...form, phone: t })}
-                keyboardType="phone-pad"
+
+              {/* ── Date de naissance ── */}
+              <DatePicker
+                label="Date de naissance"
+                value={form.date_of_birth}
+                onChange={(iso) => setForm({ ...form, date_of_birth: iso })}
+                disabled={!editing}
+                testID="profile-dob"
               />
-              <Field
-                testID="profile-country"
+
+              {/* ── Lieu de naissance ── */}
+              <View style={styles.fieldWrap}>
+                <Text style={styles.inlineLabel}>Lieu de naissance</Text>
+                <TextInput
+                  style={[styles.inlineInput, !editing && styles.inlineInputDisabled]}
+                  value={form.birth_place}
+                  onChangeText={(v) => setForm({ ...form, birth_place: v })}
+                  editable={editing}
+                  placeholder="Ville / Pays de naissance"
+                  placeholderTextColor={Colors.textSubtle}
+                />
+              </View>
+
+              {/* ── Téléphone ── */}
+              <View style={styles.fieldWrap}>
+                <Text style={styles.inlineLabel}>Téléphone</Text>
+                <TextInput
+                  style={[styles.inlineInput, !editing && styles.inlineInputDisabled]}
+                  value={form.phone}
+                  onChangeText={(v) => setForm({ ...form, phone: v })}
+                  editable={editing}
+                  keyboardType="phone-pad"
+                  placeholder="+237 6XX XXX XXX"
+                  placeholderTextColor={Colors.textSubtle}
+                />
+              </View>
+
+              {/* ── Profession ── */}
+              <View style={styles.fieldWrap}>
+                <Text style={styles.inlineLabel}>Profession</Text>
+                <TextInput
+                  style={[styles.inlineInput, !editing && styles.inlineInputDisabled]}
+                  value={form.occupation}
+                  onChangeText={(v) => setForm({ ...form, occupation: v })}
+                  editable={editing}
+                  placeholder="Votre profession"
+                  placeholderTextColor={Colors.textSubtle}
+                />
+              </View>
+
+              {/* ── Pays ── */}
+              <SelectPicker
                 label="Pays"
                 value={form.country}
-                editable={editing}
-                onChangeText={(t) => setForm({ ...form, country: t })}
+                options={COUNTRIES}
+                onSelect={(v) => setForm({ ...form, country: v, city: "", city_manual: "", neighborhood: "", neighborhood_manual: "" })}
+                disabled={!editing}
+                testID="profile-country"
               />
-              <Field
-                testID="profile-city"
-                label="Ville"
-                value={form.city}
-                editable={editing}
-                onChangeText={(t) => setForm({ ...form, city: t })}
-              />
-              <Field
-                testID="profile-occupation"
-                label="Profession"
-                value={form.occupation}
-                editable={editing}
-                onChangeText={(t) => setForm({ ...form, occupation: t })}
-              />
-              <Field
-                testID="profile-address"
-                label="Adresse"
-                value={form.address}
-                editable={editing}
-                onChangeText={(t) => setForm({ ...form, address: t })}
-              />
-              <Field
-                testID="profile-neighborhood"
-                label="Quartier"
-                value={form.neighborhood}
-                editable={editing}
-                onChangeText={(t) => setForm({ ...form, neighborhood: t })}
-              />
-              <Field
-                testID="profile-birth-place"
-                label="Lieu de naissance"
-                value={form.birth_place}
-                editable={editing}
-                onChangeText={(t) => setForm({ ...form, birth_place: t })}
-              />
+              {countryIsOther && editing ? (
+                <ManualField
+                  label="Précisez le pays"
+                  value={form.country_manual}
+                  onChange={(v) => setForm({ ...form, country_manual: v })}
+                  placeholder="Nom de votre pays..."
+                />
+              ) : null}
+
+              {/* ── Ville ── */}
+              {form.country && !countryIsOther ? (
+                <SelectPicker
+                  label="Ville"
+                  value={form.city}
+                  options={getCities(form.country)}
+                  onSelect={(v) => setForm({ ...form, city: v, neighborhood: "", neighborhood_manual: "" })}
+                  disabled={!editing}
+                  testID="profile-city"
+                />
+              ) : countryIsOther ? (
+                <ManualField
+                  label="Ville"
+                  value={form.city_manual}
+                  onChange={(v) => setForm({ ...form, city_manual: v })}
+                  placeholder="Votre ville..."
+                />
+              ) : null}
+              {cityIsOther && !countryIsOther && editing ? (
+                <ManualField
+                  label="Précisez la ville"
+                  value={form.city_manual}
+                  onChange={(v) => setForm({ ...form, city_manual: v })}
+                  placeholder="Nom de votre ville..."
+                />
+              ) : null}
+
+              {/* ── Quartier ── */}
+              {form.city && !cityIsOther && !countryIsOther && getNeighborhoods(form.city).length > 1 ? (
+                <SelectPicker
+                  label="Quartier"
+                  value={form.neighborhood}
+                  options={getNeighborhoods(form.city)}
+                  onSelect={(v) => setForm({ ...form, neighborhood: v, neighborhood_manual: "" })}
+                  disabled={!editing}
+                  testID="profile-neighborhood"
+                />
+              ) : (form.city || cityIsOther || countryIsOther) ? (
+                <ManualField
+                  label="Quartier"
+                  value={form.neighborhood_manual || form.neighborhood}
+                  onChange={(v) => setForm({ ...form, neighborhood_manual: v, neighborhood: v })}
+                  disabled={!editing}
+                  placeholder="Votre quartier..."
+                />
+              ) : null}
+              {neighborhoodIsOther && editing ? (
+                <ManualField
+                  label="Précisez le quartier"
+                  value={form.neighborhood_manual}
+                  onChange={(v) => setForm({ ...form, neighborhood_manual: v })}
+                  placeholder="Nom de votre quartier..."
+                />
+              ) : null}
+
+              {/* ── Adresse ── */}
+              <View style={[styles.fieldWrap, { marginBottom: 4 }]}>
+                <Text style={styles.inlineLabel}>Adresse (optionnel)</Text>
+                <TextInput
+                  style={[styles.inlineInput, !editing && styles.inlineInputDisabled]}
+                  value={form.address}
+                  onChangeText={(v) => setForm({ ...form, address: v })}
+                  editable={editing}
+                  placeholder="Rue, numéro, immeuble..."
+                  placeholderTextColor={Colors.textSubtle}
+                />
+              </View>
+
               {error ? <Text style={styles.error}>{error}</Text> : null}
               {editing ? (
-                <Button
-                  testID="profile-save"
-                  label="Enregistrer"
-                  onPress={handleSave}
-                  loading={saving}
-                  icon={<Save color="#fff" size={16} />}
-                />
+                <View style={{ marginTop: 16 }}>
+                  <Button
+                    testID="profile-save"
+                    label="Enregistrer les modifications"
+                    onPress={handleSave}
+                    loading={saving}
+                    icon={<Save color="#fff" size={16} />}
+                  />
+                </View>
               ) : null}
             </Card>
           </View>
@@ -379,4 +528,11 @@ const styles = StyleSheet.create({
   toggleRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10 },
   toggleLabel: { flex: 1, fontSize: 14, fontWeight: "700" },
   versionTxt: { textAlign: "center", fontSize: 11, marginTop: 30, fontWeight: "600", letterSpacing: 1 },
+  fieldWrap: { marginBottom: 14 },
+  inlineLabel: { color: Colors.textMuted, fontSize: 12, fontWeight: "700", letterSpacing: 0.4, marginBottom: 6, textTransform: "uppercase" },
+  inlineInput: {
+    backgroundColor: Colors.surfaceAlt, borderRadius: Radius.md, paddingHorizontal: 14,
+    paddingVertical: 13, borderWidth: 1, borderColor: Colors.border, color: Colors.text, fontSize: 14, fontWeight: "600",
+  },
+  inlineInputDisabled: { opacity: 0.6, backgroundColor: Colors.borderLight },
 });

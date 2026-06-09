@@ -1,0 +1,188 @@
+// Geo data: pays → villes → quartiers (focus Afrique/CEMAC + monde)
+
+export const TITLES = ["M.", "Mme", "Dr", "Pr", "Ing.", "Me", "Rév.", "Pasteur", "Imam", "Mgr"];
+
+export interface GeoEntry { label: string; value: string }
+
+export const COUNTRIES: GeoEntry[] = [
+  { label: "Cameroun", value: "CM" },
+  { label: "Côte d'Ivoire", value: "CI" },
+  { label: "Sénégal", value: "SN" },
+  { label: "Gabon", value: "GA" },
+  { label: "Congo", value: "CG" },
+  { label: "RD Congo", value: "CD" },
+  { label: "Tchad", value: "TD" },
+  { label: "Centrafrique", value: "CF" },
+  { label: "Guinée Équatoriale", value: "GQ" },
+  { label: "Nigeria", value: "NG" },
+  { label: "Ghana", value: "GH" },
+  { label: "Mali", value: "ML" },
+  { label: "Burkina Faso", value: "BF" },
+  { label: "Bénin", value: "BJ" },
+  { label: "Togo", value: "TG" },
+  { label: "Niger", value: "NE" },
+  { label: "Rwanda", value: "RW" },
+  { label: "Burundi", value: "BI" },
+  { label: "Kenya", value: "KE" },
+  { label: "Tanzanie", value: "TZ" },
+  { label: "Ethiopie", value: "ET" },
+  { label: "Madagascar", value: "MG" },
+  { label: "Maroc", value: "MA" },
+  { label: "Algérie", value: "DZ" },
+  { label: "Tunisie", value: "TN" },
+  { label: "France", value: "FR" },
+  { label: "Belgique", value: "BE" },
+  { label: "Suisse", value: "CH" },
+  { label: "Allemagne", value: "DE" },
+  { label: "Royaume-Uni", value: "GB" },
+  { label: "États-Unis", value: "US" },
+  { label: "Canada", value: "CA" },
+  { label: "Autres", value: "OTHER" },
+];
+
+export const CITIES_BY_COUNTRY: Record<string, GeoEntry[]> = {
+  CM: [
+    { label: "Douala", value: "douala" },
+    { label: "Yaoundé", value: "yaounde" },
+    { label: "Bafoussam", value: "bafoussam" },
+    { label: "Bamenda", value: "bamenda" },
+    { label: "Garoua", value: "garoua" },
+    { label: "Maroua", value: "maroua" },
+    { label: "Ngaoundéré", value: "ngaoundere" },
+    { label: "Bertoua", value: "bertoua" },
+    { label: "Ebolowa", value: "ebolowa" },
+    { label: "Kribi", value: "kribi" },
+    { label: "Kumba", value: "kumba" },
+    { label: "Buea", value: "buea" },
+    { label: "Limbé", value: "limbe" },
+    { label: "Nkongsamba", value: "nkongsamba" },
+    { label: "Dschang", value: "dschang" },
+    { label: "Autres", value: "OTHER" },
+  ],
+  CI: [
+    { label: "Abidjan", value: "abidjan" },
+    { label: "Bouaké", value: "bouake" },
+    { label: "Daloa", value: "daloa" },
+    { label: "Yamoussoukro", value: "yamoussoukro" },
+    { label: "Korhogo", value: "korhogo" },
+    { label: "Autres", value: "OTHER" },
+  ],
+  SN: [
+    { label: "Dakar", value: "dakar" },
+    { label: "Thiès", value: "thies" },
+    { label: "Saint-Louis", value: "saint-louis" },
+    { label: "Ziguinchor", value: "ziguinchor" },
+    { label: "Kaolack", value: "kaolack" },
+    { label: "Autres", value: "OTHER" },
+  ],
+  GA: [
+    { label: "Libreville", value: "libreville" },
+    { label: "Port-Gentil", value: "port-gentil" },
+    { label: "Franceville", value: "franceville" },
+    { label: "Autres", value: "OTHER" },
+  ],
+  FR: [
+    { label: "Paris", value: "paris" },
+    { label: "Lyon", value: "lyon" },
+    { label: "Marseille", value: "marseille" },
+    { label: "Bordeaux", value: "bordeaux" },
+    { label: "Toulouse", value: "toulouse" },
+    { label: "Nice", value: "nice" },
+    { label: "Autres", value: "OTHER" },
+  ],
+  BE: [
+    { label: "Bruxelles", value: "bruxelles" },
+    { label: "Liège", value: "liege" },
+    { label: "Gand", value: "gand" },
+    { label: "Autres", value: "OTHER" },
+  ],
+  US: [
+    { label: "New York", value: "new-york" },
+    { label: "Los Angeles", value: "los-angeles" },
+    { label: "Chicago", value: "chicago" },
+    { label: "Houston", value: "houston" },
+    { label: "Washington DC", value: "washington-dc" },
+    { label: "Autres", value: "OTHER" },
+  ],
+  CA: [
+    { label: "Montréal", value: "montreal" },
+    { label: "Toronto", value: "toronto" },
+    { label: "Vancouver", value: "vancouver" },
+    { label: "Ottawa", value: "ottawa" },
+    { label: "Autres", value: "OTHER" },
+  ],
+};
+
+export const NEIGHBORHOODS_BY_CITY: Record<string, GeoEntry[]> = {
+  douala: [
+    { label: "Akwa", value: "akwa" },
+    { label: "Bonanjo", value: "bonanjo" },
+    { label: "Bonapriso", value: "bonapriso" },
+    { label: "Bali", value: "bali" },
+    { label: "Deido", value: "deido" },
+    { label: "New Bell", value: "new-bell" },
+    { label: "Bepanda", value: "bepanda" },
+    { label: "Ndogpassi", value: "ndogpassi" },
+    { label: "Logbessou", value: "logbessou" },
+    { label: "Makepe", value: "makepe" },
+    { label: "Kotto", value: "kotto" },
+    { label: "PK8 / PK10 / PK14", value: "pk" },
+    { label: "Cite des Palmiers", value: "cite-palmiers" },
+    { label: "Bonamoussadi", value: "bonamoussadi" },
+    { label: "Autres", value: "OTHER" },
+  ],
+  yaounde: [
+    { label: "Bastos", value: "bastos" },
+    { label: "Nlongkak", value: "nlongkak" },
+    { label: "Mvog-Mbi", value: "mvog-mbi" },
+    { label: "Essos", value: "essos" },
+    { label: "Ekounou", value: "ekounou" },
+    { label: "Omnisports", value: "omnisports" },
+    { label: "Odza", value: "odza" },
+    { label: "Biyem-Assi", value: "biyem-assi" },
+    { label: "Mfandena", value: "mfandena" },
+    { label: "Nsimeyong", value: "nsimeyong" },
+    { label: "Ahala", value: "ahala" },
+    { label: "Nkol-Eton", value: "nkol-eton" },
+    { label: "Autres", value: "OTHER" },
+  ],
+  bafoussam: [
+    { label: "Centre Commercial", value: "centre" },
+    { label: "Tamdja", value: "tamdja" },
+    { label: "Djeleng", value: "djeleng" },
+    { label: "Kamkop", value: "kamkop" },
+    { label: "Autres", value: "OTHER" },
+  ],
+  abidjan: [
+    { label: "Plateau", value: "plateau" },
+    { label: "Cocody", value: "cocody" },
+    { label: "Marcory", value: "marcory" },
+    { label: "Yopougon", value: "yopougon" },
+    { label: "Abobo", value: "abobo" },
+    { label: "Autres", value: "OTHER" },
+  ],
+  dakar: [
+    { label: "Almadies", value: "almadies" },
+    { label: "Plateau", value: "plateau" },
+    { label: "Ouakam", value: "ouakam" },
+    { label: "Parcelles Assainies", value: "parcelles" },
+    { label: "Autres", value: "OTHER" },
+  ],
+  paris: [
+    { label: "1er - 4ème (Centre)", value: "paris-centre" },
+    { label: "5ème - 9ème", value: "paris-5-9" },
+    { label: "10ème - 14ème", value: "paris-10-14" },
+    { label: "15ème - 20ème", value: "paris-15-20" },
+    { label: "Banlieue Nord", value: "banlieue-nord" },
+    { label: "Banlieue Sud", value: "banlieue-sud" },
+    { label: "Autres", value: "OTHER" },
+  ],
+};
+
+export function getCities(countryValue: string): GeoEntry[] {
+  return CITIES_BY_COUNTRY[countryValue] ?? [{ label: "Autres", value: "OTHER" }];
+}
+
+export function getNeighborhoods(cityValue: string): GeoEntry[] {
+  return NEIGHBORHOODS_BY_CITY[cityValue] ?? [{ label: "Autres", value: "OTHER" }];
+}
