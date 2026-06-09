@@ -78,6 +78,17 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "POST" && s[0] === "consent" && s[1] === "tontine")                        return (await db.recordTontineConsent(body?.version, body?.tontine_id)) as T;
     if (method === "GET"  && s[0] === "consent" && s[1] === "tontine" && s[2] === "check")    return ({ signed: await db.hasSignedConsent(body?.version ?? "1.0") }) as T;
 
+    // ── Wallet security
+    if (method === "POST" && s[0] === "wallet" && s[1] === "pin" && s[2] === "set")           return (await db.setWalletPin(body?.pin_hash)) as T;
+    if (method === "POST" && s[0] === "wallet" && s[1] === "pin" && s[2] === "verify")        return (await db.verifyWalletPin(body?.pin_hash)) as T;
+    if (method === "GET"  && s[0] === "wallet" && s[1] === "pin" && s[2] === "status")        return ({ has_pin: await db.hasWalletPin() }) as T;
+    if (method === "POST" && s[0] === "wallet" && s[1] === "otp" && s[2] === "generate")      return (await db.generateTransactionOtp()) as T;
+    if (method === "POST" && s[0] === "wallet" && s[1] === "otp" && s[2] === "verify")        return (await db.verifyTransactionOtp(body?.code)) as T;
+    if (method === "POST" && s[0] === "wallet" && s[1] === "check-tx")                        return (await db.preTransactionCheck(Number(body?.amount_xaf), body?.recipient_phone)) as T;
+    if (method === "GET"  && s[0] === "wallet" && s[1] === "freeze-status")                   return (await db.getWalletFreezeStatus()) as T;
+    if (method === "POST" && s[0] === "wallet" && s[1] === "unfreeze")                        return (await db.unfreezeWallet()) as T;
+    if (method === "GET"  && s[0] === "wallet" && s[1] === "security-log")                    return (await db.getSecurityLog()) as T;
+
     // ── Associations
     if (method === "GET"  && s[0] === "associations" && !s[1])                         return (await db.listAssociations()) as T;
     if (method === "POST" && s[0] === "associations" && !s[1])                         return (await db.createAssociation(body)) as T;
@@ -101,7 +112,7 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     // ── Savings
     if (method === "GET"  && s[0] === "savings" && !s[1])                              return (await db.listSavings()) as T;
     if (method === "GET"  && s[0] === "savings" && s[1] === "summary")                 return (await db.getSavingsSummary()) as T;
-    if (method === "POST" && s[0] === "savings" && !s[1])                              return (await db.createSaving(body)) as T;
+    if (method === "POST" && s[0] === "savings" && (!s[1] || s[1] === "goals"))         return (await db.createSaving(body)) as T;
     if (method === "GET"  && s[0] === "savings" && s[1] && !s[2])                      return (await db.getSaving(s[1])) as T;
     if (method === "POST" && s[0] === "savings" && s[1] && s[2] === "deposit")         return (await db.depositSaving(s[1], Number(body?.amount), body?.note)) as T;
 

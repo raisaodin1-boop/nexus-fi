@@ -10,6 +10,8 @@ import { Button, Field } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { formatAmount, type Currency } from "@/src/exchange-rates";
 import type { WalletBalance, MobileMoneyProvider } from "@/src/wallet-db";
+import { PinConfirmModal } from "@/src/pin-modal";
+import { OtpModal } from "@/src/otp-modal";
 
 const PROVIDERS: MobileMoneyProvider[] = ["MTN MoMo", "Orange Money", "Moov Money", "Wave"];
 const CURRENCIES: Currency[] = ["XAF", "EUR", "USD"];
@@ -24,6 +26,11 @@ export default function WithdrawScreen() {
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [success, setSuccess]     = useState(false);
+  const [showPin, setShowPin]     = useState(false);
+  const [showOtp, setShowOtp]     = useState(false);
+  // Pending check-tx result flags
+  const [pendingOtp, setPendingOtp] = useState(false);
+  const [amountXaf, setAmountXaf] = useState(0);
 
   useEffect(() => {
     api.get<WalletBalance>("/wallet").then(setWallet).catch(() => {});
@@ -35,6 +42,17 @@ export default function WithdrawScreen() {
     : wallet.balance_usd
     : 0;
 
+  const doWithdraw = async () => {
+    const amt = parseFloat(amount.replace(/\s/g, "").replace(",", "."));
+    setLoading(true);
+    try {
+      await api.post("/wallet/withdraw", { amount: amt, currency, provider, phone: phone.trim() });
+      setSuccess(true);
+    } catch (e: any) {
+      setError(e?.detail ?? e?.message ?? "Erreur lors du retrait.");
+    } finally { setLoading(false); }
+  };
+
   const submit = async () => {
     setError(null);
     const amt = parseFloat(amount.replace(/\s/g, "").replace(",", "."));
@@ -43,8 +61,23 @@ export default function WithdrawScreen() {
     if (!phone.trim()) { setError("Entrez votre numéro Mobile Money."); return; }
     setLoading(true);
     try {
-      await api.post("/wallet/withdraw", { amount: amt, currency, provider, phone: phone.trim() });
-      setSuccess(true);
+      const check = await api.post<{ allowed: boolean; reason?: string; requires_pin: boolean; requires_otp: boolean; risk: string }>(
+        "/wallet/check-tx",
+        { amount_xaf: amt }
+      );
+      if (!check.allowed) {
+        setError(check.reason ?? "Transaction non autorisée.");
+        return;
+      }
+      setAmountXaf(amt);
+      if (check.requires_pin) {
+        setPendingOtp(check.requires_otp);
+        setShowPin(true);
+      } else if (check.requires_otp) {
+        setShowOtp(true);
+      } else {
+        await doWithdraw();
+      }
     } catch (e: any) {
       setError(e?.detail ?? e?.message ?? "Erreur lors du retrait.");
     } finally { setLoading(false); }
