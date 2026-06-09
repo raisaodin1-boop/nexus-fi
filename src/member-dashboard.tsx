@@ -12,7 +12,7 @@ import {
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { Bell, ChevronRight, PiggyBank, Users, Wallet, TrendingUp, Sparkles, QrCode } from "lucide-react-native";
+import { Bell, ChevronRight, PiggyBank, Users, Wallet, TrendingUp, Sparkles, QrCode, BarChart2 } from "lucide-react-native";
 
 import { useAuth } from "@/src/auth-context";
 import { api, formatXAF } from "@/src/api";
@@ -174,6 +174,10 @@ export function MemberDashboard() {
         <View style={styles.qaRow}>
           <QuickAction icon={<QrCode color="#7C3AED" size={22} />} label="Recevoir" onPress={() => router.push("/qr-receive")} testID="home-action-qr-receive" />
           <QuickAction icon={<Wallet color="#10B981" size={22} />} label="Mon Wallet" onPress={() => router.push("/wallet")} testID="home-action-wallet" />
+        </View>
+        <View style={styles.qaRow}>
+          <QuickAction icon={<BarChart2 color={Colors.secondary} size={22} />} label="Tableau de bord" onPress={() => router.push("/analytics")} testID="home-action-analytics" />
+          <View style={{ flex: 1 }} />
         </View>
 
         {/* Promotion CTA for members */}

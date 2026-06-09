@@ -56,6 +56,9 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"  && s[0] === "tontines" && !s[1])                              return (await db.listTontines()) as T;
     if (method === "POST" && s[0] === "tontines" && !s[1])                              return (await db.createTontine(body)) as T;
     if (method === "POST" && s[0] === "tontines" && s[1] === "join")                   return (await db.joinTontine(body?.invite_code)) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] === "directory")               return (await db.listPublicTontines()) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "profile")         return (await db.getPublicTontineProfile(s[1])) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] === "request-join")            return (await db.requestJoinTontine(body?.tontine_id)) as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] && !s[2])                     return (await db.getTontine(s[1])) as T;
     if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "contribute")     return (await db.contributeTontine(s[1], Number(body?.amount))) as T;
 
@@ -125,6 +128,7 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     // ── Analytics (simplified chart series from existing data)
     if (method === "GET" && s[0] === "analytics" && s[1] === "savings-series")  return (await db.getSavingsSeries(14)) as T;
     if (method === "GET" && s[0] === "analytics" && s[1] === "users-series")    return (await db.getUsersSeries(14)) as T;
+    if (method === "GET" && s[0] === "financial-analytics")  return (await db.getFinancialAnalytics()) as T;
 
     // ── Admin
     if (method === "GET" && s[0] === "admin" && s[1] === "stats")                      return (await db.getAdminStats()) as T;

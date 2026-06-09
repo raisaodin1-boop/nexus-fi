@@ -159,6 +159,111 @@ export async function joinTontine(invite_code: string) {
   return { tontine_id: tontine.id };
 }
 
+export async function listPublicTontines(filters?: {
+  min_amount?: number; max_amount?: number;
+  frequency?: string; language?: string; country?: string;
+}) {
+  const sb = getSupabase();
+  let q = sb.from("tontines")
+    .select("id, name, amount_per_cycle, frequency, max_members, language, country, description, created_at, owner_id, tontine_members(count), tontine_contributions(amount)")
+    .eq("is_public", true)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (filters?.frequency) q = q.eq("frequency", filters.frequency);
+  if (filters?.language) q = q.eq("language", filters.language);
+  if (filters?.country) q = q.eq("country", filters.country);
+  if (filters?.min_amount) q = q.gte("amount_per_cycle", filters.min_amount);
+  if (filters?.max_amount) q = q.lte("amount_per_cycle", filters.max_amount);
+  const { data, error } = await q;
+  throwSb(error);
+  return (data ?? []).map((t: any) => {
+    const memberCount = t.tontine_members?.[0]?.count ?? 0;
+    const contribs: number[] = (t.tontine_contributions ?? []).map((c: any) => Number(c.amount));
+    const expectedTotal = Number(t.amount_per_cycle) * memberCount;
+    const actualTotal = contribs.reduce((s: number, a: number) => s + a, 0);
+    const complianceRate = expectedTotal > 0 ? Math.min(100, Math.round((actualTotal / expectedTotal) * 100)) : null;
+    const fullness = t.max_members > 0 ? memberCount / t.max_members : 0;
+    const reliability = Math.round(
+      (complianceRate !== null ? complianceRate * 0.6 : 50) + fullness * 40
+    );
+    return {
+      id: t.id, name: t.name,
+      amount_per_cycle: t.amount_per_cycle,
+      frequency: t.frequency,
+      max_members: t.max_members,
+      language: t.language ?? null,
+      country: t.country ?? null,
+      description: t.description ?? null,
+      members_count: memberCount,
+      compliance_rate: complianceRate,
+      reliability_score: reliability,
+      created_at: t.created_at,
+    };
+  });
+}
+
+export async function requestJoinTontine(tontine_id: string) {
+  const me = await uid();
+  const { count } = await getSupabase()
+    .from("tontine_members")
+    .select("*", { count: "exact", head: true })
+    .eq("tontine_id", tontine_id)
+    .eq("user_id", me);
+  if ((count ?? 0) > 0) throw { status: 400, detail: "Vous êtes déjà membre de cette tontine" };
+  const { error } = await getSupabase().from("notifications").insert({
+    user_id: me,
+    title: "Demande d'adhésion",
+    body: `Demande d'adhésion à la tontine ${tontine_id}`,
+    type: "join_request",
+    metadata: { tontine_id },
+  });
+  throwSb(error);
+  return { status: "pending", tontine_id };
+}
+
+export async function getPublicTontineProfile(id: string) {
+  const sb = getSupabase();
+  const [tontineRes, membersRes, contribsRes] = await Promise.all([
+    sb.from("tontines").select("*").eq("id", id).eq("is_public", true).single(),
+    sb.from("tontine_members").select("user_id, role, joined_at, profiles(full_name, country)").eq("tontine_id", id).limit(20),
+    sb.from("tontine_contributions").select("amount, cycle, created_at").eq("tontine_id", id).order("created_at", { ascending: false }).limit(200),
+  ]);
+  if (tontineRes.error || !tontineRes.data) throw { status: 404, detail: "Tontine introuvable ou privée" };
+  const t = tontineRes.data;
+  const members = (membersRes.data ?? []).map((m: any) => ({
+    role: m.role, joined_at: m.joined_at,
+    full_name: m.profiles?.full_name ?? "Membre",
+    country: m.profiles?.country ?? null,
+  }));
+  const contribs = contribsRes.data ?? [];
+  const memberCount = members.length;
+  const expectedTotal = Number(t.amount_per_cycle) * memberCount;
+  const actualTotal = contribs.reduce((s: number, c: any) => s + Number(c.amount), 0);
+  const complianceRate = expectedTotal > 0 ? Math.min(100, Math.round((actualTotal / expectedTotal) * 100)) : null;
+  const fullness = t.max_members > 0 ? memberCount / t.max_members : 0;
+  const reliability = Math.round(
+    (complianceRate !== null ? complianceRate * 0.6 : 50) + fullness * 40
+  );
+  const now = new Date();
+  const monthly: { label: string; total: number }[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const label = d.toLocaleDateString("fr-FR", { month: "short" });
+    const total = contribs
+      .filter((c: any) => {
+        const cd = new Date(c.created_at);
+        return cd.getFullYear() === d.getFullYear() && cd.getMonth() === d.getMonth();
+      })
+      .reduce((s: number, c: any) => s + Number(c.amount), 0);
+    monthly.push({ label, total });
+  }
+  return {
+    tontine: t, members, compliance_rate: complianceRate,
+    reliability_score: reliability, monthly_history: monthly,
+    contribution_count: contribs.length, total_collected: actualTotal,
+  };
+}
+
 export async function contributeTontine(id: string, amount: number) {
   const me = await uid();
   const { data: tontine } = await getSupabase().from("tontines").select("current_cycle").eq("id", id).single();
@@ -757,6 +862,84 @@ export async function getIdentityProfile() {
       events_recorded: allEvents.length,
     },
     recent_events: allEvents.slice(0, 10),
+  };
+}
+
+/* ── FINANCIAL ANALYTICS ─────────────────────────────────── */
+
+export async function getFinancialAnalytics() {
+  const me = await uid();
+  const sb = getSupabase();
+  const now = new Date();
+
+  // Fetch last 12 months of data in parallel
+  const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1).toISOString();
+  const [savingsTxRes, tontineContribRes, savingsGoalsRes, identityEventsRes] = await Promise.all([
+    sb.from("savings_transactions").select("amount, type, created_at").eq("user_id", me).gte("created_at", twelveMonthsAgo),
+    sb.from("tontine_contributions").select("amount, created_at").eq("user_id", me).gte("created_at", twelveMonthsAgo),
+    sb.from("savings_goals").select("current_amount, target_amount, created_at, name").eq("user_id", me),
+    sb.from("identity_events").select("score_delta, event_type, created_at").eq("user_id", me).eq("event_type", "credit_score_snapshot").order("created_at", { ascending: true }).limit(24),
+  ]);
+
+  const savingsTx = savingsTxRes.data ?? [];
+  const tontineContribs = tontineContribRes.data ?? [];
+  const goals = savingsGoalsRes.data ?? [];
+
+  // Monthly cash flow: inflows (deposits) vs outflows (withdrawals) for last 6 months
+  const cashFlow: { label: string; inflow: number; outflow: number }[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const label = d.toLocaleDateString("fr-FR", { month: "short" });
+    const monthTx = savingsTx.filter((t: any) => {
+      const cd = new Date(t.created_at);
+      return cd.getFullYear() === d.getFullYear() && cd.getMonth() === d.getMonth();
+    });
+    const monthContribs = tontineContribs.filter((t: any) => {
+      const cd = new Date(t.created_at);
+      return cd.getFullYear() === d.getFullYear() && cd.getMonth() === d.getMonth();
+    });
+    const inflow = monthTx.filter((t: any) => t.type === "deposit").reduce((s: number, t: any) => s + Number(t.amount), 0);
+    const outflow = monthTx.filter((t: any) => t.type !== "deposit").reduce((s: number, t: any) => s + Number(t.amount), 0)
+      + monthContribs.reduce((s: number, t: any) => s + Number(t.amount), 0);
+    cashFlow.push({ label, inflow, outflow });
+  }
+
+  // Total saved vs total contributed (for donut)
+  const totalSaved = goals.reduce((s: number, g: any) => s + Number(g.current_amount), 0);
+  const totalContributed = tontineContribs.reduce((s: number, t: any) => s + Number(t.amount), 0);
+  const totalOut = totalSaved + totalContributed;
+
+  // Trust score history (12 months)
+  const trustHistory: { label: string; score: number }[] = (identityEventsRes.data ?? []).map((e: any) => ({
+    label: new Date(e.created_at).toLocaleDateString("fr-FR", { month: "short", year: "2-digit" }),
+    score: Number(e.score_delta ?? 0),
+  }));
+
+  // Goal projections: for each goal with a deadline, compute linear trend
+  const projections = goals
+    .filter((g: any) => g.target_amount > 0)
+    .map((g: any) => {
+      const pct = Math.min(100, (Number(g.current_amount) / Number(g.target_amount)) * 100);
+      const depositRate = savingsTx
+        .filter((t: any) => t.type === "deposit")
+        .reduce((s: number, t: any) => s + Number(t.amount), 0) / 12; // avg monthly
+      const remaining = Number(g.target_amount) - Number(g.current_amount);
+      const monthsToGo = depositRate > 0 ? Math.ceil(remaining / depositRate) : null;
+      return { name: g.name, pct: Math.round(pct), months_to_go: monthsToGo, target: Number(g.target_amount), current: Number(g.current_amount) };
+    });
+
+  // Raw transactions for CSV export
+  const rawRows = [
+    ...savingsTx.map((t: any) => ({ date: t.created_at, type: t.type, amount: t.amount, category: "Épargne" })),
+    ...tontineContribs.map((t: any) => ({ date: t.created_at, type: "contribution", amount: t.amount, category: "Tontine" })),
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  return {
+    cash_flow: cashFlow,
+    donut: { saved: totalSaved, contributed: totalContributed, total: totalOut },
+    trust_history: trustHistory,
+    projections,
+    raw_rows: rawRows,
   };
 }
 
