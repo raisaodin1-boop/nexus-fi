@@ -39,7 +39,7 @@ export const CAROUSEL_SLIDES: CarouselSlide[] = [
     greeting_en: "Welcome to your Djanguy",
     gradient: ["#1A0A00", "#7C3C00", "#FF6B35"],
     accent: "#FFB347",
-    pattern: "ankara",
+    pattern: "kente",
   },
   {
     id: "cg",

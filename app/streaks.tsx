@@ -167,7 +167,7 @@ export default function StreaksScreen() {
 
           {/* Streak ring */}
           <View style={styles.ringWrap}>
-            <StreakRing streak={current_streak} best={best_streak} />
+            <StreakRing streak={current_streak} />
           </View>
 
           {/* Stats row */}

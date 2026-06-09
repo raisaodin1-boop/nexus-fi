@@ -276,7 +276,7 @@ export default function PayContribution() {
             {(finalStatus === "canceled" || finalStatus === "expired" || finalStatus === "failed") && (
               <Button
                 label="Réessayer"
-                variant="outline"
+                variant="ghost"
                 onPress={() => { setStage("select"); setFinalStatus(null); setMethod(null); }}
                 testID="pay-retry"
               />
@@ -465,7 +465,7 @@ export default function PayContribution() {
             />
             <Button
               label="Annuler"
-              variant="outline"
+              variant="ghost"
               onPress={() => { setStage("select"); setMethod(null); setOtp(""); }}
               testID="pay-mm-cancel"
             />

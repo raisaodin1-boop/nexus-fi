@@ -8,7 +8,8 @@ import { ChevronLeft, CheckCircle2 } from "lucide-react-native";
 import { api } from "@/src/api";
 import { Button, Field } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
-import type { Currency, MobileMoneyProvider } from "@/src/wallet-db";
+import type { MobileMoneyProvider } from "@/src/wallet-db";
+import type { Currency } from "@/src/exchange-rates";
 
 const PROVIDERS: MobileMoneyProvider[] = ["MTN MoMo", "Orange Money", "Moov Money", "Wave"];
 const CURRENCIES: Currency[] = ["XAF", "EUR", "USD"];

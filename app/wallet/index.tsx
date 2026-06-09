@@ -225,9 +225,9 @@ export default function WalletScreen() {
               <View style={[styles.ratesCard, Shadow.card]}>
                 <Text style={styles.ratesTitle}>Taux de change en direct</Text>
                 <View style={styles.ratesRow}>
-                  <RateChip label="1 EUR" value={`${rates.XAF_PER_EUR.toFixed(3)} XAF`} fixed />
-                  <RateChip label="1 USD" value={`${rates.XAF_PER_USD.toFixed(1)} XAF`} />
-                  <RateChip label="1 EUR" value={`${rates.USD_PER_EUR.toFixed(4)} USD`} />
+                  <RateChip label="1 EUR" value={`${(rates.rates?.XAF ?? 655.957).toFixed(0)} XAF`} fixed />
+                  <RateChip label="1 USD" value={`${((rates.rates?.XAF ?? 655.957) / (rates.rates?.EUR ?? 1)).toFixed(0)} XAF`} />
+                  <RateChip label="1 EUR" value={`${(1 / (rates.rates?.EUR ?? 1)).toFixed(4)} USD`} />
                 </View>
                 <Text style={styles.ratesNote}>
                   XAF indexé à l'EUR · USD mis à jour le {new Date(rates.fetched_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}

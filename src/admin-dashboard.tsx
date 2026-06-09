@@ -36,7 +36,7 @@ export function AdminDashboard() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const safe = async <T>(fn: () => Promise<T>): Promise<T | null> => {
+    const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch { return null; }
     };
     const [a, s, u, p] = await Promise.all([

@@ -230,7 +230,7 @@ export default function FeeConfigScreen() {
             <Button
               testID="fee-reload"
               label="Recharger"
-              variant="outline"
+              variant="ghost"
               onPress={load}
               icon={<RefreshCw color={Colors.secondary} size={16} />}
             />

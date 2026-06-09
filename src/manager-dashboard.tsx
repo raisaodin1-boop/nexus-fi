@@ -34,7 +34,7 @@ export function ManagerDashboard() {
   const [unread, setUnread] = useState(0);
 
   const load = useCallback(async () => {
-    const safe = async <T>(fn: () => Promise<T>): Promise<T | null> => {
+    const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch { return null; }
     };
     const [o, s, n] = await Promise.all([

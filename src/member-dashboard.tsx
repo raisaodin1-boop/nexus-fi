@@ -44,7 +44,7 @@ export function MemberDashboard() {
   const [savingsSeries, setSavingsSeries] = useState<Series | null>(null);
 
   const load = useCallback(async () => {
-    const safe = async <T>(fn: () => Promise<T>): Promise<T | null> => {
+    const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch { return null; }
     };
     const [s, t, i, n, ss, al] = await Promise.all([
