@@ -551,6 +551,80 @@ export async function depositSaving(id: string, amount: number, note?: string) {
   return { detail: "Dépôt enregistré" };
 }
 
+/* ── Savings Analytics ───────────────────────────────────── */
+
+import { analyzePattern, predictGoal, buildPeerStats, buildMonthlyHistogram } from "@/src/savings-ai";
+
+export async function getSavingsAnalytics(goalId: string) {
+  const me = await uid();
+  const sb = getSupabase();
+
+  // Fetch goal + all its deposits
+  const [goalRes, txRes] = await Promise.all([
+    sb.from("savings_goals").select("*").eq("id", goalId).eq("user_id", me).single(),
+    sb.from("savings_transactions").select("amount, created_at").eq("goal_id", goalId).order("created_at", { ascending: true }),
+  ]);
+  if (goalRes.error || !goalRes.data) throw new Error("Objectif introuvable.");
+
+  const goal = goalRes.data;
+  const deposits = (txRes.data ?? []).map((t: any) => ({ amount: Number(t.amount), created_at: t.created_at as string }));
+
+  const prediction = predictGoal(goal, deposits);
+  const histogram = buildMonthlyHistogram(deposits, 6);
+
+  // Peer comparison — fetch anonymous aggregate data for goals in same target range
+  const rangeMin = goal.target_amount * 0.5;
+  const rangeMax = goal.target_amount * 2;
+  const { data: peerGoals } = await sb
+    .from("savings_goals")
+    .select("id, current_amount, created_at")
+    .neq("user_id", me)
+    .gte("target_amount", rangeMin)
+    .lte("target_amount", rangeMax)
+    .eq("is_active", true)
+    .limit(100);
+
+  // For each peer goal, estimate monthly avg from current_amount / months active
+  const peerRates = (peerGoals ?? []).map((g: any) => {
+    const ageMonths = Math.max(1, (Date.now() - new Date(g.created_at).getTime()) / (30 * 86400000));
+    return { avg_monthly: Number(g.current_amount) / ageMonths };
+  });
+
+  const peerStats = buildPeerStats(prediction.pattern.avg_monthly_xaf, peerRates);
+
+  return { goal, prediction, histogram, peer_stats: peerStats };
+}
+
+export async function getAllSavingsAnalytics() {
+  const me = await uid();
+  const { data: goals } = await getSupabase()
+    .from("savings_goals")
+    .select("id, name, current_amount, target_amount, deadline, created_at, is_active")
+    .eq("user_id", me)
+    .order("created_at", { ascending: false });
+
+  if (!goals?.length) return [];
+
+  // Fetch all transactions for all goals in one query
+  const goalIds = goals.map((g: any) => g.id);
+  const { data: allTxs } = await getSupabase()
+    .from("savings_transactions")
+    .select("goal_id, amount, created_at")
+    .in("goal_id", goalIds)
+    .order("created_at", { ascending: true });
+
+  const txsByGoal: Record<string, { amount: number; created_at: string }[]> = {};
+  for (const tx of allTxs ?? []) {
+    if (!txsByGoal[tx.goal_id]) txsByGoal[tx.goal_id] = [];
+    txsByGoal[tx.goal_id].push({ amount: Number(tx.amount), created_at: tx.created_at });
+  }
+
+  return goals.map((g: any) => ({
+    goal: g,
+    prediction: predictGoal(g, txsByGoal[g.id] ?? []),
+  }));
+}
+
 /* ── IDENTITY ────────────────────────────────────────────── */
 
 async function addIdentityEvent(user_id: string, event_type: string, points: number) {

@@ -103,6 +103,10 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"  && s[0] === "credit-score" && !s[1])                         return (await db.getCreditScore()) as T;
     if (method === "GET"  && s[0] === "credit-score" && s[1] === "history")            return (await db.getCreditScoreHistory()) as T;
 
+    // ── Savings analytics
+    if (method === "GET" && s[0] === "savings" && s[1] === "analytics" && !s[2])       return (await db.getAllSavingsAnalytics()) as T;
+    if (method === "GET" && s[0] === "savings" && s[1] && s[2] === "analytics")        return (await db.getSavingsAnalytics(s[1])) as T;
+
     // ── Wallet
     if (method === "GET"  && s[0] === "wallet" && !s[1])                               return (await db.getWallet()) as T;
     if (method === "GET"  && s[0] === "wallet" && s[1] === "transactions")             return (await db.getWalletTransactions()) as T;

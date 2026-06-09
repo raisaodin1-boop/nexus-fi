@@ -2,6 +2,8 @@ import { useCallback, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import { TrendingUp } from "lucide-react-native";
 import { api, ApiError, formatXAF } from "@/src/api";
 import { Button, Card, Field } from "@/src/ui";
 import { Colors, Spacing } from "@/src/theme";
@@ -88,6 +90,18 @@ export default function SavingsDetail() {
             <Text style={styles.progressText}>{progress}% atteint</Text>
           </View>
         </Card>
+
+        {/* ── Analytics CTA ── */}
+        <TouchableOpacity onPress={() => router.push(`/savings/analytics?id=${id}` as any)} activeOpacity={0.85} style={{ marginHorizontal: 0, marginBottom: 0 }}>
+          <LinearGradient colors={["#0B1F3A", "#1D4ED8"]} style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14, marginHorizontal: 0, borderRadius: 14, marginBottom: 12 }}>
+            <TrendingUp size={20} color="#fff" />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>Analyse IA de l'objectif</Text>
+              <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: 11, marginTop: 1 }}>Prédiction · Patterns · Comparaison membres</Text>
+            </View>
+            <Text style={{ color: "#fff", fontSize: 20, fontWeight: "300" }}>›</Text>
+          </LinearGradient>
+        </TouchableOpacity>
 
         <Text style={styles.section}>Déposer des fonds</Text>
         <Card>
