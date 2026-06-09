@@ -53,14 +53,26 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"   && s[0] === "users" && s[1] === "me" && s[2] === "kyc")      return (await db.getKycStatus()) as T;
 
     // ── Tontines
-    if (method === "GET"  && s[0] === "tontines" && !s[1])                              return (await db.listTontines()) as T;
-    if (method === "POST" && s[0] === "tontines" && !s[1])                              return (await db.createTontine(body)) as T;
-    if (method === "POST" && s[0] === "tontines" && s[1] === "join")                   return (await db.joinTontine(body?.invite_code)) as T;
-    if (method === "GET"  && s[0] === "tontines" && s[1] === "directory")               return (await db.listPublicTontines()) as T;
-    if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "profile")         return (await db.getPublicTontineProfile(s[1])) as T;
-    if (method === "POST" && s[0] === "tontines" && s[1] === "request-join")            return (await db.requestJoinTontine(body?.tontine_id)) as T;
-    if (method === "GET"  && s[0] === "tontines" && s[1] && !s[2])                     return (await db.getTontine(s[1])) as T;
-    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "contribute")     return (await db.contributeTontine(s[1], Number(body?.amount))) as T;
+    if (method === "GET"  && s[0] === "tontines" && !s[1])                                    return (await db.listTontines()) as T;
+    if (method === "POST" && s[0] === "tontines" && !s[1])                                    return (await db.createTontineSecure(body)) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] === "join")                          return (await db.joinTontineSecure(body?.invite_code)) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] === "directory")                     return (await db.listPublicTontines()) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "profile")               return (await db.getPublicTontineProfile(s[1])) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] === "request-join")                  return (await db.requestJoinTontine(body?.tontine_id)) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] && !s[2])                            return (await db.getTontine(s[1])) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "contribute")            return (await db.contributeTontineSecure(s[1], Number(body?.amount))) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "leaderboard")           return (await db.getTontineLeaderboard(s[1])) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "escrow")                return (await db.getEscrowStatus(s[1])) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "escrow-dispute")        return (await db.reportEscrowDispute(s[1], body?.reason ?? "")) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "reserve")               return (await db.getTontineReserveFund(s[1])) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "overdue")               return (await db.getOverdueMembers(s[1])) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "vote-exclusion")        return (await db.voteExclusion(s[1], body?.user_id, body?.reason ?? "")) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "exclusion-votes")       return (await db.getExclusionVotes(s[1])) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "rate-creator")          return (await db.rateCreator(s[1], Number(body?.rating), body?.comment)) as T;
+    if (method === "GET"  && s[0] === "creator-reputation" && s[1])                           return (await db.getCreatorReputation(s[1])) as T;
+    if (method === "POST" && s[0] === "security" && s[1] === "device-fingerprint")            return (await db.registerDeviceFingerprint(body?.fingerprint)) as T;
+    if (method === "POST" && s[0] === "security" && s[1] === "flag-user")                     return (await db.flagUserAsFraud(body?.user_id, body?.reason)) as T;
+    if (method === "GET"  && s[0] === "security" && s[1] === "trust-flags" && s[2])           return (await db.getUserTrustFlags(s[2])) as T;
 
     // ── Associations
     if (method === "GET"  && s[0] === "associations" && !s[1])                         return (await db.listAssociations()) as T;

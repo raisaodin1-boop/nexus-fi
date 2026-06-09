@@ -1836,3 +1836,515 @@ export async function mintCertificateHash(docId: string, docType: string): Promi
     polygon_stub: `0x${hexHash}`, // Stub — production would be actual Polygon tx hash
   };
 }
+
+/* ══════════════════════════════════════════════════════════════
+   TONTINE SECURITY SYSTEM
+   Level 1 — Opportunist prevention
+   Level 2 — Recidivist friction
+   Level 3 — Community coverage
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Constants ───────────────────────────────────────────────── */
+
+const TRUST_SCORE_PUBLIC_TONTINE = 300;     // minimum to create a public tontine
+const TRUST_SCORE_HIGH_VALUE     = 600;     // minimum for tontines > HIGH_VALUE_THRESHOLD
+const HIGH_VALUE_THRESHOLD       = 100_000; // XAF per cycle
+const KYC_REQUIRED_THRESHOLD     = 50_000;  // XAF per cycle requires KYC
+const ESCROW_HOURS               = 72;      // first cycle held for 72h
+const RESERVE_FUND_PCT           = 0.02;    // 2% of each contribution → reserve
+
+/* ── Level 1: Security-aware createTontine ───────────────────── */
+
+export async function createTontineSecure(body: Record<string, any>) {
+  const me = await uid();
+  const sb = getSupabase();
+
+  // Check blacklist
+  const { data: profile } = await sb.from("profiles").select("trust_flags, kyc_status, phone").eq("id", me).single();
+  if ((profile?.trust_flags ?? []).includes("blacklisted"))
+    throw { status: 403, detail: "Votre compte est suspendu pour fraude. Contactez le support." };
+
+  const amountPerCycle = Number(body.amount_per_cycle ?? 0);
+
+  // Trust Score gate for public tontines
+  if (body.is_public) {
+    const tsRes = await sb.from("identity_scores").select("score").eq("user_id", me).maybeSingle();
+    const score = tsRes?.data?.score ?? 0;
+    const required = amountPerCycle >= HIGH_VALUE_THRESHOLD
+      ? TRUST_SCORE_HIGH_VALUE
+      : TRUST_SCORE_PUBLIC_TONTINE;
+    if (score < required)
+      throw { status: 403, detail: `Trust Score insuffisant pour une tontine publique (requis: ${required}, votre score: ${score}). Participez à des tontines privées d'abord.` };
+  }
+
+  // KYC gate for high-value tontines
+  if (amountPerCycle >= KYC_REQUIRED_THRESHOLD) {
+    const kycStatus = profile?.kyc_status ?? null;
+    if (kycStatus !== "approved")
+      throw { status: 403, detail: `Vérification d'identité (KYC) obligatoire pour les tontines supérieures à ${KYC_REQUIRED_THRESHOLD.toLocaleString()} XAF/cycle.` };
+  }
+
+  const code = inviteCode();
+  const { data, error } = await sb.from("tontines")
+    .insert({
+      ...body,
+      owner_id: me,
+      invite_code: code,
+      reserve_fund: 0,
+      security_level: amountPerCycle >= HIGH_VALUE_THRESHOLD ? "high" : "standard",
+    })
+    .select()
+    .single();
+  throwSb(error);
+
+  // ── RULE: Creator goes LAST (position = max_members)
+  // We don't know how many will join, so we set a sentinel value.
+  // When all members have joined, the creator's position is updated to max.
+  const maxMembers = Number(body.max_members ?? 12);
+  await sb.from("tontine_members").insert({
+    tontine_id: data.id,
+    user_id: me,
+    role: "admin",
+    rotation_position: maxMembers, // creator always last
+    is_creator: true,
+  });
+
+  return data;
+}
+
+/* ── Level 1: Security-aware joinTontine ────────────────────── */
+
+export async function joinTontineSecure(invite_code: string) {
+  const me = await uid();
+  const sb = getSupabase();
+
+  // Check blacklist
+  const { data: profile } = await sb.from("profiles").select("trust_flags, kyc_status, device_fingerprint").eq("id", me).single();
+  if ((profile?.trust_flags ?? []).includes("blacklisted"))
+    throw { status: 403, detail: "Votre compte est suspendu. Contactez le support." };
+
+  const { data: tontine, error } = await sb.from("tontines")
+    .select("*").eq("invite_code", invite_code.trim().toUpperCase()).single();
+  if (error || !tontine) throw { status: 404, detail: "Code d'invitation invalide" };
+
+  // KYC gate
+  if (Number(tontine.amount_per_cycle) >= KYC_REQUIRED_THRESHOLD) {
+    if ((profile?.kyc_status ?? null) !== "approved")
+      throw { status: 403, detail: `Cette tontine requiert une vérification d'identité (cotisation ≥ ${KYC_REQUIRED_THRESHOLD.toLocaleString()} XAF).` };
+  }
+
+  // Check if device is flagged
+  if (profile?.device_fingerprint) {
+    const { data: flaggedDevice } = await sb.from("flagged_devices")
+      .select("id").eq("fingerprint", profile.device_fingerprint).maybeSingle();
+    if (flaggedDevice)
+      throw { status: 403, detail: "Appareil signalé pour activité frauduleuse." };
+  }
+
+  const { count } = await sb.from("tontine_members")
+    .select("*", { count: "exact", head: true }).eq("tontine_id", tontine.id);
+  if ((count ?? 0) >= tontine.max_members)
+    throw { status: 400, detail: "La tontine est complète" };
+
+  // Already a member?
+  const { count: alreadyIn } = await sb.from("tontine_members")
+    .select("*", { count: "exact", head: true }).eq("tontine_id", tontine.id).eq("user_id", me);
+  if ((alreadyIn ?? 0) > 0)
+    throw { status: 400, detail: "Vous êtes déjà membre de cette tontine" };
+
+  // Assign next available position (skip the creator's reserved last slot)
+  const nextPosition = (count ?? 0) + 1;
+  const { error: e2 } = await sb.from("tontine_members").insert({
+    tontine_id: tontine.id, user_id: me, role: "member", rotation_position: nextPosition,
+  });
+  throwSb(e2);
+
+  // Notify creator of new member
+  await sb.from("notifications").insert({
+    user_id: tontine.owner_id,
+    title: "Nouveau membre 🎉",
+    body: `Un nouveau membre a rejoint votre tontine "${tontine.name}".`,
+    type: "new_member",
+    metadata: { tontine_id: tontine.id },
+  });
+
+  return { tontine_id: tontine.id };
+}
+
+/* ── Level 1: Security-aware contributeTontine ──────────────── */
+
+export async function contributeTontineSecure(id: string, amount: number) {
+  const me = await uid();
+  const sb = getSupabase();
+
+  const { data: tontine } = await sb.from("tontines")
+    .select("current_cycle, amount_per_cycle, max_members, reserve_fund, owner_id, name")
+    .eq("id", id).single();
+  if (!tontine) throw { status: 404, detail: "Tontine introuvable" };
+
+  const cycle = tontine.current_cycle ?? 1;
+  const isFirstCycle = cycle === 1;
+
+  // Reserve fund: 2% withheld automatically
+  const reserveAmount = Math.round(amount * RESERVE_FUND_PCT);
+  const netAmount = amount - reserveAmount;
+
+  // Insert contribution
+  const { error } = await sb.from("tontine_contributions").insert({
+    tontine_id: id, user_id: me, amount: netAmount, cycle,
+    gross_amount: amount, reserve_amount: reserveAmount,
+  });
+  throwSb(error);
+
+  // Increment reserve fund on tontine
+  const currentReserve = Number(tontine.reserve_fund ?? 0);
+  await sb.from("tontines").update({ reserve_fund: currentReserve + reserveAmount }).eq("id", id);
+
+  // Mark member as up-to-date
+  await sb.from("tontine_members")
+    .update({ status: "a_jour", last_paid_cycle: cycle })
+    .eq("tontine_id", id).eq("user_id", me);
+
+  // If first cycle: create escrow record (hold disbursement for 72h)
+  if (isFirstCycle) {
+    const { count: paidCount } = await sb.from("tontine_contributions")
+      .select("*", { count: "exact", head: true }).eq("tontine_id", id).eq("cycle", 1);
+
+    const membersCount = Number(tontine.max_members ?? 12);
+    // When all members have paid cycle 1, create escrow
+    if ((paidCount ?? 0) >= membersCount - 1) { // -1 because we just inserted
+      const releaseAt = new Date(Date.now() + ESCROW_HOURS * 3600 * 1000).toISOString();
+      await sb.from("tontine_escrow").upsert({
+        tontine_id: id,
+        cycle: 1,
+        amount: netAmount * membersCount,
+        release_at: releaseAt,
+        status: "held",
+        dispute_count: 0,
+      });
+    }
+  }
+
+  await addIdentityEvent(me, "tontine_contribution", amount >= 50000 ? 1 : 0.5);
+  return { detail: "Contribution enregistrée", reserve_deducted: reserveAmount, net_amount: netAmount };
+}
+
+/* ── Level 1: Escrow management ─────────────────────────────── */
+
+export async function getEscrowStatus(tontineId: string) {
+  const { data } = await getSupabase().from("tontine_escrow")
+    .select("*").eq("tontine_id", tontineId).eq("cycle", 1).maybeSingle();
+  if (!data) return { status: "none" };
+
+  const now = new Date();
+  const releaseAt = new Date(data.release_at);
+  const hoursLeft = Math.max(0, (releaseAt.getTime() - now.getTime()) / 3600000);
+
+  return {
+    status: data.status,
+    release_at: data.release_at,
+    hours_left: Math.round(hoursLeft),
+    dispute_count: data.dispute_count ?? 0,
+    is_frozen: data.status === "disputed",
+    amount: data.amount,
+  };
+}
+
+export async function reportEscrowDispute(tontineId: string, reason: string) {
+  const me = await uid();
+  const sb = getSupabase();
+
+  const { data: escrow } = await sb.from("tontine_escrow")
+    .select("*").eq("tontine_id", tontineId).eq("cycle", 1).maybeSingle();
+  if (!escrow) throw { status: 404, detail: "Aucun escrow actif pour cette tontine" };
+
+  const newCount = (escrow.dispute_count ?? 0) + 1;
+  const newStatus = newCount >= 2 ? "disputed" : "held";
+
+  await sb.from("tontine_escrow").update({
+    dispute_count: newCount,
+    status: newStatus,
+  }).eq("tontine_id", tontineId).eq("cycle", 1);
+
+  // Log dispute
+  await sb.from("notifications").insert({
+    user_id: escrow.tontine_id,
+    title: `⚠️ Litige signalé — ${reason}`,
+    body: `Un membre a signalé un litige pour le cycle 1 de la tontine. Fonds gelés en attente de résolution.`,
+    type: "escrow_dispute",
+    metadata: { tontine_id: tontineId, reporter_id: me, reason, dispute_count: newCount },
+  });
+
+  return { status: newStatus, dispute_count: newCount, frozen: newStatus === "disputed" };
+}
+
+/* ── Level 2: Device fingerprint registration ───────────────── */
+
+export async function registerDeviceFingerprint(fingerprint: string) {
+  const me = await uid();
+  await getSupabase().from("profiles")
+    .update({ device_fingerprint: fingerprint }).eq("id", me);
+  return { registered: true };
+}
+
+/* ── Level 2: Blacklist & trust flags ───────────────────────── */
+
+export async function flagUserAsFraud(targetUserId: string, reason: string) {
+  const me = await uid();
+  const sb = getSupabase();
+
+  // Only admins or tontine managers can flag
+  const { data: caller } = await sb.from("profiles").select("role").eq("id", me).single();
+  if (!["super_admin", "tontine_manager"].includes(caller?.role ?? ""))
+    throw { status: 403, detail: "Accès refusé" };
+
+  // Update trust_flags array
+  const { data: target } = await sb.from("profiles").select("trust_flags, full_name").eq("id", targetUserId).single();
+  const currentFlags: string[] = target?.trust_flags ?? [];
+  if (!currentFlags.includes("blacklisted")) currentFlags.push("blacklisted");
+  if (!currentFlags.includes("fraud_confirmed")) currentFlags.push("fraud_confirmed");
+
+  await sb.from("profiles").update({
+    trust_flags: currentFlags,
+    is_active: false,
+  }).eq("id", targetUserId);
+
+  // Store device fingerprint in flagged_devices
+  const { data: targetProfile } = await sb.from("profiles")
+    .select("device_fingerprint, phone").eq("id", targetUserId).single();
+  if (targetProfile?.device_fingerprint) {
+    await sb.from("flagged_devices").upsert({
+      fingerprint: targetProfile.device_fingerprint,
+      user_id: targetUserId,
+      reason,
+      flagged_at: new Date().toISOString(),
+    });
+  }
+
+  // Record in identity events — Trust Score → 0
+  await sb.from("identity_events").insert({
+    user_id: targetUserId,
+    event_type: "fraud_flag",
+    score_delta: -9999, // effectively zeroes the score
+    metadata: { reason, flagged_by: me },
+  } as any);
+
+  // Notify target
+  await sb.from("notifications").insert({
+    user_id: targetUserId,
+    title: "⛔ Compte suspendu",
+    body: `Votre compte a été suspendu pour activité frauduleuse : ${reason}. Contactez support@hodix.app.`,
+    type: "account_suspended",
+  });
+
+  return { flagged: true, name: target?.full_name };
+}
+
+export async function getUserTrustFlags(userId: string) {
+  const { data } = await getSupabase().from("profiles")
+    .select("trust_flags, full_name, phone").eq("id", userId).single();
+  return {
+    flags: data?.trust_flags ?? [],
+    is_blacklisted: (data?.trust_flags ?? []).includes("blacklisted"),
+    has_fraud_confirmed: (data?.trust_flags ?? []).includes("fraud_confirmed"),
+    name: data?.full_name,
+  };
+}
+
+/* ── Level 3: Exclusion vote ────────────────────────────────── */
+
+export async function voteExclusion(tontineId: string, targetUserId: string, reason: string) {
+  const me = await uid();
+  const sb = getSupabase();
+
+  // Verify voter is a member
+  const { count: isMember } = await sb.from("tontine_members")
+    .select("*", { count: "exact", head: true })
+    .eq("tontine_id", tontineId).eq("user_id", me);
+  if (!isMember) throw { status: 403, detail: "Vous devez être membre pour voter" };
+
+  // Record vote (upsert prevents double voting)
+  await sb.from("exclusion_votes").upsert({
+    tontine_id: tontineId,
+    target_user_id: targetUserId,
+    voter_id: me,
+    reason,
+    voted_at: new Date().toISOString(),
+  });
+
+  // Count total votes vs total members
+  const [{ count: voteCount }, { count: memberCount }] = await Promise.all([
+    sb.from("exclusion_votes").select("*", { count: "exact", head: true })
+      .eq("tontine_id", tontineId).eq("target_user_id", targetUserId),
+    sb.from("tontine_members").select("*", { count: "exact", head: true })
+      .eq("tontine_id", tontineId),
+  ]);
+
+  const threshold = Math.ceil((memberCount ?? 1) * 0.6); // 60% majority
+  const excluded = (voteCount ?? 0) >= threshold;
+
+  if (excluded) {
+    // Execute exclusion
+    await sb.from("tontine_members")
+      .update({ status: "exclu", excluded_at: new Date().toISOString(), exclusion_reason: reason })
+      .eq("tontine_id", tontineId).eq("user_id", targetUserId);
+
+    // Drop Trust Score
+    await addIdentityEvent(targetUserId, "exclusion_vote_lost", -50);
+
+    // Notify excluded
+    const { data: tontine } = await sb.from("tontines").select("name").eq("id", tontineId).single();
+    await sb.from("notifications").insert({
+      user_id: targetUserId,
+      title: "⛔ Exclusion de tontine",
+      body: `Vous avez été exclu(e) de la tontine "${tontine?.name ?? ""}" par vote des membres.`,
+      type: "exclusion",
+      metadata: { tontine_id: tontineId, reason },
+    });
+  }
+
+  return {
+    votes: voteCount ?? 0,
+    threshold,
+    excluded,
+    percent: Math.round(((voteCount ?? 0) / (memberCount ?? 1)) * 100),
+  };
+}
+
+export async function getExclusionVotes(tontineId: string) {
+  const sb = getSupabase();
+  const { data } = await sb.from("exclusion_votes")
+    .select("target_user_id, voter_id, reason, voted_at, profiles!target_user_id(full_name)")
+    .eq("tontine_id", tontineId);
+
+  // Group by target
+  const grouped: Record<string, { name: string; count: number; reasons: string[] }> = {};
+  for (const v of (data ?? []) as any[]) {
+    const tid = v.target_user_id;
+    if (!grouped[tid]) grouped[tid] = { name: v.profiles?.full_name ?? "Membre", count: 0, reasons: [] };
+    grouped[tid].count++;
+    if (v.reason && !grouped[tid].reasons.includes(v.reason)) grouped[tid].reasons.push(v.reason);
+  }
+
+  const { count: memberCount } = await sb.from("tontine_members")
+    .select("*", { count: "exact", head: true }).eq("tontine_id", tontineId);
+  const threshold = Math.ceil((memberCount ?? 1) * 0.6);
+
+  return Object.entries(grouped).map(([userId, g]) => ({
+    user_id: userId,
+    display_name: g.name,
+    vote_count: g.count,
+    threshold,
+    percent: Math.round((g.count / (memberCount ?? 1)) * 100),
+    reasons: g.reasons,
+    will_be_excluded: g.count >= threshold,
+  }));
+}
+
+/* ── Level 3: Creator rating ────────────────────────────────── */
+
+export async function rateCreator(tontineId: string, rating: number, comment?: string) {
+  const me = await uid();
+  const sb = getSupabase();
+
+  if (rating < 1 || rating > 5) throw { status: 400, detail: "Note entre 1 et 5" };
+
+  const { data: tontine } = await sb.from("tontines").select("owner_id").eq("id", tontineId).single();
+  if (!tontine) throw { status: 404, detail: "Tontine introuvable" };
+
+  // Voter must be a past/current member
+  const { count } = await sb.from("tontine_members")
+    .select("*", { count: "exact", head: true }).eq("tontine_id", tontineId).eq("user_id", me);
+  if (!count) throw { status: 403, detail: "Vous devez avoir été membre pour noter" };
+
+  await sb.from("creator_ratings").upsert({
+    tontine_id: tontineId,
+    rater_id: me,
+    creator_id: tontine.owner_id,
+    rating,
+    comment: comment ?? null,
+    rated_at: new Date().toISOString(),
+  });
+
+  return { rated: true };
+}
+
+export async function getCreatorReputation(creatorId: string) {
+  const { data } = await getSupabase().from("creator_ratings")
+    .select("rating, comment, rated_at").eq("creator_id", creatorId);
+
+  const ratings = (data ?? []).map((r: any) => Number(r.rating));
+  if (!ratings.length) return { avg: null, count: 0, distribution: {}, comments: [] };
+
+  const avg = ratings.reduce((s, r) => s + r, 0) / ratings.length;
+  const distribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  for (const r of ratings) distribution[r] = (distribution[r] ?? 0) + 1;
+
+  return {
+    avg: Math.round(avg * 10) / 10,
+    count: ratings.length,
+    distribution,
+    comments: (data ?? [])
+      .filter((r: any) => r.comment)
+      .slice(0, 5)
+      .map((r: any) => ({ text: r.comment, date: r.rated_at })),
+  };
+}
+
+/* ── Level 3: Reserve fund status ───────────────────────────── */
+
+export async function getTontineReserveFund(tontineId: string) {
+  const me = await uid();
+  const sb = getSupabase();
+
+  const { data: tontine } = await sb.from("tontines")
+    .select("reserve_fund, amount_per_cycle, max_members, owner_id, name")
+    .eq("id", tontineId).single();
+  if (!tontine) throw { status: 404, detail: "Tontine introuvable" };
+
+  const memberCount = Number(tontine.max_members ?? 1);
+  const fullCycleFund = Number(tontine.amount_per_cycle) * memberCount;
+  const coveragePercent = fullCycleFund > 0
+    ? Math.min(100, Math.round((Number(tontine.reserve_fund) / fullCycleFund) * 100))
+    : 0;
+
+  return {
+    reserve: Number(tontine.reserve_fund ?? 0),
+    full_cycle_cost: fullCycleFund,
+    coverage_percent: coveragePercent,
+    covers_full_cycle: Number(tontine.reserve_fund) >= fullCycleFund,
+    is_owner: tontine.owner_id === me,
+  };
+}
+
+/* ── Overdue detection ───────────────────────────────────────── */
+
+export async function getOverdueMembers(tontineId: string) {
+  const sb = getSupabase();
+  const { data: tontine } = await sb.from("tontines")
+    .select("current_cycle, cycle_deadline, owner_id").eq("id", tontineId).single();
+  if (!tontine) return [];
+
+  const cycle = tontine.current_cycle ?? 1;
+  const deadline = tontine.cycle_deadline ? new Date(tontine.cycle_deadline) : null;
+  const now = new Date();
+  const isOverdue = deadline && now > deadline;
+
+  const { data: members } = await sb.from("tontine_members")
+    .select("user_id, last_paid_cycle, status, profiles(full_name)")
+    .eq("tontine_id", tontineId)
+    .neq("status", "exclu");
+
+  return (members ?? [])
+    .filter((m: any) => (m.last_paid_cycle ?? 0) < cycle)
+    .map((m: any) => ({
+      user_id: m.user_id,
+      name: m.profiles?.full_name ?? "Membre",
+      last_paid_cycle: m.last_paid_cycle ?? 0,
+      cycles_late: cycle - (m.last_paid_cycle ?? 0),
+      is_overdue: isOverdue,
+      days_overdue: deadline && isOverdue
+        ? Math.round((now.getTime() - deadline.getTime()) / 86400000)
+        : 0,
+    }));
+}

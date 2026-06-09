@@ -39,8 +39,9 @@ interface Member {
   role: "admin" | "member";
   rotation_position: number;
   has_received: boolean;
-  status: "a_jour" | "en_retard" | "suspendu";
+  status: "a_jour" | "en_retard" | "suspendu" | "exclu";
   cycles_paid: number;
+  cycles_late?: number;
 }
 
 interface Contribution {
@@ -662,9 +663,19 @@ export function TontineDetailView({ id }: { id: string }) {
                   <Text style={styles.rotAvatarLetter}>{m.full_name?.[0]?.toUpperCase()}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                     {m.role === "admin" ? <Crown color={Colors.accent} size={12} /> : <UsersIcon color={Colors.textSubtle} size={12} />}
                     <Text style={styles.rotName}>{m.full_name}</Text>
+                    {m.status === "exclu" && (
+                      <View style={{ backgroundColor: "#FEE2E2", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ color: "#EF4444", fontSize: 10, fontWeight: "700" }}>⛔ Exclu</Text>
+                      </View>
+                    )}
+                    {(m.status === "en_retard" || (m.cycles_late ?? 0) > 0) && m.status !== "exclu" && (
+                      <View style={{ backgroundColor: "#FEF3C7", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ color: "#D97706", fontSize: 10, fontWeight: "700" }}>⚠️ En retard</Text>
+                      </View>
+                    )}
                   </View>
                   <Text style={styles.rotStatus}>
                     Pos. #{m.rotation_position} · {m.cycles_paid ?? 0} cycle(s) payé(s)
