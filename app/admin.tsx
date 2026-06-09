@@ -1,4 +1,4 @@
-// Admin Console — full management panel
+// Admin Console — premium redesign
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
@@ -16,21 +16,22 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import {
-  ArrowLeft, Users, ShieldCheck, ShieldAlert, Crown, CheckCircle, XCircle,
-  Search, Send, Bell, ChevronRight, BarChart3,
+  ArrowLeft, Users, ShieldCheck, Crown, BarChart3, Bell,
+  CheckCircle, XCircle, Send, ChevronRight, ShieldAlert,
+  Search, Zap,
 } from "lucide-react-native";
 
 import { api, ApiError } from "@/src/api";
 import { useAuth } from "@/src/auth-context";
-import { Card, SectionTitle, SkeletonCard } from "@/src/ui";
-import { Colors, Radius, Spacing, Shadow } from "@/src/theme";
+import { SkeletonCard } from "@/src/ui";
+import { Colors, Radius, Spacing } from "@/src/theme";
 import { useToast } from "@/src/toast";
 
 type Tab = "users" | "kyc" | "promotions" | "tontines" | "broadcast";
 
 interface AdminUser {
   id: string; email: string; full_name: string; role: string;
-  is_active: boolean; created_at: string;
+  is_active?: boolean | null; created_at: string;
 }
 interface KycEntry {
   user_id: string; full_name: string; email: string; kyc_status: string; created_at: string;
@@ -40,6 +41,40 @@ interface PromoRequest {
 }
 interface AdminTontine {
   id: string; name: string; invite_code: string; status: string; members_count: number; created_at: string;
+}
+
+const ROLE_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
+  super_admin: { label: "Super Admin", bg: "#7C3AED", color: "#fff" },
+  tontine_manager: { label: "Manager", bg: "#F59E0B", color: "#fff" },
+  admin: { label: "Admin", bg: "#3B82F6", color: "#fff" },
+  member: { label: "Membre", bg: "#E5E7EB", color: "#374151" },
+};
+
+const KYC_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
+  verified: { label: "Vérifié", bg: "#D1FAE5", color: "#065F46" },
+  pending_review: { label: "En attente", bg: "#FEF3C7", color: "#92400E" },
+  rejected: { label: "Rejeté", bg: "#FEE2E2", color: "#991B1B" },
+  not_started: { label: "Non démarré", bg: "#F3F4F6", color: "#6B7280" },
+};
+
+function Avatar({ name, size = 40, bg }: { name: string; size?: number; bg?: string }) {
+  const initials = name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase() || "?";
+  const colors = ["#6366F1", "#8B5CF6", "#EC4899", "#F59E0B", "#10B981", "#3B82F6"];
+  const colorIndex = name.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % colors.length;
+  const bgColor = bg ?? colors[colorIndex];
+  return (
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: bgColor, alignItems: "center", justifyContent: "center" }}>
+      <Text style={{ color: "#fff", fontWeight: "800", fontSize: size * 0.35 }}>{initials}</Text>
+    </View>
+  );
+}
+
+function StatusBadge({ config }: { config: { label: string; bg: string; color: string } }) {
+  return (
+    <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: config.bg }}>
+      <Text style={{ fontSize: 11, fontWeight: "700", color: config.color }}>{config.label}</Text>
+    </View>
+  );
 }
 
 export default function AdminConsole() {
@@ -61,10 +96,11 @@ export default function AdminConsole() {
   if (user?.role !== "super_admin") {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
-        <View style={styles.center}>
-          <ShieldAlert color={Colors.danger} size={40} />
-          <Text style={styles.denied}>Accès refusé</Text>
-        </View>
+        <LinearGradient colors={["#0F172A", "#1E293B"]} style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 16 }}>
+          <ShieldAlert color="#EF4444" size={48} />
+          <Text style={{ color: "#fff", fontSize: 20, fontWeight: "900" }}>Accès refusé</Text>
+          <Text style={{ color: "rgba(255,255,255,0.5)", fontSize: 14 }}>Zone réservée aux super admins</Text>
+        </LinearGradient>
       </SafeAreaView>
     );
   }
@@ -94,24 +130,18 @@ export default function AdminConsole() {
 
   const handleKyc = async (userId: string, approve: boolean) => {
     try {
-      const ep = approve ? "/admin/kyc/approve" : "/admin/kyc/reject";
-      await api.post(ep, { user_id: userId });
-      show(approve ? "KYC approuvé" : "KYC rejeté", approve ? "success" : "error");
+      await api.post(approve ? "/admin/kyc/approve" : "/admin/kyc/reject", { user_id: userId });
+      show(approve ? "KYC approuvé ✓" : "KYC rejeté", approve ? "success" : "error");
       load();
-    } catch (e) {
-      show(e instanceof ApiError ? e.detail : "Erreur", "error");
-    }
+    } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
   };
 
   const handlePromotion = async (userId: string, approve: boolean) => {
     try {
-      const ep = approve ? "/admin/promotion/approve" : "/admin/promotion/reject";
-      await api.post(ep, { user_id: userId });
+      await api.post(approve ? "/admin/promotion/approve" : "/admin/promotion/reject", { user_id: userId });
       show(approve ? "Promotion accordée !" : "Demande refusée", approve ? "success" : "error");
       load();
-    } catch (e) {
-      show(e instanceof ApiError ? e.detail : "Erreur", "error");
-    }
+    } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
   };
 
   const handleRoleChange = async (userId: string, newRole: string) => {
@@ -119,9 +149,7 @@ export default function AdminConsole() {
       await api.patch("/admin/users/role", { user_id: userId, role: newRole });
       show("Rôle mis à jour", "success");
       load();
-    } catch (e) {
-      show(e instanceof ApiError ? e.detail : "Erreur", "error");
-    }
+    } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
   };
 
   const handleDeactivate = (userId: string) => {
@@ -130,9 +158,7 @@ export default function AdminConsole() {
         await api.post("/admin/users/deactivate", { user_id: userId });
         show("Compte désactivé", "success");
         load();
-      } catch (e) {
-        show(e instanceof ApiError ? e.detail : "Erreur", "error");
-      }
+      } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
     };
     if (Platform.OS === "web") {
       if (window.confirm("Désactiver ce compte ?")) doIt();
@@ -145,25 +171,20 @@ export default function AdminConsole() {
   };
 
   const handleBroadcast = async () => {
-    if (!broadcastTitle.trim() || !broadcastBody.trim()) {
-      show("Remplissez le titre et le message", "error"); return;
-    }
+    if (!broadcastTitle.trim() || !broadcastBody.trim()) { show("Remplissez le titre et le message", "error"); return; }
     setBroadcasting(true);
     try {
       await api.post("/admin/broadcast", { title: broadcastTitle.trim(), body: broadcastBody.trim() });
       show("Notification envoyée à tous les membres !", "success");
       setBroadcastTitle(""); setBroadcastBody("");
-    } catch (e) {
-      show(e instanceof ApiError ? e.detail : "Erreur", "error");
-    } finally {
-      setBroadcasting(false);
-    }
+    } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
+    finally { setBroadcasting(false); }
   };
 
-  const TABS: { key: Tab; label: string; icon: any }[] = [
-    { key: "users", label: "Membres", icon: Users },
-    { key: "kyc", label: "KYC", icon: ShieldCheck },
-    { key: "promotions", label: "Promotions", icon: Crown },
+  const TABS: { key: Tab; label: string; icon: any; count?: number }[] = [
+    { key: "users", label: "Membres", icon: Users, count: users.length || undefined },
+    { key: "kyc", label: "KYC", icon: ShieldCheck, count: kyc.filter(k => k.kyc_status === "pending_review").length || undefined },
+    { key: "promotions", label: "Promos", icon: Crown, count: promos.filter(p => p.status === "pending").length || undefined },
     { key: "tontines", label: "Tontines", icon: BarChart3 },
     { key: "broadcast", label: "Broadcast", icon: Bell },
   ];
@@ -176,35 +197,53 @@ export default function AdminConsole() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       {/* Header */}
-      <LinearGradient colors={[Colors.primary, Colors.gradMid]} style={styles.header}>
+      <LinearGradient colors={["#0F172A", "#1E3A5F"]} style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <ArrowLeft color="#fff" size={22} />
+          <ArrowLeft color="#fff" size={20} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>Console Super Admin</Text>
-          <Text style={styles.headerSub}>Hodix Control Center</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Zap color="#F5C842" size={14} fill="#F5C842" />
+            <Text style={styles.headerEyebrow}>HODIX CONTROL CENTER</Text>
+          </View>
+          <Text style={styles.headerTitle}>Console Admin</Text>
         </View>
-        <View style={styles.adminBadge}>
-          <ShieldAlert color={Colors.accent} size={16} />
-        </View>
+        <Avatar name={user?.full_name ?? "A"} size={38} bg="#6366F1" />
+      </LinearGradient>
+
+      {/* Stats strip */}
+      <LinearGradient colors={["#1E3A5F", "#0F172A"]} style={styles.statsStrip}>
+        {[
+          { label: "Membres", value: users.length, color: "#60A5FA" },
+          { label: "KYC pending", value: kyc.filter(k => k.kyc_status === "pending_review").length, color: "#FBBF24" },
+          { label: "Tontines", value: tontines.length, color: "#34D399" },
+        ].map((s) => (
+          <View key={s.label} style={styles.statItem}>
+            <Text style={[styles.statValue, { color: s.color }]}>{s.value}</Text>
+            <Text style={styles.statLabel}>{s.label}</Text>
+          </View>
+        ))}
       </LinearGradient>
 
       {/* Tabs */}
-      <ScrollView
-        horizontal showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.tabsRow}
-      >
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsRow} style={styles.tabsScroll}>
         {TABS.map((t) => {
           const Icon = t.icon;
           const active = t.key === tab;
           return (
-            <TouchableOpacity
-              key={t.key}
-              onPress={() => setTab(t.key)}
-              style={[styles.tabBtn, active && styles.tabBtnActive]}
-            >
-              <Icon color={active ? "#fff" : Colors.textMuted} size={14} />
-              <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{t.label}</Text>
+            <TouchableOpacity key={t.key} onPress={() => setTab(t.key)} style={[styles.tabBtn, active && styles.tabBtnActive]} activeOpacity={0.75}>
+              {active
+                ? <LinearGradient colors={["#6366F1", "#8B5CF6"]} style={styles.tabBtnGrad}>
+                    <Icon color="#fff" size={13} />
+                    <Text style={styles.tabLabelActive}>{t.label}</Text>
+                    {!!t.count && <View style={styles.tabBadge}><Text style={styles.tabBadgeText}>{t.count}</Text></View>}
+                  </LinearGradient>
+                : <>
+                    <Icon color={Colors.textMuted} size={13} />
+                    <Text style={styles.tabLabel}>{t.label}</Text>
+                    {!!t.count && <View style={[styles.tabBadge, { backgroundColor: Colors.danger }]}><Text style={styles.tabBadgeText}>{t.count}</Text></View>}
+                  </>
+              }
             </TouchableOpacity>
           );
         })}
@@ -218,7 +257,7 @@ export default function AdminConsole() {
       ) : tab === "users" ? (
         <View style={{ flex: 1 }}>
           <View style={styles.searchRow}>
-            <Search color={Colors.textMuted} size={16} />
+            <Search color={Colors.textMuted} size={15} />
             <TextInput
               style={styles.searchInput}
               value={search}
@@ -230,36 +269,49 @@ export default function AdminConsole() {
           <FlatList
             data={filteredUsers}
             keyExtractor={(u) => u.id}
-            contentContainerStyle={{ padding: Spacing.xl, gap: 10, paddingBottom: 100 }}
-            renderItem={({ item: u }) => (
-              <Card style={{ padding: 14 }}>
-                <Text style={styles.userName}>{u.full_name}</Text>
-                <Text style={styles.userEmail}>{u.email}</Text>
-                <View style={styles.userMeta}>
-                  <View style={[styles.rolePill, { backgroundColor: u.role === "super_admin" ? Colors.danger : u.role === "tontine_manager" ? Colors.accent : Colors.border }]}>
-                    <Text style={[styles.rolePillText, { color: u.role !== "member" ? "#fff" : Colors.text }]}>{u.role}</Text>
+            contentContainerStyle={{ paddingHorizontal: Spacing.xl, paddingBottom: 100, gap: 10 }}
+            renderItem={({ item: u }) => {
+              const roleConf = ROLE_CONFIG[u.role] ?? ROLE_CONFIG.member;
+              const isDeactivated = u.is_active === false;
+              return (
+                <View style={styles.userCard}>
+                  <View style={styles.userCardLeft}>
+                    <Avatar name={u.full_name} size={44} />
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <Text style={styles.userName} numberOfLines={1}>{u.full_name}</Text>
+                        {isDeactivated && (
+                          <View style={{ backgroundColor: "#FEE2E2", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999 }}>
+                            <Text style={{ color: "#991B1B", fontSize: 10, fontWeight: "700" }}>Inactif</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.userEmail} numberOfLines={1}>{u.email}</Text>
+                      <View style={{ flexDirection: "row", gap: 6, marginTop: 4 }}>
+                        <StatusBadge config={roleConf} />
+                      </View>
+                    </View>
                   </View>
-                  {!u.is_active && <View style={[styles.rolePill, { backgroundColor: Colors.danger }]}><Text style={[styles.rolePillText, { color: "#fff" }]}>Inactif</Text></View>}
+                  <View style={styles.userActions}>
+                    {u.role === "member" && (
+                      <TouchableOpacity style={styles.promoteBtn} onPress={() => handleRoleChange(u.id, "tontine_manager")}>
+                        <Text style={styles.promoteBtnText}>↑ Manager</Text>
+                      </TouchableOpacity>
+                    )}
+                    {u.role === "tontine_manager" && (
+                      <TouchableOpacity style={[styles.promoteBtn, { backgroundColor: "#EDE9FE" }]} onPress={() => handleRoleChange(u.id, "member")}>
+                        <Text style={[styles.promoteBtnText, { color: "#6D28D9" }]}>↓ Membre</Text>
+                      </TouchableOpacity>
+                    )}
+                    {!isDeactivated && u.role !== "super_admin" && (
+                      <TouchableOpacity style={styles.deactivateBtn} onPress={() => handleDeactivate(u.id)}>
+                        <XCircle color="#EF4444" size={14} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
-                <View style={styles.actionRow}>
-                  {u.role === "member" && (
-                    <TouchableOpacity style={styles.actionBtn} onPress={() => handleRoleChange(u.id, "tontine_manager")}>
-                      <Text style={styles.actionBtnText}>→ Manager</Text>
-                    </TouchableOpacity>
-                  )}
-                  {u.role === "tontine_manager" && (
-                    <TouchableOpacity style={styles.actionBtn} onPress={() => handleRoleChange(u.id, "member")}>
-                      <Text style={styles.actionBtnText}>→ Membre</Text>
-                    </TouchableOpacity>
-                  )}
-                  {u.is_active && u.role !== "super_admin" && (
-                    <TouchableOpacity style={[styles.actionBtn, { backgroundColor: `${Colors.danger}15`, borderColor: Colors.danger }]} onPress={() => handleDeactivate(u.id)}>
-                      <Text style={[styles.actionBtnText, { color: Colors.danger }]}>Désactiver</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </Card>
-            )}
+              );
+            }}
             ListEmptyComponent={<Text style={styles.empty}>Aucun membre trouvé</Text>}
           />
         </View>
@@ -267,79 +319,115 @@ export default function AdminConsole() {
         <FlatList
           data={kyc}
           keyExtractor={(k) => k.user_id}
-          contentContainerStyle={{ padding: Spacing.xl, gap: 10, paddingBottom: 100 }}
-          renderItem={({ item: k }) => (
-            <Card style={{ padding: 14 }}>
-              <Text style={styles.userName}>{k.full_name}</Text>
-              <Text style={styles.userEmail}>{k.email}</Text>
-              <Text style={[styles.userEmail, { marginBottom: 10 }]}>Statut : {k.kyc_status}</Text>
-              {k.kyc_status === "pending_review" && (
-                <View style={styles.actionRow}>
-                  <TouchableOpacity style={[styles.actionBtn, { backgroundColor: `${Colors.accent}15`, borderColor: Colors.accent }]} onPress={() => handleKyc(k.user_id, true)}>
-                    <CheckCircle color={Colors.accent} size={14} />
-                    <Text style={[styles.actionBtnText, { color: Colors.accent }]}>Approuver</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.actionBtn, { backgroundColor: `${Colors.danger}15`, borderColor: Colors.danger }]} onPress={() => handleKyc(k.user_id, false)}>
-                    <XCircle color={Colors.danger} size={14} />
-                    <Text style={[styles.actionBtnText, { color: Colors.danger }]}>Rejeter</Text>
-                  </TouchableOpacity>
+          contentContainerStyle={{ paddingHorizontal: Spacing.xl, paddingBottom: 100, gap: 10 }}
+          renderItem={({ item: k }) => {
+            const kycConf = KYC_CONFIG[k.kyc_status] ?? KYC_CONFIG.not_started;
+            return (
+              <View style={styles.userCard}>
+                <View style={styles.userCardLeft}>
+                  <Avatar name={k.full_name} size={44} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.userName} numberOfLines={1}>{k.full_name}</Text>
+                    <Text style={styles.userEmail} numberOfLines={1}>{k.email}</Text>
+                    <View style={{ marginTop: 4 }}>
+                      <StatusBadge config={kycConf} />
+                    </View>
+                  </View>
                 </View>
-              )}
-            </Card>
-          )}
+                {k.kyc_status === "pending_review" && (
+                  <View style={{ gap: 6 }}>
+                    <TouchableOpacity style={styles.approveBtn} onPress={() => handleKyc(k.user_id, true)}>
+                      <CheckCircle color="#fff" size={13} />
+                      <Text style={styles.approveBtnText}>OK</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.rejectBtn} onPress={() => handleKyc(k.user_id, false)}>
+                      <XCircle color="#fff" size={13} />
+                      <Text style={styles.rejectBtnText}>Non</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            );
+          }}
           ListEmptyComponent={<Text style={styles.empty}>Aucune soumission KYC en attente</Text>}
         />
       ) : tab === "promotions" ? (
         <FlatList
           data={promos}
           keyExtractor={(p) => p.id}
-          contentContainerStyle={{ padding: Spacing.xl, gap: 10, paddingBottom: 100 }}
-          renderItem={({ item: p }) => (
-            <Card style={{ padding: 14 }}>
-              <Text style={styles.userName}>{p.full_name}</Text>
-              <Text style={styles.userEmail}>{p.email}</Text>
-              <Text style={[styles.userEmail, { marginBottom: 10 }]}>Statut : {p.status}</Text>
-              {p.status === "pending" && (
-                <View style={styles.actionRow}>
-                  <TouchableOpacity style={[styles.actionBtn, { backgroundColor: `${Colors.accent}15`, borderColor: Colors.accent }]} onPress={() => handlePromotion(p.user_id, true)}>
-                    <CheckCircle color={Colors.accent} size={14} />
-                    <Text style={[styles.actionBtnText, { color: Colors.accent }]}>Accorder</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.actionBtn, { backgroundColor: `${Colors.danger}15`, borderColor: Colors.danger }]} onPress={() => handlePromotion(p.user_id, false)}>
-                    <XCircle color={Colors.danger} size={14} />
-                    <Text style={[styles.actionBtnText, { color: Colors.danger }]}>Refuser</Text>
-                  </TouchableOpacity>
+          contentContainerStyle={{ paddingHorizontal: Spacing.xl, paddingBottom: 100, gap: 10 }}
+          renderItem={({ item: p }) => {
+            const statusConf = p.status === "pending"
+              ? { label: "En attente", bg: "#FEF3C7", color: "#92400E" }
+              : p.status === "approved"
+              ? { label: "Approuvé", bg: "#D1FAE5", color: "#065F46" }
+              : { label: "Refusé", bg: "#FEE2E2", color: "#991B1B" };
+            return (
+              <View style={styles.userCard}>
+                <View style={styles.userCardLeft}>
+                  <Avatar name={p.full_name} size={44} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.userName} numberOfLines={1}>{p.full_name}</Text>
+                    <Text style={styles.userEmail} numberOfLines={1}>{p.email}</Text>
+                    <View style={{ marginTop: 4 }}>
+                      <StatusBadge config={statusConf} />
+                    </View>
+                  </View>
                 </View>
-              )}
-            </Card>
-          )}
+                {p.status === "pending" && (
+                  <View style={{ gap: 6 }}>
+                    <TouchableOpacity style={styles.approveBtn} onPress={() => handlePromotion(p.user_id, true)}>
+                      <CheckCircle color="#fff" size={13} />
+                      <Text style={styles.approveBtnText}>OK</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.rejectBtn} onPress={() => handlePromotion(p.user_id, false)}>
+                      <XCircle color="#fff" size={13} />
+                      <Text style={styles.rejectBtnText}>Non</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            );
+          }}
           ListEmptyComponent={<Text style={styles.empty}>Aucune demande de promotion</Text>}
         />
       ) : tab === "tontines" ? (
         <FlatList
           data={tontines}
           keyExtractor={(t) => t.id}
-          contentContainerStyle={{ padding: Spacing.xl, gap: 10, paddingBottom: 100 }}
-          renderItem={({ item: t }) => (
-            <Card style={{ padding: 14 }}>
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.userName}>{t.name}</Text>
-                  <Text style={styles.userEmail}>Code : {t.invite_code}</Text>
-                  <Text style={styles.userEmail}>{t.members_count} membre(s) · {t.status}</Text>
+          contentContainerStyle={{ paddingHorizontal: Spacing.xl, paddingBottom: 100, gap: 10 }}
+          renderItem={({ item: t }) => {
+            const statusConf = t.status === "active"
+              ? { label: "Active", bg: "#D1FAE5", color: "#065F46" }
+              : t.status === "completed"
+              ? { label: "Terminée", bg: "#DBEAFE", color: "#1D4ED8" }
+              : { label: t.status, bg: "#F3F4F6", color: "#6B7280" };
+            return (
+              <TouchableOpacity style={styles.userCard} onPress={() => router.push(`/tontines/${t.id}` as any)} activeOpacity={0.8}>
+                <View style={styles.userCardLeft}>
+                  <Avatar name={t.name} size={44} bg="#10B981" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.userName} numberOfLines={1}>{t.name}</Text>
+                    <Text style={styles.userEmail}>Code : <Text style={{ fontWeight: "800", color: Colors.primary }}>{t.invite_code}</Text></Text>
+                    <View style={{ flexDirection: "row", gap: 6, marginTop: 4, alignItems: "center" }}>
+                      <StatusBadge config={statusConf} />
+                      <Text style={{ fontSize: 11, color: Colors.textMuted, fontWeight: "600" }}>{t.members_count} membre(s)</Text>
+                    </View>
+                  </View>
                 </View>
-                <TouchableOpacity onPress={() => router.push(`/tontines/${t.id}` as any)} style={styles.chevronBtn}>
-                  <ChevronRight color={Colors.textMuted} size={18} />
-                </TouchableOpacity>
-              </View>
-            </Card>
-          )}
+                <ChevronRight color={Colors.textMuted} size={18} />
+              </TouchableOpacity>
+            );
+          }}
           ListEmptyComponent={<Text style={styles.empty}>Aucune tontine</Text>}
         />
       ) : (
         <ScrollView contentContainerStyle={{ padding: Spacing.xl, gap: 16, paddingBottom: 100 }}>
-          <Card style={{ padding: 20, gap: 14 }}>
-            <Text style={styles.broadcastTitle}>Notification à tous les membres</Text>
+          <View style={styles.broadcastCard}>
+            <LinearGradient colors={["#6366F1", "#8B5CF6"]} style={styles.broadcastIconBg}>
+              <Bell color="#fff" size={22} />
+            </LinearGradient>
+            <Text style={styles.broadcastTitle}>Notification globale</Text>
             <Text style={styles.broadcastDesc}>Envoyez une notification push à l'ensemble de la communauté Hodix.</Text>
             <TextInput
               style={styles.broadcastInput}
@@ -349,26 +437,21 @@ export default function AdminConsole() {
               placeholderTextColor={Colors.textMuted}
             />
             <TextInput
-              style={[styles.broadcastInput, { minHeight: 80, textAlignVertical: "top" }]}
+              style={[styles.broadcastInput, { minHeight: 90, textAlignVertical: "top" }]}
               value={broadcastBody}
               onChangeText={setBroadcastBody}
               placeholder="Message à envoyer..."
               placeholderTextColor={Colors.textMuted}
               multiline
             />
-            <TouchableOpacity
-              style={[styles.sendBtn, broadcasting && { opacity: 0.6 }]}
-              onPress={handleBroadcast}
-              disabled={broadcasting}
-              activeOpacity={0.85}
-            >
-              <LinearGradient colors={[Colors.secondary, Colors.accent]} style={styles.sendBtnGrad}>
+            <TouchableOpacity style={[styles.sendBtn, broadcasting && { opacity: 0.6 }]} onPress={handleBroadcast} disabled={broadcasting} activeOpacity={0.85}>
+              <LinearGradient colors={["#6366F1", "#8B5CF6"]} style={styles.sendBtnGrad}>
                 {broadcasting
                   ? <ActivityIndicator color="#fff" size="small" />
-                  : <><Send color="#fff" size={16} /><Text style={styles.sendBtnText}>Envoyer à tous</Text></>}
+                  : <><Send color="#fff" size={15} /><Text style={styles.sendBtnText}>Envoyer à tous</Text></>}
               </LinearGradient>
             </TouchableOpacity>
-          </Card>
+          </View>
         </ScrollView>
       )}
     </SafeAreaView>
@@ -376,55 +459,95 @@ export default function AdminConsole() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.bg },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
-  denied: { fontSize: 18, fontWeight: "800", color: Colors.danger },
+  safe: { flex: 1, backgroundColor: "#F8FAFC" },
   header: {
     flexDirection: "row", alignItems: "center", gap: 12,
-    paddingHorizontal: Spacing.xl, paddingVertical: Spacing.lg,
+    paddingHorizontal: 20, paddingVertical: 16,
   },
-  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" },
-  headerTitle: { color: "#fff", fontSize: 18, fontWeight: "900" },
-  headerSub: { color: "rgba(255,255,255,0.65)", fontSize: 12, fontWeight: "600" },
-  adminBadge: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" },
-  tabsRow: { paddingHorizontal: Spacing.xl, paddingVertical: 12, gap: 8 },
+  backBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center",
+  },
+  headerEyebrow: { color: "#F5C842", fontSize: 10, fontWeight: "800", letterSpacing: 1.5 },
+  headerTitle: { color: "#fff", fontSize: 20, fontWeight: "900", marginTop: 1 },
+  statsStrip: {
+    flexDirection: "row", justifyContent: "space-around",
+    paddingVertical: 12, paddingHorizontal: 20,
+  },
+  statItem: { alignItems: "center" },
+  statValue: { fontSize: 22, fontWeight: "900" },
+  statLabel: { fontSize: 10, color: "rgba(255,255,255,0.5)", fontWeight: "600", marginTop: 1 },
+  tabsScroll: { backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: "#E5E7EB" },
+  tabsRow: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
   tabBtn: {
-    flexDirection: "row", alignItems: "center", gap: 6,
+    flexDirection: "row", alignItems: "center", gap: 5,
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.full,
-    backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
+    backgroundColor: "#F1F5F9", borderWidth: 0,
   },
-  tabBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  tabLabel: { fontSize: 12, fontWeight: "700", color: Colors.textMuted },
-  tabLabelActive: { color: "#fff" },
+  tabBtnActive: { padding: 0, overflow: "hidden", borderRadius: Radius.full },
+  tabBtnGrad: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 14, paddingVertical: 8 },
+  tabLabel: { fontSize: 12, fontWeight: "700", color: "#94A3B8" },
+  tabLabelActive: { fontSize: 12, fontWeight: "700", color: "#fff" },
+  tabBadge: {
+    minWidth: 16, height: 16, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.3)",
+    alignItems: "center", justifyContent: "center", paddingHorizontal: 4,
+  },
+  tabBadgeText: { color: "#fff", fontSize: 9, fontWeight: "900" },
   searchRow: {
     flexDirection: "row", alignItems: "center", gap: 10,
-    marginHorizontal: Spacing.xl, marginBottom: 4,
-    backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border,
+    marginHorizontal: 16, marginVertical: 12,
+    backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: "#E5E7EB",
     paddingHorizontal: 14, paddingVertical: 10,
+    shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
-  searchInput: { flex: 1, fontSize: 14, color: Colors.text, outlineStyle: "none" } as any,
-  userName: { fontSize: 15, fontWeight: "800", color: Colors.primary, marginBottom: 2 },
-  userEmail: { fontSize: 12, color: Colors.textMuted, fontWeight: "500", marginBottom: 4 },
-  userMeta: { flexDirection: "row", gap: 6, marginBottom: 8 },
-  rolePill: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: Radius.full },
-  rolePillText: { fontSize: 11, fontWeight: "700" },
-  actionRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
-  actionBtn: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.md,
-    borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surfaceAlt,
+  searchInput: { flex: 1, fontSize: 14, color: "#1E293B", outlineStyle: "none" } as any,
+  userCard: {
+    backgroundColor: "#fff", borderRadius: 16, padding: 14,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
-  actionBtnText: { fontSize: 12, fontWeight: "700", color: Colors.text },
-  chevronBtn: { padding: 4 },
-  empty: { textAlign: "center", color: Colors.textMuted, fontWeight: "600", marginTop: 40 },
-  broadcastTitle: { fontSize: 17, fontWeight: "900", color: Colors.primary },
-  broadcastDesc: { fontSize: 13, color: Colors.textMuted, lineHeight: 18 },
+  userCardLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
+  userActions: { flexDirection: "row", alignItems: "center", gap: 6 },
+  userName: { fontSize: 14, fontWeight: "800", color: "#1E293B" },
+  userEmail: { fontSize: 11, color: "#94A3B8", fontWeight: "500", marginTop: 1 },
+  promoteBtn: {
+    backgroundColor: "#EFF6FF", paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 8,
+  },
+  promoteBtnText: { fontSize: 11, fontWeight: "800", color: "#2563EB" },
+  deactivateBtn: {
+    width: 30, height: 30, borderRadius: 8,
+    backgroundColor: "#FEF2F2", alignItems: "center", justifyContent: "center",
+  },
+  approveBtn: {
+    flexDirection: "row", alignItems: "center", gap: 3,
+    backgroundColor: "#10B981", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
+  },
+  approveBtnText: { color: "#fff", fontSize: 11, fontWeight: "800" },
+  rejectBtn: {
+    flexDirection: "row", alignItems: "center", gap: 3,
+    backgroundColor: "#EF4444", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
+  },
+  rejectBtnText: { color: "#fff", fontSize: 11, fontWeight: "800" },
+  empty: { textAlign: "center", color: "#94A3B8", fontWeight: "600", marginTop: 48, fontSize: 14 },
+  broadcastCard: {
+    backgroundColor: "#fff", borderRadius: 20, padding: 20, gap: 14,
+    shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  broadcastIconBg: {
+    width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center",
+  },
+  broadcastTitle: { fontSize: 18, fontWeight: "900", color: "#1E293B" },
+  broadcastDesc: { fontSize: 13, color: "#94A3B8", lineHeight: 19 },
   broadcastInput: {
-    borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md,
+    borderWidth: 1.5, borderColor: "#E5E7EB", borderRadius: 12,
     paddingHorizontal: 14, paddingVertical: 12, fontSize: 14,
-    color: Colors.text, backgroundColor: Colors.surfaceAlt,
+    color: "#1E293B", backgroundColor: "#F8FAFC",
   },
-  sendBtn: { borderRadius: Radius.lg, overflow: "hidden" },
-  sendBtnGrad: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14 },
+  sendBtn: { borderRadius: 14, overflow: "hidden", marginTop: 4 },
+  sendBtnGrad: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 15 },
   sendBtnText: { color: "#fff", fontSize: 15, fontWeight: "800" },
 });
