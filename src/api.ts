@@ -74,6 +74,10 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "POST" && s[0] === "security" && s[1] === "flag-user")                     return (await db.flagUserAsFraud(body?.user_id, body?.reason)) as T;
     if (method === "GET"  && s[0] === "security" && s[1] === "trust-flags" && s[2])           return (await db.getUserTrustFlags(s[2])) as T;
 
+    // ── Consent
+    if (method === "POST" && s[0] === "consent" && s[1] === "tontine")                        return (await db.recordTontineConsent(body?.version, body?.tontine_id)) as T;
+    if (method === "GET"  && s[0] === "consent" && s[1] === "tontine" && s[2] === "check")    return ({ signed: await db.hasSignedConsent(body?.version ?? "1.0") }) as T;
+
     // ── Associations
     if (method === "GET"  && s[0] === "associations" && !s[1])                         return (await db.listAssociations()) as T;
     if (method === "POST" && s[0] === "associations" && !s[1])                         return (await db.createAssociation(body)) as T;

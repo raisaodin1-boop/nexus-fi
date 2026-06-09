@@ -2348,3 +2348,29 @@ export async function getOverdueMembers(tontineId: string) {
         : 0,
     }));
 }
+
+/* ── TONTINE CREATOR CONSENT ─────────────────────────────────── */
+
+export async function recordTontineConsent(version: string, tontineId?: string) {
+  const me = await uid();
+  const { error } = await getSupabase().from("tontine_consents").insert({
+    user_id: me,
+    version,
+    tontine_id: tontineId ?? null,
+    signed_at: new Date().toISOString(),
+    // Store minimal context for legal proof
+    platform: "hodix-mobile",
+  });
+  throwSb(error);
+  return { signed: true, signed_at: new Date().toISOString(), version };
+}
+
+export async function hasSignedConsent(version: string): Promise<boolean> {
+  const me = await uid();
+  const { count } = await getSupabase()
+    .from("tontine_consents")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", me)
+    .eq("version", version);
+  return (count ?? 0) > 0;
+}
