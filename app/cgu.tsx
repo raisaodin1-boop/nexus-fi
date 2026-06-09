@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-nati
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { Shield } from "lucide-react-native";
+import { Shield, Lock, Database } from "lucide-react-native";
 
 import { Colors, Radius, Spacing } from "@/src/theme";
 
@@ -273,6 +273,19 @@ export default function CGUScreen() {
             <P>Hodix s'engage à accuser réception dans un délai de 48 heures ouvrées et à apporter une réponse de fond dans un délai maximum de 15 jours ouvrés.</P>
           </Section>
 
+          {/* Liens vers documents annexes */}
+          <View style={styles.linksSection}>
+            <Text style={styles.linksSectionTitle}>Documents complémentaires</Text>
+            <TouchableOpacity style={styles.docLink} onPress={() => router.push("/privacy" as any)}>
+              <Lock color={Colors.secondary} size={16} />
+              <Text style={styles.docLinkText}>Politique de Confidentialité détaillée →</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.docLink} onPress={() => router.push("/data-rights" as any)}>
+              <Database color="#7C3AED" size={16} />
+              <Text style={[styles.docLinkText, { color: "#7C3AED" }]}>Mes données & droits RGPD →</Text>
+            </TouchableOpacity>
+          </View>
+
           <View style={styles.footer}>
             <Text style={styles.footerText}>© Hodix 2026 — Tous droits réservés</Text>
             <Text style={styles.footerSub}>Document juridique confidentiel. Toute reproduction non autorisée est interdite.</Text>
@@ -309,6 +322,10 @@ const styles = StyleSheet.create({
   liText: { color: Colors.text, fontSize: 13, lineHeight: 20, flex: 1, fontWeight: "400" },
   importantBox: { backgroundColor: "#FFF7ED", borderRadius: Radius.md, padding: 14, borderWidth: 1, borderColor: "#FED7AA", marginBottom: 10 },
   importantText: { color: "#92400E", fontSize: 13, lineHeight: 20, fontWeight: "600" },
+  linksSection: { marginTop: 20, backgroundColor: Colors.surfaceAlt, borderRadius: 14, padding: 16, gap: 10 },
+  linksSectionTitle: { color: Colors.textMuted, fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 },
+  docLink: { flexDirection: "row", alignItems: "center", gap: 8 },
+  docLinkText: { color: Colors.secondary, fontSize: 13, fontWeight: "700", textDecorationLine: "underline" },
   footer: { marginTop: 32, alignItems: "center", gap: 4 },
   footerText: { color: Colors.textMuted, fontSize: 12, fontWeight: "700" },
   footerSub: { color: Colors.textSubtle, fontSize: 11, textAlign: "center" },

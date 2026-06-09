@@ -254,6 +254,9 @@ export default function ProfileScreen() {
               <SettingRow icon={<Bell color={Colors.secondary} size={18} />} label="Notifications" onPress={() => router.push("/notifications")} testID="profile-go-notifs" borderColor={borderColor} txtColor={txt} />
               <SettingRow icon={<ShieldCheck color={Colors.accent} size={18} />} label="Vérification KYC" onPress={() => router.push("/kyc")} testID="profile-go-kyc" borderColor={borderColor} txtColor={txt} />
               <SettingRow icon={<CreditCard color={Colors.primary} size={18} />} label="Mes Paiements" onPress={() => router.push("/payments")} testID="profile-go-payments" borderColor={borderColor} txtColor={txt} />
+              <SettingRow icon={<Shield color="#7C3AED" size={18} />} label="Mes données & droits" onPress={() => router.push("/data-rights" as any)} testID="profile-go-data-rights" borderColor={borderColor} txtColor={txt} />
+              <SettingRow icon={<Shield color={Colors.secondary} size={18} />} label="Politique de confidentialité" onPress={() => router.push("/privacy" as any)} testID="profile-go-privacy" borderColor={borderColor} txtColor={txt} />
+              <SettingRow icon={<Shield color={Colors.textMuted} size={18} />} label="Conditions d'utilisation (CGU)" onPress={() => router.push("/cgu" as any)} testID="profile-go-cgu" borderColor={borderColor} txtColor={txt} />
               {user?.role === "member" ? (
                 <SettingRow icon={<Sparkles color={Colors.accent} size={18} />} label="Demander une promotion Manager" onPress={() => router.push("/promotion-request")} testID="profile-promotion" borderColor={borderColor} txtColor={txt} />
               ) : null}
