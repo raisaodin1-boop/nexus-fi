@@ -17,7 +17,7 @@ import { Colors, Radius, Spacing, Shadow } from "@/src/theme";
 import { ApiError } from "@/src/api";
 import { HodixLogo } from "@/src/logo";
 import { getSupabase } from "@/src/supabase";
-import { sendWelcomeMessage, applyReferralBonus } from "@/src/db";
+import { applyReferralBonus } from "@/src/db";
 import { useAuth } from "@/src/auth-context";
 
 type RoleChoice = "member" | "tontine_manager";
@@ -146,9 +146,8 @@ export default function RegisterScreen() {
           phone: phone.trim() || null,
         }, { onConflict: "id" });
 
-        // Send welcome message + apply referral bonus (non-blocking, after profile exists)
+        // Welcome email + notification via AuthContext (SIGNED_IN). Referral bonus only here.
         setTimeout(async () => {
-          try { await sendWelcomeMessage(data.user!.id, fullName.trim()); } catch {}
           if (referralCode.trim()) {
             try { await applyReferralBonus(data.user!.id, referralCode.trim().toUpperCase()); } catch {}
           }

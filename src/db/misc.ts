@@ -65,13 +65,30 @@ export async function applyReferralBonus(newUserId: string, referralCode: string
 }
 
 export async function sendWelcomeMessage(userId: string, fullName: string) {
-  const code = genReferralCode();
-  await getSupabase().from("profiles").update({ referral_code: code }).eq("id", userId);
-  await getSupabase().from("notifications").insert({
+  const sb = getSupabase();
+  const { data: profile } = await sb.from("profiles")
+    .select("referral_code, welcome_email_sent_at")
+    .eq("id", userId)
+    .maybeSingle();
+  if (profile?.welcome_email_sent_at) return;
+
+  let code = profile?.referral_code;
+  if (!code) {
+    code = genReferralCode();
+    await sb.from("profiles").update({ referral_code: code }).eq("id", userId);
+  }
+
+  await sb.from("notifications").insert({
     user_id: userId, title: `Bienvenue sur HODIX, ${fullName} ! 🎉`,
     body: `Votre compte est créé. Votre code de parrainage personnel est : ${code}\n\nPartagez-le à vos proches et gagnez 500 FCFA de bonus par inscription !`,
     type: "welcome", is_read: false,
   });
+
+  try {
+    await sb.functions.invoke("send-welcome", {
+      body: { full_name: fullName, referral_code: code },
+    });
+  } catch { /* best-effort — notification in-app déjà envoyée */ }
 }
 
 /* ── STREAKS ─────────────────────────────────────────────── */

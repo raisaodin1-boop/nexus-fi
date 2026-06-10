@@ -100,10 +100,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initialized.current = true;
 
     // Listen to auth changes — this also fires immediately with current session
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         const u = await buildUser(session.user);
         setUser(u);
+        if (event === "SIGNED_IN") {
+          setTimeout(async () => {
+            try {
+              const { data: profile } = await supabase.from("profiles")
+                .select("welcome_email_sent_at, full_name")
+                .eq("id", session.user!.id)
+                .maybeSingle();
+              if (!profile?.welcome_email_sent_at) {
+                const name = profile?.full_name ?? session.user!.email?.split("@")[0] ?? "Membre";
+                await sendWelcomeMessage(session.user!.id, name);
+              }
+            } catch { /* best-effort */ }
+          }, 2000);
+        }
       } else {
         setUser(null);
       }
@@ -136,15 +150,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     if (error) throw { detail: error.message };
 
-    // Post-signup side effects (non-blocking)
+    // Welcome email via onAuthStateChange (SIGNED_IN). Referral bonus only here.
     const newUserId = data.user?.id;
-    if (newUserId) {
+    if (newUserId && referralCode?.trim()) {
       setTimeout(async () => {
-        try { await sendWelcomeMessage(newUserId, full_name); } catch {}
-        if (referralCode?.trim()) {
-          try { await applyReferralBonus(newUserId, referralCode.trim().toUpperCase()); } catch {}
-        }
-      }, 2000); // wait 2s for profile row to be created via trigger
+        try { await applyReferralBonus(newUserId, referralCode.trim().toUpperCase()); } catch {}
+      }, 2000);
     }
   }, []);
 

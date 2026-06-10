@@ -5,6 +5,7 @@ import { depositSaving } from "./savings";
 import { contributeAssociation, contributeCooperative, contributeFund } from "./groups";
 import { topupFromMobileMoney } from "@/src/wallet-db";
 import type { PaymentKind } from "@/src/payment-nav";
+import { paymentToReceipt } from "@/src/payment-receipt";
 
 const PAYMENT_BLOCKED =
   "Paiement électronique requis. Utilisez la page de paiement — aucun crédit sans débit confirmé.";
@@ -289,6 +290,9 @@ export async function confirmCinetpayPayment(payload: ConfirmPayload) {
   throwSb(error);
   if (!payment) throw { status: 404, detail: "Paiement introuvable." };
   if (payment.status === "succeeded") {
+    if (!payment.receipt_email_sent_at) {
+      try { await sendPaymentReceiptEmail(payment.id); } catch { /* best-effort */ }
+    }
     return { payment_id: payment.id, status: "succeeded", already_fulfilled: true };
   }
   if (payment.status !== "pending_cinetpay") {
@@ -325,7 +329,47 @@ export async function confirmCinetpayPayment(payload: ConfirmPayload) {
     type: "success",
   });
 
-  return { payment_id: payment.id, status: "succeeded", meta };
+  let receiptEmail: { delivery?: string } | null = null;
+  try {
+    receiptEmail = await sendPaymentReceiptEmail(payment.id);
+  } catch {
+    // Reçu toujours disponible dans l'app même si l'email échoue.
+  }
+
+  return { payment_id: payment.id, status: "succeeded", meta, receipt_email: receiptEmail };
+}
+
+export async function getPaymentReceipt(paymentId: string) {
+  const me = await uid();
+  const { data, error } = await getSupabase()
+    .from("payments")
+    .select("id, amount, status, description, created_at, receipt_email_sent_at")
+    .eq("id", paymentId)
+    .eq("user_id", me)
+    .maybeSingle();
+  throwSb(error);
+  if (!data) throw { status: 404, detail: "Paiement introuvable." };
+  if (data.status !== "succeeded") {
+    throw { status: 400, detail: "Reçu disponible uniquement pour les paiements confirmés." };
+  }
+  const meta = parsePaymentMeta(data.description);
+  return paymentToReceipt(data, meta);
+}
+
+export async function sendPaymentReceiptEmail(paymentId: string, force = false) {
+  const { data, error } = await getSupabase().functions.invoke("send-receipt", {
+    body: { payment_id: paymentId, force },
+  });
+  if (error) throw { status: 502, detail: error.message ?? "Envoi du reçu par email impossible." };
+  if (!data?.ok) throw { status: 400, detail: data?.error ?? "Envoi du reçu par email impossible." };
+  return data as {
+    ok: boolean;
+    delivery?: "email" | "app";
+    already_sent?: boolean;
+    email_masked?: string;
+    receipt_id?: string;
+    sent_at?: string;
+  };
 }
 
 export async function getPaymentStatus(paymentId: string) {

@@ -180,9 +180,10 @@ export default function PayContribution() {
         provider: method,
         phone,
       });
-      setFinalStatus("succeeded");
-      setStage("done");
-      router.replace(returnRoute as any);
+      router.replace({
+        pathname: "/receipt",
+        params: { paymentId, type: paymentKind },
+      } as any);
     } catch (e) {
       setError(e instanceof ApiError ? e.detail : "Paiement non confirmé — aucun crédit appliqué.");
     } finally { setBusy(false); }
@@ -218,8 +219,11 @@ export default function PayContribution() {
 
   // ---- DONE ----
   if (stage === "done" && finalStatus) {
-    if (finalStatus === "succeeded") {
-      router.replace(returnRoute as any);
+    if (finalStatus === "succeeded" && paymentId) {
+      router.replace({
+        pathname: "/receipt",
+        params: { paymentId, type: paymentKind },
+      } as any);
       return null;
     }
     return (

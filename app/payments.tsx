@@ -52,6 +52,11 @@ export default function PaymentsScreen() {
           renderItem={({ item: p }) => {
             const isIn = p.type === "credit" || p.type === "deposit";
             return (
+              <TouchableOpacity
+                activeOpacity={0.85}
+                disabled={p.status !== "succeeded"}
+                onPress={() => router.push({ pathname: "/receipt", params: { paymentId: p.id } } as any)}
+              >
               <Card style={{ padding: 14, flexDirection: "row", alignItems: "center", gap: 12 }}>
                 <View style={[styles.iconBox, { backgroundColor: isIn ? `${Colors.accent}20` : `${Colors.danger}20` }]}>
                   {isIn
@@ -69,6 +74,7 @@ export default function PaymentsScreen() {
                   <Text style={styles.status}>{p.status}</Text>
                 </View>
               </Card>
+              </TouchableOpacity>
             );
           }}
           ListEmptyComponent={
