@@ -42,12 +42,17 @@ async function sendSms(phone: string, body: string): Promise<boolean> {
 
 Deno.serve(async (req) => {
   const auth = req.headers.get("Authorization") ?? "";
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  if (auth.replace(/^Bearer\s+/i, "").trim() !== serviceKey) {
+  const bearer = auth.replace(/^Bearer\s+/i, "").trim();
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const cronSecret = Deno.env.get("TONTINE_CRON_SECRET") ?? "";
+  const authorized = bearer.length > 0 && (
+    bearer === serviceKey || (cronSecret.length > 0 && bearer === cronSecret)
+  );
+  if (!authorized) {
     return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), { status: 401 });
   }
 
-  const admin = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey);
+  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const now = new Date();
   let reminders = 0;
   let advanced = 0;
