@@ -90,22 +90,32 @@ alter table public.tontines enable row level security;
 alter table public.tontine_members enable row level security;
 alter table public.tontine_contributions enable row level security;
 
+create or replace function public.is_tontine_owner(p_tontine_id uuid)
+returns boolean language sql security definer set search_path = public stable as $$
+  select exists (select 1 from public.tontines where id = p_tontine_id and owner_id = auth.uid());
+$$;
+
+create or replace function public.is_tontine_member(p_tontine_id uuid)
+returns boolean language sql security definer set search_path = public stable as $$
+  select exists (select 1 from public.tontine_members where tontine_id = p_tontine_id and user_id = auth.uid());
+$$;
+
 create policy "tontines_select" on public.tontines for select using (
-  is_public = true or owner_id = auth.uid() or
-  exists (select 1 from public.tontine_members where tontine_id = id and user_id = auth.uid())
+  is_public = true or owner_id = auth.uid() or public.is_tontine_member(id)
 );
 create policy "tontines_insert" on public.tontines for insert with check (auth.uid() = owner_id);
 create policy "tontines_update" on public.tontines for update using (auth.uid() = owner_id);
 
 create policy "tontine_members_select" on public.tontine_members for select using (
-  user_id = auth.uid() or
-  exists (select 1 from public.tontines t where t.id = tontine_id and t.owner_id = auth.uid())
+  user_id = auth.uid() or public.is_tontine_owner(tontine_id)
 );
-create policy "tontine_members_insert" on public.tontine_members for insert with check (true);
+create policy "tontine_members_insert" on public.tontine_members for insert with check (
+  public.is_tontine_owner(tontine_id)
+  or (user_id = auth.uid() and coalesce(role, 'member') = 'member')
+);
 
 create policy "tontine_contributions_select" on public.tontine_contributions for select using (
-  user_id = auth.uid() or
-  exists (select 1 from public.tontines t where t.id = tontine_id and t.owner_id = auth.uid())
+  user_id = auth.uid() or public.is_tontine_owner(tontine_id)
 );
 create policy "tontine_contributions_insert" on public.tontine_contributions for insert with check (auth.uid() = user_id);
 
