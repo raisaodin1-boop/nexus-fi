@@ -1,5 +1,5 @@
 // Premium theme — Nexus Fi / HODIX
-import { Platform } from "react-native";
+import { Platform, ViewStyle } from "react-native";
 
 export const Colors = {
   // Brand
@@ -88,8 +88,8 @@ const _nativeShadow = (y: number, blur: number, alpha: number, elevation: number
   elevation,
 });
 
-const _shadow = (y: number, blur: number, alpha: number, elev: number) =>
-  Platform.OS === "web" ? _webShadow(y, blur, alpha) : _nativeShadow(y, blur, alpha, elev);
+const _shadow = (y: number, blur: number, alpha: number, elev: number): ViewStyle =>
+  (Platform.OS === "web" ? _webShadow(y, blur, alpha) : _nativeShadow(y, blur, alpha, elev)) as ViewStyle;
 
 export const Shadow = {
   card: _shadow(2, 8, 0.06, 2),

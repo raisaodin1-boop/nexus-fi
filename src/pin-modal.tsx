@@ -3,7 +3,7 @@
  * PinSetupModal: first-time 4-digit PIN creation (enter + confirm).
  * PinConfirmModal: transaction confirmation with lockout logic.
  */
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Modal,
@@ -17,12 +17,14 @@ import { Colors, Radius, Spacing } from "@/src/theme";
 import { api, formatXAF } from "@/src/api";
 import {
   hashPin,
+  hashPinLegacy,
   storePinHash,
   getStoredPinHash,
   checkPinLocked,
   recordPinAttempt,
   getRemainingAttempts,
 } from "@/src/security";
+import { getBiometricInfo, isBiometricEnabled, authenticateBiometric } from "@/src/biometrics";
 
 // ─── Numpad ──────────────────────────────────────────────────────────────────
 
@@ -144,7 +146,7 @@ export function PinSetupModal({ visible, userId, onSuccess, onCancel }: PinSetup
         } else {
           setLoading(true);
           try {
-            const h = hashPin(next, userId);
+            const h = await hashPin(next, userId);
             await storePinHash(h);
             await api.post("/wallet/pin/set", { pin_hash: h });
             reset();
@@ -203,12 +205,40 @@ export function PinConfirmModal({ visible, userId, amount, onSuccess, onCancel }
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [bioLabel, setBioLabel] = useState<string | null>(null);
   const { shake, triggerShake } = usePinShake();
 
   const reset = () => {
     setPin("");
     setError(null);
   };
+
+  const tryBiometric = async () => {
+    const ok = await authenticateBiometric(
+      amount !== undefined ? `Confirmer ${formatXAF(amount)}` : "Confirmer la transaction",
+    );
+    if (ok) {
+      await recordPinAttempt(true);
+      reset();
+      onSuccess();
+    }
+  };
+
+  // When the user enabled biometrics, offer Face ID / fingerprint as a
+  // faster alternative to the PIN (auto-prompted once on open).
+  useEffect(() => {
+    if (!visible) return;
+    let active = true;
+    (async () => {
+      if (!(await isBiometricEnabled())) return;
+      const info = await getBiometricInfo();
+      if (!active || !info.available) return;
+      setBioLabel(info.label);
+      tryBiometric();
+    })();
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   const handleKey = async (key: string) => {
     if (loading) return;
@@ -232,9 +262,18 @@ export function PinConfirmModal({ visible, userId, amount, onSuccess, onCancel }
         }
 
         const stored = await getStoredPinHash();
-        const h = hashPin(next, userId);
+        const h = await hashPin(next, userId);
 
-        if (h === stored) {
+        // PINs created before the SHA-256 upgrade were stored with the
+        // legacy hash — accept once, then transparently re-store as v2.
+        let valid = h === stored;
+        if (!valid && stored && stored === hashPinLegacy(next, userId)) {
+          valid = true;
+          await storePinHash(h);
+          api.post("/wallet/pin/set", { pin_hash: h }).catch(() => {});
+        }
+
+        if (valid) {
           await recordPinAttempt(true);
           reset();
           onSuccess();
@@ -281,6 +320,12 @@ export function PinConfirmModal({ visible, userId, amount, onSuccess, onCancel }
           <PinDots count={pin.length} shake={shake} />
 
           <Numpad onKey={handleKey} />
+
+          {bioLabel ? (
+            <TouchableOpacity onPress={tryBiometric} style={styles.bioBtn}>
+              <Text style={styles.bioBtnText}>Utiliser {bioLabel}</Text>
+            </TouchableOpacity>
+          ) : null}
 
           <TouchableOpacity onPress={handleCancel} style={styles.cancelBtn}>
             <Text style={styles.cancelText}>Annuler</Text>
@@ -389,6 +434,18 @@ const styles = StyleSheet.create({
   keyPlaceholder: {
     width: 72,
     height: 72,
+  },
+  bioBtn: {
+    marginTop: Spacing.lg,
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.primaryLight,
+  },
+  bioBtnText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: Colors.primaryDark,
   },
   cancelBtn: {
     marginTop: Spacing.xl,

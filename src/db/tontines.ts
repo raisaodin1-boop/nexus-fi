@@ -437,12 +437,13 @@ export async function getTontineReserveFund(tontineId: string) {
   const { data: tontine } = await getSupabase().from("tontines")
     .select("reserve_fund, amount_per_cycle, max_members, owner_id, name").eq("id", tontineId).single();
   if (!tontine) throw { status: 404, detail: "Tontine introuvable" };
-  const memberCount = Number(tontine.max_members ?? 1);
-  const fullCycleFund = Number(tontine.amount_per_cycle) * memberCount;
-  const coveragePercent = fullCycleFund > 0 ? Math.min(100, Math.round((Number(tontine.reserve_fund) / fullCycleFund) * 100)) : 0;
+  const memberCount = Number(tontine.max_members ?? 1) || 1;
+  const fullCycleFund = (Number(tontine.amount_per_cycle) || 0) * memberCount;
+  const reserve = Number(tontine.reserve_fund ?? 0) || 0;
+  const coveragePercent = fullCycleFund > 0 ? Math.min(100, Math.round((reserve / fullCycleFund) * 100)) : 0;
   return {
-    reserve: Number(tontine.reserve_fund ?? 0), full_cycle_cost: fullCycleFund,
-    coverage_percent: coveragePercent, covers_full_cycle: Number(tontine.reserve_fund) >= fullCycleFund,
+    reserve, full_cycle_cost: fullCycleFund,
+    coverage_percent: coveragePercent, covers_full_cycle: fullCycleFund > 0 && reserve >= fullCycleFund,
     is_owner: tontine.owner_id === me,
   };
 }

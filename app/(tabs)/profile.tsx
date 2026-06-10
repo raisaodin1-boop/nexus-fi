@@ -24,6 +24,7 @@ import { useTheme } from "@/src/theme-context";
 import { Button, Card, Field, SectionTitle } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { api, ApiError, User } from "@/src/api";
+import { getBiometricInfo, authenticateBiometric, setBiometricEnabled } from "@/src/biometrics";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -111,17 +112,31 @@ export default function ProfileScreen() {
             text: "Désactiver",
             style: "destructive",
             onPress: async () => {
-              try {
-                await SecureStore.deleteItemAsync("bio_enabled");
-                await SecureStore.deleteItemAsync("bio_email");
-                await SecureStore.deleteItemAsync("bio_password");
-                setBioEnabled(false);
-              } catch {}
+              await setBiometricEnabled(false);
+              setBioEnabled(false);
             },
           },
         ],
       );
+      return;
     }
+
+    const info = await getBiometricInfo();
+    if (!info.available) {
+      Alert.alert(
+        "Biométrie indisponible",
+        Platform.OS === "web"
+          ? "La biométrie n'est pas disponible sur le web. Utilisez l'application mobile."
+          : "Aucune biométrie configurée sur cet appareil. Activez Face ID ou l'empreinte dans les réglages de votre téléphone.",
+      );
+      return;
+    }
+    // Verify the user's biometrics before turning the lock on.
+    const ok = await authenticateBiometric(`Activer ${info.label} pour Hodix`);
+    if (!ok) return;
+    await setBiometricEnabled(true);
+    setBioEnabled(true);
+    Alert.alert("Biométrie activée", `${info.label} sera demandé à l'ouverture de l'app et pour confirmer vos transactions.`);
   };
 
   const bg = isDark ? colors.bg : Colors.bg;

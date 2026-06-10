@@ -12,7 +12,7 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
   }
 
   componentDidCatch(error: any, info: any) {
-    console.error("[ErrorBoundary]", error, info?.componentStack);
+    if (__DEV__) console.error("[ErrorBoundary]", error, info?.componentStack);
   }
 
   reset = () => this.setState({ hasError: false, message: "" });

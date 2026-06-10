@@ -3,7 +3,7 @@ import { uid, cached, throwSb } from "./helpers";
 
 export async function getAdminAnalytics() {
   return cached("admin-analytics", 90_000, async () => {
-    const safe = async <T>(fn: () => Promise<T>, fallback: T): Promise<T> => {
+    const safe = async <T>(fn: () => PromiseLike<T>, fallback: T): Promise<T> => {
       try { return await fn(); } catch { return fallback; }
     };
     const [users, allTontines, assocCount, coopCount, savingsData, contribData, kycData] = await Promise.all([

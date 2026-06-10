@@ -5,22 +5,35 @@
 import { Platform } from "react-native";
 import * as Device from "expo-device";
 import * as SecureStore from "expo-secure-store";
+import * as Crypto from "expo-crypto";
 
 /* ── Key names in SecureStore ───────────────────────────────── */
 const PIN_KEY = "hodix_wallet_pin_hash";
 const PIN_ATTEMPTS_KEY = "hodix_pin_attempts";
 const PIN_LOCKOUT_KEY = "hodix_pin_lockout_until";
 
-/* ── PIN hashing (djb2 + user salt — no native crypto needed) ── */
+/* ── PIN hashing ────────────────────────────────────────────── */
+// v2: SHA-256 (expo-crypto), iterated to slow down offline brute-force.
+// hashPinLegacy (djb2/FNV v1) is kept only to migrate PINs created
+// before the upgrade — see verify flow in pin-modal.
 
-export function hashPin(pin: string, salt: string): string {
+const PIN_ITERATIONS = 500;
+
+export async function hashPin(pin: string, salt: string): Promise<string> {
+  let digest = `hodix:${salt}:${pin}:v2`;
+  for (let i = 0; i < PIN_ITERATIONS; i++) {
+    digest = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, digest);
+  }
+  return digest;
+}
+
+export function hashPinLegacy(pin: string, salt: string): string {
   const raw = `hodix:${salt}:${pin}:v1`;
   let h = 5381;
   for (let i = 0; i < raw.length; i++) {
     h = ((h << 5) + h) ^ raw.charCodeAt(i);
     h = h >>> 0;
   }
-  // Second pass for extra avalanche
   let h2 = 0x811c9dc5;
   for (let i = 0; i < raw.length; i++) {
     h2 ^= raw.charCodeAt(i);

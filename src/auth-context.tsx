@@ -49,7 +49,7 @@ async function fetchProfile(userId: string): Promise<Partial<User>> {
     const timeout = new Promise<null>((res) => setTimeout(() => res(null), 8000));
     const query = supabase
       .from("profiles")
-      .select("full_name,role,phone,gender,country,city,occupation,date_of_birth,birth_place,neighborhood,address,kyc_status,trust_score")
+      .select("full_name,role,phone,gender,country,city,occupation,date_of_birth,birth_place,neighborhood,address,kyc_status,trust_score,email")
       .eq("id", userId)
       .single();
     const result = await Promise.race([query, timeout]);
@@ -62,6 +62,10 @@ async function fetchProfile(userId: string): Promise<Partial<User>> {
 
 async function buildUser(sbUser: any): Promise<User> {
   const profile = await fetchProfile(sbUser.id);
+  // Keep profiles.email in sync so P2P transfer lookup by email works.
+  if (sbUser.email && (profile as any).email !== sbUser.email) {
+    supabase.from("profiles").update({ email: sbUser.email }).eq("id", sbUser.id).then(() => {}, () => {});
+  }
   const rawRole = profile.role || sbUser.user_metadata?.role || "member";
   const role = (rawRole === "admin" || rawRole === "super_admin") ? "super_admin" : rawRole as string;
   return {

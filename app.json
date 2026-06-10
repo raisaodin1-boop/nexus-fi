@@ -51,6 +51,12 @@
       "expo-font",
       "expo-secure-store",
       [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "HODIX utilise Face ID pour sécuriser l'accès à votre compte et confirmer vos transactions."
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "HODIX a besoin d'accéder à vos photos pour le KYC.",

@@ -11,7 +11,8 @@ if (Platform.OS !== "web") {
 
 import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import Constants from "expo-constants";
@@ -26,6 +27,8 @@ import { api } from "@/src/api";
 import { OfflineBanner } from "@/src/offline";
 import { useFirstLaunch } from "@/src/use-first-launch";
 import { useDeviceFingerprint } from "@/src/device-fingerprint";
+import { isBiometricEnabled, authenticateBiometric } from "@/src/biometrics";
+import { Colors } from "@/src/theme";
 
 if (Platform.OS !== "web") {
   SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -91,6 +94,58 @@ function FirstLaunchGuard() {
   return null;
 }
 
+/**
+ * App-lock: when the user enabled biometrics, require Face ID / fingerprint
+ * once at cold start before showing any financial data. Logging in with
+ * email/password counts as authentication, so the gate only arms when a
+ * session is already present at launch.
+ */
+function BiometricGate({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const [locked, setLocked] = useState<boolean | null>(Platform.OS === "web" ? false : null);
+  const decidedRef = useRef(false);
+
+  const tryUnlock = async () => {
+    const ok = await authenticateBiometric("Déverrouiller Hodix");
+    if (ok) setLocked(false);
+  };
+
+  useEffect(() => {
+    if (Platform.OS === "web" || decidedRef.current || loading) return;
+    decidedRef.current = true;
+    (async () => {
+      if (!user || !(await isBiometricEnabled())) {
+        setLocked(false);
+        return;
+      }
+      setLocked(true);
+      tryUnlock();
+    })();
+  }, [loading, user]);
+
+  if (locked === null) return null;
+  if (!locked) return <>{children}</>;
+  return (
+    <View style={gateStyles.container}>
+      <Text style={gateStyles.emoji}>🔒</Text>
+      <Text style={gateStyles.title}>Hodix est verrouillé</Text>
+      <Text style={gateStyles.sub}>Authentifiez-vous pour accéder à votre compte.</Text>
+      <TouchableOpacity style={gateStyles.btn} onPress={tryUnlock}>
+        <Text style={gateStyles.btnText}>Déverrouiller</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const gateStyles = StyleSheet.create({
+  container: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: Colors.bgDark, padding: 32 },
+  emoji: { fontSize: 48, marginBottom: 16 },
+  title: { color: "#FFFFFF", fontSize: 22, fontWeight: "700", marginBottom: 8 },
+  sub: { color: "#9CA3AF", fontSize: 15, textAlign: "center", marginBottom: 28 },
+  btn: { backgroundColor: Colors.primary, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 14 },
+  btnText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
+});
+
 function RootLayoutInner() {
   const [loaded, error] = useIconFonts();
   useDeviceFingerprint();
@@ -105,13 +160,13 @@ function RootLayoutInner() {
   if (Platform.OS !== "web" && !loaded && !error) return null;
 
   return (
-    <>
+    <BiometricGate>
       <PushSetup />
       <FirstLaunchGuard />
       <StatusBar style="light" />
       <OfflineBanner />
       <Stack screenOptions={{ headerShown: false, animation: "fade" }} />
-    </>
+    </BiometricGate>
   );
 }
 

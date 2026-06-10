@@ -203,7 +203,7 @@ export function predictGoal(
         alert = `✅ Vous êtes dans les temps ! Maintenez un dépôt de ${fmtXAF(optimalMonthly)}/mois pour atteindre votre objectif à temps.`;
       }
     } else {
-      alert = `📈 À votre rythme actuel (${fmtXAF(pattern.avg_monthly_xaf)}/mois), objectif atteint dans ~${predictedMonthsRemaining} mois (${completionDate.slice(0, 7)}).`;
+      alert = `📈 À votre rythme actuel (${fmtXAF(pattern.avg_monthly_xaf)}/mois), objectif atteint dans ~${predictedMonthsRemaining} mois (${completionDate.toISOString().slice(0, 7)}).`;
     }
   } else if (remaining > 0) {
     alert = "💡 Effectuez votre premier dépôt pour obtenir une prédiction personnalisée.";
