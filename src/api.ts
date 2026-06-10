@@ -72,6 +72,7 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "escrow-dispute")        return (await db.reportEscrowDispute(s[1], body?.reason ?? "")) as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "reserve")               return (await db.getTontineReserveFund(s[1])) as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "overdue")               return (await db.getOverdueMembers(s[1])) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "advance")             return (await db.advanceTontineCycle(s[1])) as T;
     if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "vote-exclusion")        return (await db.voteExclusion(s[1], body?.user_id, body?.reason ?? "")) as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "exclusion-votes")       return (await db.getExclusionVotes(s[1])) as T;
     if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "rate-creator")          return (await db.rateCreator(s[1], Number(body?.rating), body?.comment)) as T;
@@ -164,7 +165,12 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "POST" && s[0] === "wallet" && s[1] === "pay-contribution")         return db.rejectDirectPayment() as T;
 
     // ── KYC
-    if (method === "POST" && s[0] === "kyc" && s[1] === "submit")                      return (await db.submitKyc()) as T;
+    if (method === "POST" && s[0] === "kyc" && s[1] === "submit") {
+      if (body?.id_front_base64 && body?.selfie_base64) {
+        return (await db.submitKycFromBase64(body)) as T;
+      }
+      return (await db.submitKyc(body)) as T;
+    }
 
     // ── Payments
     if (method === "GET"  && s[0] === "payments" && s[1] === "history")                 return (await db.listPayments()) as T;
@@ -251,8 +257,10 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
       return { detail: "Mot de passe mis à jour" } as T;
     }
 
-    // ── Reports (stub — not yet implemented)
-    if (s[0] === "reports") return { detail: "Certificats disponibles dans la version premium" } as T;
+    // ── Reports & loans
+    if (method === "GET"  && s[0] === "reports-b64" && s[1])                              return (await db.getReportHtml(s[1] as "identity" | "trust-score" | "savings")) as T;
+    if (method === "POST" && s[0] === "loans" && s[1] === "apply")                       return (await db.submitLoanApplication(body)) as T;
+    if (method === "GET"  && s[0] === "loans" && s[1] === "applications")                  return (await db.getLoanApplications()) as T;
 
     throw { status: 404, detail: `Route introuvable: ${method} /${s.join("/")}` };
 

@@ -216,15 +216,31 @@ Deno.serve(async (req) => {
   const sentAt = new Date().toISOString();
   await admin.from("payments").update({ receipt_email_sent_at: sentAt }).eq("id", payment.id);
 
+  const pushTitle = delivery === "email" ? "Reçu envoyé par email" : "Reçu de transaction disponible";
+  const pushBody = delivery === "email"
+    ? `${formatXaf(amountXaf)} — Réf. ${receiptId}`
+    : `${formatXaf(amountXaf)} — ${kindLabel(kind)}. Réf. ${receiptId}. Consultez l'app pour le détail.`;
+
   if (delivery === "app") {
     await admin.from("notifications").insert({
       user_id: user.id,
-      title: "Reçu de transaction disponible",
-      body: `${formatXaf(amountXaf)} — ${kindLabel(kind)}. Réf. ${receiptId}. Consultez l'app pour le détail.`,
+      title: pushTitle,
+      body: pushBody,
       type: "receipt",
       is_read: false,
     });
   }
+
+  try {
+    await fetch(`${supabaseUrl}/functions/v1/send-push`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ user_id: user.id, title: pushTitle, body: pushBody, type: "receipt" }),
+    });
+  } catch { /* best-effort */ }
 
   return json({
     ok: true,

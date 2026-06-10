@@ -278,14 +278,27 @@ export async function getRegionalRanking(country: string) {
 
 export async function mintCertificateHash(docId: string, docType: string): Promise<{ hash: string; verify_url: string; polygon_stub: string }> {
   const me = await uid();
-  const { data: profile } = await getSupabase().from("profiles").select("full_name").eq("id", me).single();
-  const payload = `${me}:${docId}:${docType}:${profile?.full_name ?? ""}`;
-  let hash = 0;
-  for (let i = 0; i < payload.length; i++) { hash = ((hash << 5) - hash) + payload.charCodeAt(i); hash |= 0; }
-  const hexHash = Math.abs(hash).toString(16).padStart(8, "0") + docId.replace(/-/g, "").slice(0, 24);
-  await getSupabase().from("identity_events").insert({
+  const sb = getSupabase();
+  const { data: profile } = await sb.from("profiles").select("full_name").eq("id", me).single();
+  const payload = `${me}:${docId}:${docType}:${profile?.full_name ?? ""}:${new Date().toISOString()}`;
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload));
+  const hexHash = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  const verifyUrl = `https://hodix.app/verify/${hexHash}`;
+  const chainRef = `0x${hexHash.slice(0, 40)}`;
+
+  await sb.from("identity_certificates").upsert({
+    user_id: me,
+    doc_id: docId,
+    doc_type: docType,
+    content_hash: hexHash,
+    verify_url: verifyUrl,
+    chain_ref: chainRef,
+  }, { onConflict: "content_hash" });
+
+  await sb.from("identity_events").insert({
     user_id: me, event_type: "nft_certificate", points_delta: 0,
-    metadata: { doc_id: docId, doc_type: docType, hash: hexHash },
+    metadata: { doc_id: docId, doc_type: docType, hash: hexHash, chain_ref: chainRef },
   } as any);
-  return { hash: hexHash, verify_url: `https://hodix.app/verify/${hexHash}`, polygon_stub: `0x${hexHash}` };
+
+  return { hash: hexHash, verify_url: verifyUrl, polygon_stub: chainRef };
 }

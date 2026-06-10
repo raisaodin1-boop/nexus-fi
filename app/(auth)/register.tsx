@@ -146,12 +146,16 @@ export default function RegisterScreen() {
           phone: phone.trim() || null,
         }, { onConflict: "id" });
 
-        // Welcome email + notification via AuthContext (SIGNED_IN). Referral bonus only here.
         setTimeout(async () => {
           if (referralCode.trim()) {
             try { await applyReferralBonus(data.user!.id, referralCode.trim().toUpperCase()); } catch {}
           }
         }, 2000);
+
+        if (phone.trim()) {
+          setStep("otp");
+          return;
+        }
       }
 
       router.replace("/(tabs)");
@@ -163,16 +167,46 @@ export default function RegisterScreen() {
   };
 
   const sendOtp = async (_firstSend = false) => {
-    // OTP phone via Supabase — bypass gracefully if not configured
-    setOtpBypassed(true);
-    setOtpVerified(true);
-    setOtpSent(true);
+    setOtpLoading(true);
+    setOtpError(null);
+    try {
+      const normalized = normalizePhone(phone);
+      await getSupabase().from("profiles").update({ phone: normalized }).eq("id", (await getSupabase().auth.getUser()).data.user!.id);
+      const { data, error } = await getSupabase().functions.invoke("send-otp", {
+        body: { action: "send", purpose: "registration", phone: normalized },
+      });
+      if (error) throw new Error(error.message);
+      if (!data?.ok) throw new Error(data?.error ?? "Envoi impossible");
+      setOtpSent(true);
+      setOtpBypassed(data.delivery !== "sms");
+      setCountdown(60);
+    } catch (e: any) {
+      setOtpError(e?.message ?? "Impossible d'envoyer le code SMS.");
+      setOtpBypassed(true);
+      setOtpSent(true);
+    } finally {
+      setOtpLoading(false);
+    }
   };
 
   const verifyOtp = async () => {
-    // OTP bypassed — navigate directly
-    setOtpVerified(true);
-    router.replace("/(tabs)");
+    setOtpLoading(true);
+    setOtpError(null);
+    try {
+      const { data, error } = await getSupabase().functions.invoke("send-otp", {
+        body: { action: "verify", code: otpCode.trim(), purpose: "registration" },
+      });
+      if (error) throw new Error(error.message);
+      if (!data?.valid) {
+        setOtpError(data?.reason ?? "Code incorrect");
+        return;
+      }
+      setOtpVerified(true);
+    } catch (e: any) {
+      setOtpError(e?.message ?? "Vérification impossible");
+    } finally {
+      setOtpLoading(false);
+    }
   };
 
   const skipOtp = () => {

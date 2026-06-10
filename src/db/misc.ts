@@ -1,24 +1,6 @@
 import { getSupabase } from "@/src/supabase";
 import { uid, throwSb } from "./helpers";
-
-/* ── KYC ──────────────────────────────────────────────────── */
-
-export async function getKycStatus() {
-  const me = await uid();
-  const { data } = await getSupabase().from("kyc_submissions").select("*").eq("user_id", me).maybeSingle();
-  if (!data) return { status: "not_submitted" };
-  const status = data.status === "pending" ? "pending_review" : data.status;
-  return { ...data, status };
-}
-
-export async function submitKyc() {
-  const me = await uid();
-  const { error } = await getSupabase().from("kyc_submissions")
-    .upsert({ user_id: me, status: "pending", submitted_at: new Date().toISOString() }, { onConflict: "user_id" });
-  throwSb(error);
-  await getSupabase().from("profiles").update({ kyc_status: "pending_review" }).eq("id", me);
-  return { detail: "Demande KYC soumise" };
-}
+import { notifyUser } from "./notifications";
 
 /* ── PAYMENTS ────────────────────────────────────────────── */
 
@@ -58,9 +40,11 @@ export async function applyReferralBonus(newUserId: string, referralCode: string
   await getSupabase().from("profiles").update({ referred_by: referralCode }).eq("id", newUserId);
   const current = Number(referrer.referral_bonus ?? 0);
   await getSupabase().from("profiles").update({ referral_bonus: current + 500 }).eq("id", referrer.id);
-  await getSupabase().from("notifications").insert({
-    user_id: referrer.id, title: "Bonus de parrainage 🎁",
-    body: "Un nouveau membre a rejoint HODIX avec votre code ! +500 FCFA bonus ajoutés à votre compte.", type: "referral",
+  await notifyUser({
+    user_id: referrer.id,
+    title: "Bonus de parrainage 🎁",
+    body: "Un nouveau membre a rejoint HODIX avec votre code ! +500 FCFA bonus ajoutés à votre compte.",
+    type: "referral",
   });
 }
 
@@ -78,10 +62,11 @@ export async function sendWelcomeMessage(userId: string, fullName: string) {
     await sb.from("profiles").update({ referral_code: code }).eq("id", userId);
   }
 
-  await sb.from("notifications").insert({
-    user_id: userId, title: `Bienvenue sur HODIX, ${fullName} ! 🎉`,
+  await notifyUser({
+    user_id: userId,
+    title: `Bienvenue sur HODIX, ${fullName} ! 🎉`,
     body: `Votre compte est créé. Votre code de parrainage personnel est : ${code}\n\nPartagez-le à vos proches et gagnez 500 FCFA de bonus par inscription !`,
-    type: "welcome", is_read: false,
+    type: "welcome",
   });
 
   try {

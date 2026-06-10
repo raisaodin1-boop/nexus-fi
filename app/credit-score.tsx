@@ -362,6 +362,29 @@ export default function CreditScoreScreen() {
             {!data.is_loan_eligible && (
               <Text style={styles.partnerHint}>Score minimum 700 requis pour le partage partenaire.</Text>
             )}
+            <TouchableOpacity
+              style={[styles.partnerBtn, { marginTop: 12, opacity: data.is_loan_eligible ? 1 : 0.5 }]}
+              disabled={!data.is_loan_eligible}
+              onPress={async () => {
+                try {
+                  const r = await api.post<{ detail?: string; partner_ref?: string }>("/loans/apply", {
+                    amount_xaf: 500_000,
+                    duration_months: 12,
+                    purpose: "Financement personnel HODIX",
+                    credit_score: data.score,
+                  });
+                  Alert.alert("Demande envoyée", r.detail ?? `Réf. ${r.partner_ref}`);
+                } catch (e: any) {
+                  Alert.alert("Demande impossible", e?.detail ?? e?.message ?? "Erreur");
+                }
+              }}
+              activeOpacity={0.8}
+            >
+              <LinearGradient colors={["#059669", "#10B981"]} style={styles.partnerBtnGrad}>
+                <Award size={16} color="#fff" />
+                <Text style={styles.partnerBtnText}>Demander un financement (500 000 XAF)</Text>
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
         </View>
 

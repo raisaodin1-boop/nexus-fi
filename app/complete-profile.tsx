@@ -157,7 +157,6 @@ export default function CompleteProfile() {
         city: city.trim(),
         country,
         occupation: occupation.trim(),
-        ...(idDocBase64 ? { id_doc_base64: idDocBase64 } : {}),
       });
       await refresh();
       router.replace("/kyc");

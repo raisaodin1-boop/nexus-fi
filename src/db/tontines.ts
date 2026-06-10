@@ -1,6 +1,11 @@
 import { getSupabase } from "@/src/supabase";
 import { uid, throwSb, inviteCode, invalidateCache } from "./helpers";
 import { addIdentityEvent } from "./identity";
+import { notifyUser } from "./notifications";
+
+const FREQ_DAYS: Record<string, number> = {
+  weekly: 7, biweekly: 14, monthly: 30, quarterly: 90,
+};
 
 /* ── Basic CRUD ─────────────────────────────────────────────── */
 
@@ -373,6 +378,75 @@ export async function contributeTontineSecure(id: string, amount: number) {
 
   await addIdentityEvent(me, "tontine_contribution", amount >= 50000 ? 1 : 0.5);
   return { detail: "Contribution enregistrée", reserve_deducted: reserveAmount, net_amount: netAmount };
+}
+
+function nextCycleDeadline(frequency?: string | null): string {
+  const days = FREQ_DAYS[(frequency ?? "monthly").toLowerCase()] ?? 30;
+  return new Date(Date.now() + days * 86400000).toISOString();
+}
+
+export async function advanceTontineCycle(tontineId: string) {
+  const me = await uid();
+  const sb = getSupabase();
+  const { data: tontine } = await sb.from("tontines")
+    .select("id, owner_id, name, current_cycle, max_members, frequency, auto_advance")
+    .eq("id", tontineId).single();
+  if (!tontine) throw { status: 404, detail: "Tontine introuvable." };
+  if (tontine.owner_id !== me) throw { status: 403, detail: "Réservé au gestionnaire de la tontine." };
+
+  const cycle = tontine.current_cycle ?? 1;
+  const { count: memberCount } = await sb.from("tontine_members")
+    .select("*", { count: "exact", head: true }).eq("tontine_id", tontineId).neq("status", "exclu");
+  const { count: paidCount } = await sb.from("tontine_contributions")
+    .select("*", { count: "exact", head: true }).eq("tontine_id", tontineId).eq("cycle", cycle);
+
+  if ((paidCount ?? 0) < (memberCount ?? 1)) {
+    throw { status: 400, detail: "Tous les membres n'ont pas encore cotisé pour ce cycle." };
+  }
+
+  const nextCycle = cycle + 1;
+  await sb.from("tontines").update({
+    current_cycle: nextCycle,
+    cycle_deadline: nextCycleDeadline(tontine.frequency),
+  }).eq("id", tontineId);
+
+  const { data: members } = await sb.from("tontine_members").select("user_id").eq("tontine_id", tontineId);
+  for (const m of members ?? []) {
+    await notifyUser({
+      user_id: m.user_id,
+      title: `Nouveau cycle — ${tontine.name}`,
+      body: `Le cycle ${nextCycle} a commencé. Pensez à votre cotisation !`,
+      type: "tontine_cycle",
+    });
+  }
+
+  invalidateCache("tontines");
+  return { current_cycle: nextCycle, detail: `Cycle ${nextCycle} démarré.` };
+}
+
+export async function releaseDueEscrows() {
+  const sb = getSupabase();
+  const now = new Date().toISOString();
+  const { data: due } = await sb.from("tontine_escrow")
+    .select("*, tontines(name, owner_id)")
+    .eq("status", "held")
+    .lte("release_at", now)
+    .lt("dispute_count", 2);
+  let released = 0;
+  for (const row of due ?? []) {
+    await sb.from("tontine_escrow").update({ status: "released" }).eq("id", row.id);
+    const ownerId = (row as any).tontines?.owner_id;
+    if (ownerId) {
+      await notifyUser({
+        user_id: ownerId,
+        title: "Escrow libéré",
+        body: `Les fonds du cycle ${row.cycle} de ${(row as any).tontines?.name ?? "la tontine"} sont disponibles.`,
+        type: "escrow_release",
+      });
+    }
+    released++;
+  }
+  return { released };
 }
 
 /* ── Escrow ─────────────────────────────────────────────────── */

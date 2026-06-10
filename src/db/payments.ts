@@ -6,6 +6,7 @@ import { contributeAssociation, contributeCooperative, contributeFund } from "./
 import { topupFromMobileMoney } from "@/src/wallet-db";
 import type { PaymentKind } from "@/src/payment-nav";
 import { paymentToReceipt } from "@/src/payment-receipt";
+import { notifyUser } from "./notifications";
 
 const PAYMENT_BLOCKED =
   "Paiement électronique requis. Utilisez la page de paiement — aucun crédit sans débit confirmé.";
@@ -322,7 +323,7 @@ export async function confirmCinetpayPayment(payload: ConfirmPayload) {
 
   await fulfillPayment(meta);
 
-  await getSupabase().from("notifications").insert({
+  await notifyUser({
     user_id: me,
     title: "Paiement confirmé",
     body: `${meta.amount_xaf.toLocaleString("fr-FR")} XAF — opération enregistrée après validation du paiement.`,

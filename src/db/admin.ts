@@ -1,4 +1,5 @@
 import { getSupabase } from "@/src/supabase";
+import { notifyUser } from "./notifications";
 import { uid, cached, throwSb } from "./helpers";
 
 export async function getAdminAnalytics() {
@@ -126,7 +127,9 @@ export async function adminDeleteTontine(id: string) {
 
 export async function adminListKyc() {
   const { data, error } = await getSupabase()
-    .from("kyc_submissions").select("id, user_id, status, submitted_at").order("submitted_at", { ascending: false }).limit(100);
+    .from("kyc_submissions")
+    .select("id, user_id, status, submitted_at, verification_mode, provider, id_type, country_code")
+    .order("submitted_at", { ascending: false }).limit(100);
   if (error) return [];
   const userIds = [...new Set((data ?? []).map((k: any) => k.user_id))];
   const profileMap: Record<string, any> = {};
@@ -145,7 +148,7 @@ export async function adminHandleKyc(userId: string, approve: boolean) {
   await getSupabase().from("profiles").update({ kyc_status: status }).eq("id", userId);
   const title = approve ? "KYC approuvé ✅" : "KYC refusé";
   const body = approve ? "Votre identité a été vérifiée avec succès." : "Votre dossier KYC a été refusé. Contactez le support.";
-  await getSupabase().from("notifications").insert({ user_id: userId, title, body, type: "kyc" });
+  await notifyUser({ user_id: userId, title, body, type: "kyc" });
   return { detail: `KYC ${approve ? "approuvé" : "refusé"}` };
 }
 

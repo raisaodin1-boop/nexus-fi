@@ -97,22 +97,9 @@ export async function topupFromMobileMoney(payload: TopupPayload): Promise<Walle
   if (!Number.isFinite(payload.amount) || payload.amount <= 0) throw new Error("Montant invalide.");
   if (!/^\+?[\d\s\-]{8,15}$/.test(payload.phone)) throw new Error("Numéro de téléphone invalide.");
 
-  const rates = await getRates();
-  const amountXaf = convert(payload.amount, payload.currency, "XAF", rates);
-
-  // In production: call Mobile Money API here and await confirmation.
-  // For now we simulate immediate confirmation (sandbox mode).
-  // Balance is credited atomically server-side (RPC) — no client-side math.
-  const { data: tx, error } = await getSupabase().rpc("wallet_topup", {
-    p_amount: payload.amount,
-    p_currency: payload.currency,
-    p_provider: payload.provider,
-    p_phone: payload.phone,
-    p_amount_xaf: amountXaf,
-  });
-  if (error) throw new Error(error.message);
-
-  return { ...tx, amount: Number(tx.amount), amount_xaf: Number(tx.amount_xaf) };
+  throw new Error(
+    "Recharge électronique requise. Utilisez Wallet → Recharger (paiement CinetPay) — aucun crédit sans débit confirmé.",
+  );
 }
 
 // ─── Withdrawal to Mobile Money ───────────────────────────────────────────────
