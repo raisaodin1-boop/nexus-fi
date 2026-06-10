@@ -25,6 +25,7 @@ import { Button, Card, Field, SectionTitle } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { api, ApiError, User } from "@/src/api";
 import { getBiometricInfo, authenticateBiometric, setBiometricEnabled } from "@/src/biometrics";
+import { DatePicker, birthDateBounds } from "@/src/date-picker";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -35,6 +36,9 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bioEnabled, setBioEnabled] = useState(false);
+  const [dobDate, setDobDate] = useState<Date | null>(
+    user?.date_of_birth ? new Date(user.date_of_birth) : null,
+  );
 
   const [form, setForm] = useState({
     full_name: user?.full_name ?? "",
@@ -43,7 +47,6 @@ export default function ProfileScreen() {
     country: user?.country ?? "",
     city: user?.city ?? "",
     occupation: user?.occupation ?? "",
-    date_of_birth: user?.date_of_birth ?? "",
     birth_place: user?.birth_place ?? "",
     neighborhood: user?.neighborhood ?? "",
     address: user?.address ?? "",
@@ -59,11 +62,11 @@ export default function ProfileScreen() {
         country: user.country ?? "",
         city: user.city ?? "",
         occupation: user.occupation ?? "",
-        date_of_birth: user.date_of_birth ?? "",
         birth_place: user.birth_place ?? "",
         neighborhood: user.neighborhood ?? "",
         address: user.address ?? "",
       });
+      setDobDate(user.date_of_birth ? new Date(user.date_of_birth) : null);
     }
   }, [user]);
 
@@ -76,10 +79,9 @@ export default function ProfileScreen() {
   const handleSave = async () => {
     setSaving(true); setError(null);
     try {
-      const { date_of_birth, ...rest } = form;
       const payload = {
-        ...rest,
-        ...(date_of_birth?.trim() ? { date_of_birth: date_of_birth.trim() } : {}),
+        ...form,
+        ...(dobDate ? { date_of_birth: dobDate.toISOString().split("T")[0] } : {}),
       };
       await api.patch<User>("/users/me", payload);
       await refresh();
@@ -232,6 +234,15 @@ export default function ProfileScreen() {
                 editable={editing}
                 onChangeText={(t) => setForm({ ...form, occupation: t })}
               />
+              {editing ? (
+                <DatePicker
+                  label="Date de naissance"
+                  value={dobDate}
+                  onChange={setDobDate}
+                  {...birthDateBounds()}
+                  testID="profile-dob"
+                />
+              ) : null}
               <Field
                 testID="profile-address"
                 label="Adresse"
