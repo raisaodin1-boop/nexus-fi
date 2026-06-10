@@ -21,11 +21,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowLeft, ArrowDown, ArrowUp, Award, CheckCircle, ChevronRight,
-  Copy, Crown, MessageSquare, RefreshCw, Shield, Shuffle, Trophy, Users as UsersIcon,
+  Copy, Crown, MessageSquare, RefreshCw, Shield, Shuffle, Smartphone, Trophy, Users as UsersIcon,
   Wallet, X,
 } from "lucide-react-native";
 
 import { api, ApiError, formatXAF } from "@/src/api";
+import { useAuth } from "@/src/auth-context";
+import { TransactionConsentModal } from "@/src/consent-modal";
 import { supabase } from "@/src/supabase";
 import { Button, Card, Field, SkeletonBox, SkeletonCard } from "@/src/ui";
 import { DocumentButton } from "@/src/document-button";
@@ -408,6 +410,7 @@ function DisbursementHistory({ disbursements, currency }: { disbursements: Disbu
 
 export function TontineDetailView({ id }: { id: string }) {
   const router = useRouter();
+  const { user } = useAuth();
   const [data, setData] = useState<TontineData | null>(null);
   const [loading, setLoading] = useState(true);
   const [disbursements, setDisbursements] = useState<Disbursement[]>([]);
@@ -418,6 +421,10 @@ export function TontineDetailView({ id }: { id: string }) {
   const [contributeMemberId, setContributeMemberId] = useState<string | null>(null);
   const [contributeBusy, setContributeBusy] = useState(false);
   const [contributeError, setContributeError] = useState<string | null>(null);
+  const [walletBusy, setWalletBusy] = useState(false);
+  const [walletError, setWalletError] = useState<string | null>(null);
+  const [showWalletConsent, setShowWalletConsent] = useState(false);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
@@ -471,6 +478,53 @@ export function TontineDetailView({ id }: { id: string }) {
     } finally { setContributeBusy(false); }
   };
 
+  const openExternalPayment = () => {
+    if (!data) return;
+    const amount = data.tontine.contribution_amount;
+    if (!amount || amount <= 0) {
+      Alert.alert("Montant invalide", "Le montant de cotisation n'est pas configuré pour cette tontine.");
+      return;
+    }
+    router.push({
+      pathname: "/pay",
+      params: {
+        tontine_id: id,
+        amount: String(amount),
+        label: data.tontine.name,
+      },
+    } as any);
+  };
+
+  const loadWalletBalance = async () => {
+    try {
+      const wallet = await api.get<{ balance_xaf: number }>("/wallet");
+      setWalletBalance(Number(wallet.balance_xaf ?? 0));
+    } catch {
+      setWalletBalance(null);
+    }
+  };
+
+  const payFromWallet = async () => {
+    if (!data) return;
+    const amount = data.tontine.contribution_amount;
+    const cycle = data.tontine.current_cycle ?? 1;
+    setWalletBusy(true); setWalletError(null);
+    try {
+      await api.post("/wallet/pay-contribution", { tontine_id: id, amount, cycle });
+      setShowWalletConsent(false);
+      await load();
+      Alert.alert("Cotisation validée", "Votre paiement a été enregistré avec succès.");
+    } catch (e) {
+      setWalletError(e instanceof ApiError ? e.detail : (e as Error)?.message ?? "Erreur de paiement");
+    } finally { setWalletBusy(false); }
+  };
+
+  const startWalletPayment = async () => {
+    setWalletError(null);
+    await loadWalletBalance();
+    setShowWalletConsent(true);
+  };
+
   const shareWhatsApp = async () => {
     if (!data) return;
     const t = data.tontine;
@@ -500,6 +554,53 @@ export function TontineDetailView({ id }: { id: string }) {
   }
 
   const { tontine, is_admin, members, contributions, cycle } = data;
+  const currentCycle = tontine.current_cycle ?? 1;
+  const hasPaidCurrentCycle = !!user?.id && contributions.some(
+    (c) => c.user_id === user.id && c.cycle === currentCycle,
+  );
+  const canContribute = !!tontine.contribution_amount && tontine.contribution_amount > 0;
+
+  const ContributePanel = () => (
+    <View style={{ marginTop: 16, gap: 10 }}>
+      <Text style={styles.sectionTitle}>
+        {hasPaidCurrentCycle ? "Cotisation du cycle" : "Payer ma cotisation"}
+      </Text>
+      {hasPaidCurrentCycle ? (
+        <Card style={{ padding: 14, gap: 6, borderColor: Colors.accent, borderWidth: 1 }}>
+          <Text style={{ color: Colors.accent, fontWeight: "800" }}>✓ Cotisation enregistrée pour le cycle {currentCycle}</Text>
+          <Text style={{ color: Colors.textMuted, fontSize: 12 }}>
+            Montant : {formatXAF(tontine.contribution_amount, tontine.currency)}
+          </Text>
+        </Card>
+      ) : canContribute ? (
+        <Card style={{ padding: 16, gap: 12 }}>
+          <Text style={{ color: Colors.textMuted, fontSize: 13 }}>
+            Montant du cycle : {formatXAF(tontine.contribution_amount, tontine.currency)}
+          </Text>
+          {walletError ? <Text style={styles.errorText}>{walletError}</Text> : null}
+          <Button
+            label={`Cotiser depuis mon portefeuille — ${formatXAF(tontine.contribution_amount, tontine.currency)}`}
+            onPress={startWalletPayment}
+            loading={walletBusy}
+            icon={<Wallet color="#fff" size={16} />}
+            testID="tontine-pay-wallet"
+          />
+          <Button
+            label="Payer via Mobile Money / Carte"
+            variant="secondary"
+            onPress={openExternalPayment}
+            icon={<Smartphone color={Colors.primary} size={16} />}
+            testID="tontine-pay-external"
+          />
+          <Text style={{ color: Colors.textSubtle, fontSize: 11, textAlign: "center" }}>
+            Orange Money, MTN ou carte bancaire — validation automatique après paiement
+          </Text>
+        </Card>
+      ) : (
+        <Card><Text style={styles.emptyText}>Montant de cotisation non configuré.</Text></Card>
+      )}
+    </View>
+  );
 
   const TABS = [
     { key: "cycle" as const, label: "Cycle" },
@@ -576,6 +677,8 @@ export function TontineDetailView({ id }: { id: string }) {
               <Text style={styles.codeText}>{tontine.invite_code}</Text>
               <Text style={styles.codeCta}>Partager</Text>
             </TouchableOpacity>
+
+            <ContributePanel />
 
             {/* PDF certificate */}
             <View style={{ marginTop: 16 }}>
@@ -723,6 +826,7 @@ export function TontineDetailView({ id }: { id: string }) {
         {/* ── TAB: CONTRIBUTIONS ── */}
         {activeTab === "contributions" && (
           <View style={{ gap: 8 }}>
+            <ContributePanel />
             {contributions.length === 0
               ? <Card><Text style={styles.emptyText}>Aucune cotisation enregistrée.</Text></Card>
               : contributions.map((c) => (
@@ -739,6 +843,23 @@ export function TontineDetailView({ id }: { id: string }) {
           </View>
         )}
       </ScrollView>
+
+      <TransactionConsentModal
+        visible={showWalletConsent}
+        amount={tontine.contribution_amount}
+        currency={tontine.currency}
+        type="contribution"
+        onCancel={() => setShowWalletConsent(false)}
+        onConfirm={() => {
+          const balance = walletBalance ?? 0;
+          if (balance < tontine.contribution_amount) {
+            setShowWalletConsent(false);
+            setWalletError(`Solde insuffisant (${formatXAF(balance)}). Rechargez votre portefeuille.`);
+            return;
+          }
+          payFromWallet();
+        }}
+      />
 
       {/* Disbursement modal */}
       <DisbursementModal

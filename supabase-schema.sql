@@ -115,7 +115,9 @@ create policy "tontine_members_insert" on public.tontine_members for insert with
 );
 
 create policy "tontine_contributions_select" on public.tontine_contributions for select using (
-  user_id = auth.uid() or public.is_tontine_owner(tontine_id)
+  user_id = auth.uid()
+  or public.is_tontine_owner(tontine_id)
+  or public.is_tontine_member(tontine_id)
 );
 create policy "tontine_contributions_insert" on public.tontine_contributions for insert with check (auth.uid() = user_id);
 

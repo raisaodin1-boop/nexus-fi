@@ -175,6 +175,10 @@ export default function PayContribution() {
       }
       setFinalStatus("succeeded");
       setStage("done");
+      if (tontine_id) {
+        router.replace(`/tontines/${tontine_id}` as any);
+        return;
+      }
       if (mmResult?.payment_id) {
         router.replace({
           pathname: "/payments/receipt",
@@ -269,8 +273,11 @@ export default function PayContribution() {
               </Card>
             )}
             <Button
-              label={goal_id ? "Retour à l'objectif" : "Retour à la tontine"}
-              onPress={() => router.back()}
+              label={goal_id ? "Retour à l'objectif" : tontine_id ? "Retour à la tontine" : "Retour"}
+              onPress={() => {
+                if (tontine_id) router.replace(`/tontines/${tontine_id}` as any);
+                else router.back();
+              }}
               testID="pay-done"
             />
             {(finalStatus === "canceled" || finalStatus === "expired" || finalStatus === "failed") && (

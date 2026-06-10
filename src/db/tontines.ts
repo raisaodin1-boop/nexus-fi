@@ -18,26 +18,85 @@ export async function listTontines() {
 }
 
 export async function getTontine(id: string) {
-  const { data: tontine, error } = await getSupabase()
-    .from("tontines").select("*").eq("id", id).single();
+  const me = await uid();
+  const sb = getSupabase();
+
+  const { data: tontine, error } = await sb.from("tontines").select("*").eq("id", id).single();
   throwSb(error);
 
-  const { data: members } = await getSupabase()
+  const { data: members } = await sb
     .from("tontine_members")
     .select("*, profiles(full_name)")
     .eq("tontine_id", id);
 
-  const { data: contributions } = await getSupabase()
+  const { data: contributions } = await sb
     .from("tontine_contributions")
     .select("*, profiles(full_name)")
     .eq("tontine_id", id)
     .order("created_at", { ascending: false })
-    .limit(50);
+    .limit(100);
+
+  const membersList = (members ?? []).map((m: any) => ({
+    ...m,
+    full_name: m.profiles?.full_name ?? "—",
+    cycles_paid: m.cycles_paid ?? 0,
+    status: m.status ?? "a_jour",
+  }));
+
+  const contributionsList = (contributions ?? []).map((c: any) => ({
+    id: c.id,
+    user_id: c.user_id,
+    full_name: c.profiles?.full_name ?? "—",
+    amount: Number(c.amount ?? 0),
+    created_at: c.created_at,
+    cycle: c.cycle ?? null,
+    payment_method: c.payment_method ?? null,
+  }));
+
+  const contributionAmount = Number(tontine.amount_per_cycle ?? tontine.contribution_amount ?? 0);
+  const totalCollected = contributionsList.reduce((sum, c) => sum + c.amount, 0);
+  const membersCount = membersList.length;
+  const currentCycle = tontine.current_cycle ?? 1;
+  const totalCycles = Math.max(membersCount, tontine.max_members ?? 1);
+  const paidThisCycle = contributionsList.filter((c) => c.cycle === currentCycle).length;
+  const compliancePct = membersCount > 0 ? Math.round((paidThisCycle / membersCount) * 100) : 0;
+
+  const myMember = membersList.find((m) => m.user_id === me);
+  const isAdmin = tontine.owner_id === me || myMember?.role === "admin";
+
+  const rotationOrder = [...membersList].sort((a, b) => (a.rotation_position ?? 0) - (b.rotation_position ?? 0));
+  const currentBeneficiary = rotationOrder.find((m) => !m.has_received) ?? null;
+  const beneficiaryIdx = currentBeneficiary ? rotationOrder.indexOf(currentBeneficiary) : -1;
+  const nextBeneficiary = beneficiaryIdx >= 0 && beneficiaryIdx < rotationOrder.length - 1
+    ? rotationOrder[beneficiaryIdx + 1]
+    : null;
 
   return {
-    tontine,
-    members: (members ?? []).map((m: any) => ({ ...m, full_name: m.profiles?.full_name ?? "—" })),
-    contributions: (contributions ?? []).map((c: any) => ({ ...c, full_name: c.profiles?.full_name ?? "—" })),
+    tontine: {
+      ...tontine,
+      contribution_amount: contributionAmount,
+      members_count: membersCount,
+      total_collected: totalCollected,
+      total_cycles: totalCycles,
+      current_cycle: currentCycle,
+      status: tontine.status ?? (tontine.is_active ? "active" : "inactive"),
+      rotation_mode: tontine.rotation_mode ?? "rotation",
+      currency: tontine.currency ?? "XAF",
+    },
+    is_admin: isAdmin,
+    members: membersList,
+    contributions: contributionsList,
+    compliance_pct: compliancePct,
+    cycle: {
+      current_cycle: currentCycle,
+      total_cycles: totalCycles,
+      current_beneficiary_id: currentBeneficiary?.user_id ?? null,
+      current_beneficiary_name: currentBeneficiary?.full_name ?? null,
+      next_beneficiary_name: nextBeneficiary?.full_name ?? null,
+      rotation_mode: (tontine.rotation_mode ?? "rotation") as "rotation" | "random" | "custom",
+      cycle_start_date: null,
+      compliance_pct: compliancePct,
+    },
   };
 }
 
@@ -212,7 +271,9 @@ export async function createTontineSecure(body: Record<string, any>) {
   const code = inviteCode();
   const insertRow: Record<string, any> = {
     name: body.name, description: body.description ?? null,
-    amount_per_cycle: amountPerCycle, frequency: body.frequency ?? "monthly",
+    amount_per_cycle: amountPerCycle,
+    contribution_amount: amountPerCycle,
+    frequency: body.frequency ?? "monthly",
     max_members: Number(body.max_members ?? 12), is_public: body.is_public ?? false,
     owner_id: me, invite_code: code,
   };

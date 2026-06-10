@@ -192,7 +192,7 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
                 variant="accent"
                 icon={<CreditCard color="#fff" size={18} />}
                 onPress={() => router.push({
-                  pathname: "/payments/pay",
+                  pathname: "/pay",
                   params: { tontine_id: item.id, amount: String(item.contribution_amount) },
                 } as any)}
               />

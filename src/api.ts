@@ -150,7 +150,14 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "POST" && s[0] === "kyc" && s[1] === "submit")                      return (await db.submitKyc()) as T;
 
     // ── Payments
-    if (method === "GET" && s[0] === "payments" && s[1] === "history")                 return (await db.listPayments()) as T;
+    if (method === "GET"  && s[0] === "payments" && s[1] === "history")                 return (await db.listPayments()) as T;
+    if (method === "GET"  && s[0] === "payments" && s[1] && s[2] === "status")          return (await db.getPaymentStatus(s[1])) as T;
+    if (method === "POST" && s[0] === "payments" && s[1] === "contributions" && s[2] === "checkout")
+      return (await db.createContributionCheckout(body)) as T;
+    if (method === "POST" && s[0] === "payments" && s[1] === "mobile-money" && s[2] === "initiate")
+      return (await db.initiateMobileMoneyPayment(body)) as T;
+    if (method === "POST" && s[0] === "payments" && s[1] === "mobile-money" && s[2] === "confirm")
+      return (await db.confirmMobileMoneyPayment(body)) as T;
 
     // ── Analytics (simplified chart series from existing data)
     if (method === "GET" && s[0] === "analytics" && s[1] === "savings-series")  return (await db.getSavingsSeries(14)) as T;
@@ -258,5 +265,7 @@ export async function fetchMe(): Promise<User> {
 /* ── Currency formatter ────────────────────────────────────── */
 
 export function formatXAF(amount: number, currency = "XAF"): string {
-  return `${Math.round(amount).toLocaleString("fr-FR")} ${currency}`;
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return `0 ${currency}`;
+  return `${Math.round(n).toLocaleString("fr-FR")} ${currency}`;
 }

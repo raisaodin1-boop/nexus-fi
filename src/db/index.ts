@@ -8,4 +8,5 @@ export * from "./admin";
 export * from "./notifications";
 export * from "./messages";
 export * from "./misc";
+export * from "./payments";
 export * from "./wallet-security";
