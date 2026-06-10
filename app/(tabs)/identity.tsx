@@ -84,47 +84,22 @@ export default function Identity() {
   };
 
   const downloadCertified = async (kind: "identity" | "trust-score" | "savings") => {
-    try {
-      const resp = await api.get<{ filename: string; base64: string }>(`/reports/certified/${kind}`);
-      if (Platform.OS === "web") {
-        const link = document.createElement("a");
-        link.href = `data:application/pdf;base64,${resp.base64}`;
-        link.download = resp.filename;
-        link.click();
-        return;
-      }
-      const dir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? "";
-      const uri = `${dir}${resp.filename}`;
-      await FileSystem.writeAsStringAsync(uri, resp.base64, { encoding: FileSystem.EncodingType.Base64 });
-      if (!(await Sharing.isAvailableAsync())) {
-        throw new Error("Le partage n'est pas disponible sur cet appareil.");
-      }
-      await Sharing.shareAsync(uri, {
-        dialogTitle: "Partager le certificat authentifié Hodix",
-        mimeType: "application/pdf",
-        UTI: "com.adobe.pdf",
-      });
-    } catch (e: any) {
-      if (e?.status === 402) {
-        Alert.alert(
-          "Certificat Authentifié",
-          "Ce certificat nécessite un paiement de 10 000 FCFA. Voulez-vous continuer ?",
-          [
-            { text: "Annuler", style: "cancel" },
-            {
-              text: "Payer 10 000 FCFA",
-              onPress: () =>
-                router.push({
-                  pathname: "/payments/pay",
-                  params: { amount: "10000", reason: `Certificat authentifié - ${kind}`, kind },
-                } as any),
-            },
-          ],
-        );
-      } else {
-        Alert.alert("Erreur", e?.message ?? "Une erreur est survenue.");
-      }
-    }
+    // Payment gate — always ask before attempting download
+    Alert.alert(
+      "Certificat Authentifié VIP",
+      "Ce certificat officiel nécessite un paiement de 10 000 FCFA. Voulez-vous continuer vers le paiement ?",
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Payer 10 000 FCFA →",
+          onPress: () =>
+            router.push({
+              pathname: "/payments/pay",
+              params: { amount: "10000", reason: `Certificat authentifié - ${kind}`, kind },
+            } as any),
+        },
+      ],
+    );
   };
 
   if (loading || !identity) {
