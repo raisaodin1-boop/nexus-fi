@@ -41,7 +41,7 @@ export function HodixLogo({
             borderRadius: Math.round(size / 4.5),
           },
           Platform.OS === "web"
-            ? { boxShadow: "0px 8px 24px rgba(11, 31, 58, 0.35)" }
+            ? ({ boxShadow: "0px 8px 24px rgba(11, 31, 58, 0.35)" } as unknown as ViewStyle)
             : {
                 shadowColor: Colors.primary,
                 shadowOpacity: 0.35,

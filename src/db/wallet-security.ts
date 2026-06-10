@@ -11,30 +11,38 @@ const LIMITS = {
 const OTP_TTL_MIN = 10;
 
 export async function logSecurityEvent(userId: string, eventType: string, metadata: Record<string, any>) {
-  await getSupabase().from("identity_events").insert({
-    user_id: userId, event_type: `sec:${eventType}`, score_delta: 0, metadata,
-  } as any).throwOnError().then(() => {}).catch(() => {});
+  try {
+    await getSupabase().from("identity_events").insert({
+      user_id: userId, event_type: `sec:${eventType}`, score_delta: 0, metadata,
+    } as any);
+  } catch {
+    // best-effort audit log — never block the calling flow
+  }
 }
 
+// PIN hashes live in the private wallet_security table (RLS: own row only),
+// NOT in profiles which is readable by all authenticated users.
 export async function setWalletPin(pinHash: string) {
   const me = await uid();
-  await getSupabase().from("profiles").update({ wallet_pin_hash: pinHash }).eq("id", me);
+  const { error } = await getSupabase().from("wallet_security")
+    .upsert({ user_id: me, pin_hash: pinHash, updated_at: new Date().toISOString() });
+  if (error) throw new Error(error.message);
   await logSecurityEvent(me, "pin_set", {});
   return { ok: true };
 }
 
 export async function verifyWalletPin(pinHash: string): Promise<{ valid: boolean }> {
   const me = await uid();
-  const { data } = await getSupabase().from("profiles").select("wallet_pin_hash").eq("id", me).single();
-  const valid = !!data?.wallet_pin_hash && data.wallet_pin_hash === pinHash;
+  const { data } = await getSupabase().from("wallet_security").select("pin_hash").eq("user_id", me).maybeSingle();
+  const valid = !!data?.pin_hash && data.pin_hash === pinHash;
   await logSecurityEvent(me, valid ? "pin_ok" : "pin_fail", {});
   return { valid };
 }
 
 export async function hasWalletPin(): Promise<boolean> {
   const me = await uid();
-  const { data } = await getSupabase().from("profiles").select("wallet_pin_hash").eq("id", me).single();
-  return !!data?.wallet_pin_hash;
+  const { data } = await getSupabase().from("wallet_security").select("pin_hash").eq("user_id", me).maybeSingle();
+  return !!data?.pin_hash;
 }
 
 export async function generateTransactionOtp(): Promise<{ code: string; expires_at: string }> {

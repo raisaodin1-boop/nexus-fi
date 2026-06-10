@@ -17,6 +17,7 @@ import { Colors, Radius, Spacing } from "@/src/theme";
 import { api, formatXAF } from "@/src/api";
 import {
   hashPin,
+  hashPinLegacy,
   storePinHash,
   getStoredPinHash,
   checkPinLocked,
@@ -144,7 +145,7 @@ export function PinSetupModal({ visible, userId, onSuccess, onCancel }: PinSetup
         } else {
           setLoading(true);
           try {
-            const h = hashPin(next, userId);
+            const h = await hashPin(next, userId);
             await storePinHash(h);
             await api.post("/wallet/pin/set", { pin_hash: h });
             reset();
@@ -232,9 +233,18 @@ export function PinConfirmModal({ visible, userId, amount, onSuccess, onCancel }
         }
 
         const stored = await getStoredPinHash();
-        const h = hashPin(next, userId);
+        const h = await hashPin(next, userId);
 
-        if (h === stored) {
+        // PINs created before the SHA-256 upgrade were stored with the
+        // legacy hash — accept once, then transparently re-store as v2.
+        let valid = h === stored;
+        if (!valid && stored && stored === hashPinLegacy(next, userId)) {
+          valid = true;
+          await storePinHash(h);
+          api.post("/wallet/pin/set", { pin_hash: h }).catch(() => {});
+        }
+
+        if (valid) {
           await recordPinAttempt(true);
           reset();
           onSuccess();
