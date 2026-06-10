@@ -16,7 +16,7 @@
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
-    "types": ["react", "react-native", "node"]
+    "types": ["react", "node"]
   },
   "include": [
     "**/*.ts",

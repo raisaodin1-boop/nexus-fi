@@ -40,11 +40,17 @@ export class ApiError extends Error {
 type Seg = string[];
 
 function seg(path: string): Seg {
-  return path.split("/").filter(Boolean);
+  return path.split("?")[0].split("/").filter(Boolean);
+}
+
+function q(path: string): URLSearchParams {
+  const qs = path.split("?")[1];
+  return new URLSearchParams(qs ?? "");
 }
 
 async function route<T>(method: string, path: string, body?: any): Promise<T> {
   const s = seg(path);
+  const query = q(path);
 
   try {
     // ── Users
@@ -76,7 +82,8 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
 
     // ── Consent
     if (method === "POST" && s[0] === "consent" && s[1] === "tontine")                        return (await db.recordTontineConsent(body?.version, body?.tontine_id)) as T;
-    if (method === "GET"  && s[0] === "consent" && s[1] === "tontine" && s[2] === "check")    return ({ signed: await db.hasSignedConsent(body?.version ?? "1.0") }) as T;
+    if (method === "GET"  && s[0] === "consent" && s[1] === "tontine" && s[2] === "check")
+      return ({ signed: await db.hasSignedConsent(query.get("version") ?? body?.version ?? "1.0") }) as T;
 
     // ── Wallet security
     if (method === "POST" && s[0] === "wallet" && s[1] === "pin" && s[2] === "set")           return (await db.setWalletPin(body?.pin_hash)) as T;
@@ -119,7 +126,16 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     // ── Trust score / Insights / Analytics
     if (method === "GET" && s[0] === "trust-score")                                    return (await db.getTrustScore()) as T;
     if (method === "GET" && s[0] === "insights")                                       return (await db.getInsights()) as T;
-    if (method === "GET" && s[0] === "analytics")                                      return (await db.getSavingsSeries(Number(new URLSearchParams(s[2]?.split("?")[1]).get("days")) || 14)) as T;
+    if (method === "GET" && s[0] === "analytics" && !s[1])
+      return (await db.getSavingsSeries(Number(query.get("days")) || 14)) as T;
+    if (method === "GET" && s[0] === "analytics" && s[1] === "me" && s[2] === "savings")
+      return (await db.getSavingsSeries(Number(query.get("days")) || 14)) as T;
+    if (method === "GET" && s[0] === "analytics" && s[1] === "me" && s[2] === "contributions")
+      return (await db.getContributionsSeries(Number(query.get("days")) || 14)) as T;
+    if (method === "GET" && s[0] === "analytics" && s[1] === "platform" && s[2] === "savings")
+      return (await db.getPlatformSavingsSeries(Number(query.get("days")) || 14)) as T;
+    if (method === "GET" && s[0] === "analytics" && s[1] === "platform" && s[2] === "users")
+      return (await db.getUsersSeries(Number(query.get("days")) || 14)) as T;
 
     // ── Identity
     if (method === "GET" && s[0] === "identity" && !s[1])                              return (await db.getIdentity()) as T;
@@ -128,6 +144,7 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     // ── Notifications
     if (method === "GET"  && s[0] === "notifications")                                 return (await db.listNotifications()) as T;
     if (method === "POST" && s[0] === "notifications" && s[1] === "push-token")        return (await db.savePushToken(body?.token)) as T;
+    if (method === "POST" && s[0] === "notifications" && s[1] === "consent")          return (await db.saveNotificationConsent(!!body?.push_consent, body?.marketing_consent)) as T;
 
     // ── Credit score
     if (method === "GET"  && s[0] === "credit-score" && !s[1])                         return (await db.getCreditScore()) as T;
@@ -141,7 +158,7 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"  && s[0] === "wallet" && !s[1])                               return (await db.getWallet()) as T;
     if (method === "GET"  && s[0] === "wallet" && s[1] === "transactions")             return (await db.getWalletTransactions()) as T;
     if (method === "GET"  && s[0] === "wallet" && s[1] === "rates")                    return (await db.getExchangeRates()) as T;
-    if (method === "POST" && s[0] === "wallet" && s[1] === "topup")                    return (await db.topupWallet(body)) as T;
+    if (method === "POST" && s[0] === "wallet" && s[1] === "topup")                    return db.rejectDirectPayment() as T;
     if (method === "POST" && s[0] === "wallet" && s[1] === "withdraw")                 return (await db.withdrawWallet(body)) as T;
     if (method === "POST" && s[0] === "wallet" && s[1] === "transfer")                 return (await db.transferWallet(body)) as T;
     if (method === "POST" && s[0] === "wallet" && s[1] === "pay-contribution")         return db.rejectDirectPayment() as T;

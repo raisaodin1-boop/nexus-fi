@@ -12,7 +12,7 @@ const LIMITS = {
 export async function logSecurityEvent(userId: string, eventType: string, metadata: Record<string, any>) {
   try {
     await getSupabase().from("identity_events").insert({
-      user_id: userId, event_type: `sec:${eventType}`, score_delta: 0, metadata,
+      user_id: userId, event_type: `sec:${eventType}`, points_delta: 0, metadata,
     } as any);
   } catch {
     // best-effort audit log — never block the calling flow
@@ -100,7 +100,7 @@ export async function checkCoolingPeriod(recipientPhone: string): Promise<{ allo
     const { data: regEvent } = await getSupabase().from("identity_events")
       .select("created_at").eq("user_id", me).eq("event_type", `new_recipient:${recipientPhone}`).maybeSingle();
     if (!regEvent) {
-      await getSupabase().from("identity_events").insert({ user_id: me, event_type: `new_recipient:${recipientPhone}`, score_delta: 0, metadata: { phone: recipientPhone, registered_at: new Date().toISOString() } } as any);
+      await getSupabase().from("identity_events").insert({ user_id: me, event_type: `new_recipient:${recipientPhone}`, points_delta: 0, metadata: { phone: recipientPhone, registered_at: new Date().toISOString() } } as any);
       return { allowed: false, wait_minutes: LIMITS.cooling_hours * 60 };
     }
     const elapsed = Date.now() - new Date(regEvent.created_at).getTime();

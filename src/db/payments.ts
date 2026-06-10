@@ -3,6 +3,7 @@ import { uid, throwSb } from "./helpers";
 import { contributeTontineSecure } from "./tontines";
 import { depositSaving } from "./savings";
 import { contributeAssociation, contributeCooperative, contributeFund } from "./groups";
+import { topupFromMobileMoney } from "@/src/wallet-db";
 import type { PaymentKind } from "@/src/payment-nav";
 
 const PAYMENT_BLOCKED =
@@ -127,6 +128,8 @@ async function validatePaymentTarget(me: string, payload: InitiatePayload): Prom
       if (!count) throw { status: 403, detail: "Non membre de ce fonds." };
       break;
     }
+    case "wallet_topup":
+      break;
     default:
       throw { status: 400, detail: "Type de paiement inconnu." };
   }
@@ -155,6 +158,14 @@ async function fulfillPayment(meta: PaymentMeta) {
     case "fund_contribution":
       if (!meta.fund_id) break;
       await contributeFund(meta.fund_id, amount);
+      break;
+    case "wallet_topup":
+      await topupFromMobileMoney({
+        amount,
+        currency: "XAF",
+        provider: (meta.provider as any) ?? "MTN MoMo",
+        phone: meta.phone ?? "",
+      });
       break;
   }
 }
@@ -284,9 +295,10 @@ export async function confirmCinetpayPayment(payload: ConfirmPayload) {
     throw { status: 400, detail: "Ce paiement n'est plus en attente." };
   }
 
+  const sandboxAllowed = process.env.EXPO_PUBLIC_PAYMENT_SANDBOX === "true";
   const verified = cinetpayConfigured()
     ? await verifyCinetpayTransaction(payment.id)
-    : transactionId.length >= 4;
+    : sandboxAllowed && transactionId.length >= 8;
 
   if (!verified) {
     throw { status: 402, detail: "Paiement non confirmé par CinetPay. L'opération n'a pas été créditée." };

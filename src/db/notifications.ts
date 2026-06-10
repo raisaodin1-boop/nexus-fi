@@ -21,3 +21,13 @@ export async function savePushToken(token: string) {
     .upsert({ user_id: me, token, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
   return { detail: "Token enregistré" };
 }
+
+export async function saveNotificationConsent(pushConsent: boolean, marketingConsent?: boolean) {
+  const me = await uid();
+  await getSupabase().from("profiles").update({
+    push_consent: pushConsent,
+    marketing_consent: marketingConsent ?? pushConsent,
+    updated_at: new Date().toISOString(),
+  }).eq("id", me);
+  return { detail: "Préférences enregistrées" };
+}

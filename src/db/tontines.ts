@@ -399,8 +399,9 @@ export async function reportEscrowDispute(tontineId: string, reason: string) {
   const newCount = (escrow.dispute_count ?? 0) + 1;
   const newStatus = newCount >= 2 ? "disputed" : "held";
   await sb.from("tontine_escrow").update({ dispute_count: newCount, status: newStatus }).eq("tontine_id", tontineId).eq("cycle", 1);
+  const { data: tontine } = await sb.from("tontines").select("owner_id, name").eq("id", tontineId).single();
   await sb.from("notifications").insert({
-    user_id: escrow.tontine_id,
+    user_id: tontine?.owner_id ?? me,
     title: `⚠️ Litige signalé — ${reason}`,
     body: `Un membre a signalé un litige pour le cycle 1 de la tontine. Fonds gelés en attente de résolution.`,
     type: "escrow_dispute",
@@ -532,9 +533,9 @@ export async function getOverdueMembers(tontineId: string) {
 
 export async function recordTontineConsent(version: string, tontineId?: string) {
   const me = await uid();
-  const { error } = await getSupabase().from("tontine_consents").insert({
+  const { error } = await getSupabase().from("tontine_consent").insert({
     user_id: me, version, tontine_id: tontineId ?? null,
-    signed_at: new Date().toISOString(), platform: "hodix-mobile",
+    signed_at: new Date().toISOString(),
   });
   throwSb(error);
   return { signed: true, signed_at: new Date().toISOString(), version };
@@ -542,9 +543,38 @@ export async function recordTontineConsent(version: string, tontineId?: string) 
 
 export async function hasSignedConsent(version: string): Promise<boolean> {
   const me = await uid();
-  const { count } = await getSupabase().from("tontine_consents")
+  const { count } = await getSupabase().from("tontine_consent")
     .select("*", { count: "exact", head: true }).eq("user_id", me).eq("version", version);
   return (count ?? 0) > 0;
+}
+
+/* ── Analytics series ───────────────────────────────────────── */
+
+export async function getContributionsSeries(days = 14) {
+  const me = await uid();
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+  const { data } = await getSupabase()
+    .from("tontine_contributions").select("amount, created_at")
+    .eq("user_id", me).gte("created_at", since).order("created_at", { ascending: true });
+  const byDate: Record<string, number> = {};
+  for (const tx of data ?? []) {
+    const d = (tx.created_at as string).slice(0, 10);
+    byDate[d] = (byDate[d] ?? 0) + Number(tx.amount);
+  }
+  return { days, series: Object.entries(byDate).map(([date, value]) => ({ date, value })) };
+}
+
+export async function getPlatformSavingsSeries(days = 14) {
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+  const { data } = await getSupabase()
+    .from("savings_transactions").select("amount, created_at")
+    .gte("created_at", since).order("created_at", { ascending: true });
+  const byDate: Record<string, number> = {};
+  for (const tx of data ?? []) {
+    const d = (tx.created_at as string).slice(0, 10);
+    byDate[d] = (byDate[d] ?? 0) + Number(tx.amount);
+  }
+  return { days, series: Object.entries(byDate).map(([date, value]) => ({ date, value })) };
 }
 
 /* ── Leaderboard ────────────────────────────────────────────── */

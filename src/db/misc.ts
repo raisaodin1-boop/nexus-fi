@@ -5,8 +5,10 @@ import { uid, throwSb } from "./helpers";
 
 export async function getKycStatus() {
   const me = await uid();
-  const { data } = await getSupabase().from("kyc_submissions").select("*").eq("user_id", me).single();
-  return data ?? { status: "not_submitted" };
+  const { data } = await getSupabase().from("kyc_submissions").select("*").eq("user_id", me).maybeSingle();
+  if (!data) return { status: "not_submitted" };
+  const status = data.status === "pending" ? "pending_review" : data.status;
+  return { ...data, status };
 }
 
 export async function submitKyc() {
@@ -14,7 +16,7 @@ export async function submitKyc() {
   const { error } = await getSupabase().from("kyc_submissions")
     .upsert({ user_id: me, status: "pending", submitted_at: new Date().toISOString() }, { onConflict: "user_id" });
   throwSb(error);
-  await getSupabase().from("profiles").update({ kyc_status: "pending" }).eq("id", me);
+  await getSupabase().from("profiles").update({ kyc_status: "pending_review" }).eq("id", me);
   return { detail: "Demande KYC soumise" };
 }
 
@@ -121,7 +123,7 @@ export async function getStreakData(): Promise<StreakData> {
     const eventKey = `streak_${current}`;
     const { count } = await sb.from("identity_events").select("*", { count: "exact", head: true }).eq("user_id", me).eq("event_type", eventKey);
     if ((count ?? 0) === 0) {
-      await sb.from("identity_events").insert({ user_id: me, event_type: eventKey, score_delta: 10 });
+      await sb.from("identity_events").insert({ user_id: me, event_type: eventKey, points_delta: 10 });
       await sb.from("notifications").insert({
         user_id: me, title: `🔥 ${current} semaines consécutives !`,
         body: `Incroyable ! Vous avez cotisé ${current} semaines d'affilée. +10 pts Trust Score gagné !`,
@@ -252,7 +254,7 @@ export async function flagUserAsFraud(targetUserId: string, reason: string) {
   if (targetProfile?.device_fingerprint) {
     await sb.from("flagged_devices").upsert({ fingerprint: targetProfile.device_fingerprint, user_id: targetUserId, reason, flagged_at: new Date().toISOString() });
   }
-  await sb.from("identity_events").insert({ user_id: targetUserId, event_type: "fraud_flag", score_delta: -9999, metadata: { reason, flagged_by: me } } as any);
+  await sb.from("identity_events").insert({ user_id: targetUserId, event_type: "fraud_flag", points_delta: -9999, metadata: { reason, flagged_by: me } } as any);
   await sb.from("notifications").insert({ user_id: targetUserId, title: "⛔ Compte suspendu", body: `Votre compte a été suspendu pour activité frauduleuse : ${reason}.`, type: "account_suspended" });
   return { flagged: true, name: target?.full_name };
 }

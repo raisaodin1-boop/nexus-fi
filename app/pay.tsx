@@ -78,6 +78,7 @@ function paymentTitle(kind: PaymentKind) {
     case "association_contribution": return "COTISATION ASSOCIATION";
     case "cooperative_contribution": return "COTISATION COOPÉRATIVE";
     case "fund_contribution": return "CONTRIBUTION FONDS";
+    case "wallet_topup": return "RECHARGE WALLET";
     default: return "DÉPÔT ÉPARGNE";
   }
 }

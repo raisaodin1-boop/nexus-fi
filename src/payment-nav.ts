@@ -5,7 +5,8 @@ export type PaymentKind =
   | "savings_deposit"
   | "association_contribution"
   | "cooperative_contribution"
-  | "fund_contribution";
+  | "fund_contribution"
+  | "wallet_topup";
 
 export interface PaymentNavParams {
   amount: number;
@@ -37,6 +38,7 @@ export function openPaymentScreen(router: Router, params: PaymentNavParams) {
 }
 
 export function paymentReturnRoute(params: PaymentNavParams): string {
+  if (params.kind === "wallet_topup") return "/wallet";
   if (params.goal_id) return `/savings/${params.goal_id}`;
   if (params.tontine_id) return `/tontines/${params.tontine_id}`;
   if (params.association_id) return `/associations/${params.association_id}`;
