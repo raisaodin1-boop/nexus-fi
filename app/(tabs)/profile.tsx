@@ -76,7 +76,12 @@ export default function ProfileScreen() {
   const handleSave = async () => {
     setSaving(true); setError(null);
     try {
-      await api.patch<User>("/users/me", form);
+      const { date_of_birth, ...rest } = form;
+      const payload = {
+        ...rest,
+        ...(date_of_birth?.trim() ? { date_of_birth: date_of_birth.trim() } : {}),
+      };
+      await api.patch<User>("/users/me", payload);
       await refresh();
       setEditing(false);
     } catch (e) {

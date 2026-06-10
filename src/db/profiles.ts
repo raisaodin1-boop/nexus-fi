@@ -20,9 +20,17 @@ export async function getMe() {
 
 export async function updateMe(body: Record<string, any>) {
   const me = await uid();
+  const payload = { ...body, updated_at: new Date().toISOString() };
+
+  // Postgres `date` columns reject "" — coerce empty optional dates to null.
+  if ("date_of_birth" in payload) {
+    const dob = payload.date_of_birth;
+    if (typeof dob === "string" && dob.trim() === "") payload.date_of_birth = null;
+  }
+
   const { data, error } = await getSupabase()
     .from("profiles")
-    .update({ ...body, updated_at: new Date().toISOString() })
+    .update(payload)
     .eq("id", me)
     .select()
     .maybeSingle();
