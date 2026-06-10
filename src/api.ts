@@ -60,7 +60,7 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "profile")               return (await db.getPublicTontineProfile(s[1])) as T;
     if (method === "POST" && s[0] === "tontines" && s[1] === "request-join")                  return (await db.requestJoinTontine(body?.tontine_id)) as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] && !s[2])                            return (await db.getTontine(s[1])) as T;
-    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "contribute")            return (await db.contributeTontineSecure(s[1], Number(body?.amount))) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "contribute")            return db.rejectDirectPayment() as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "leaderboard")           return (await db.getTontineLeaderboard(s[1])) as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "escrow")                return (await db.getEscrowStatus(s[1])) as T;
     if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "escrow-dispute")        return (await db.reportEscrowDispute(s[1], body?.reason ?? "")) as T;
@@ -94,27 +94,27 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "POST" && s[0] === "associations" && !s[1])                         return (await db.createAssociation(body)) as T;
     if (method === "POST" && s[0] === "associations" && s[1] === "join")               return (await db.joinAssociation(body?.invite_code)) as T;
     if (method === "GET"  && s[0] === "associations" && s[1] && !s[2])                 return (await db.getAssociation(s[1])) as T;
-    if (method === "POST" && s[0] === "associations" && s[1] && s[2] === "contribute") return (await db.contributeAssociation(s[1], Number(body?.amount))) as T;
+    if (method === "POST" && s[0] === "associations" && s[1] && s[2] === "contribute") return db.rejectDirectPayment() as T;
 
     // ── Cooperatives
     if (method === "GET"  && s[0] === "cooperatives" && !s[1])                         return (await db.listCooperatives()) as T;
     if (method === "POST" && s[0] === "cooperatives" && !s[1])                         return (await db.createCooperative(body)) as T;
     if (method === "POST" && s[0] === "cooperatives" && s[1] === "join")               return (await db.joinCooperative(body?.invite_code)) as T;
     if (method === "GET"  && s[0] === "cooperatives" && s[1] && !s[2])                 return (await db.getCooperative(s[1])) as T;
-    if (method === "POST" && s[0] === "cooperatives" && s[1] && s[2] === "contribute") return (await db.contributeCooperative(s[1], Number(body?.amount))) as T;
+    if (method === "POST" && s[0] === "cooperatives" && s[1] && s[2] === "contribute") return db.rejectDirectPayment() as T;
 
     // ── Funds
     if (method === "GET"  && s[0] === "funds" && !s[1])                                return (await db.listFunds()) as T;
     if (method === "POST" && s[0] === "funds" && !s[1])                                return (await db.createFund(body)) as T;
     if (method === "GET"  && s[0] === "funds" && s[1] && !s[2])                        return (await db.getFund(s[1])) as T;
-    if (method === "POST" && s[0] === "funds" && s[1] && s[2] === "contribute")        return (await db.contributeFund(s[1], Number(body?.amount))) as T;
+    if (method === "POST" && s[0] === "funds" && s[1] && s[2] === "contribute")        return db.rejectDirectPayment() as T;
 
     // ── Savings
     if (method === "GET"  && s[0] === "savings" && (!s[1] || s[1] === "goals"))          return (await db.listSavings()) as T;
     if (method === "GET"  && s[0] === "savings" && s[1] === "summary")                 return (await db.getSavingsSummary()) as T;
     if (method === "POST" && s[0] === "savings" && (!s[1] || s[1] === "goals"))         return (await db.createSaving(body)) as T;
     if (method === "GET"  && s[0] === "savings" && s[1] && !s[2])                      return (await db.getSaving(s[1])) as T;
-    if (method === "POST" && s[0] === "savings" && s[1] && s[2] === "deposit")         return (await db.depositSaving(s[1], Number(body?.amount), body?.note)) as T;
+    if (method === "POST" && s[0] === "savings" && s[1] && s[2] === "deposit")         return db.rejectDirectPayment() as T;
 
     // ── Trust score / Insights / Analytics
     if (method === "GET" && s[0] === "trust-score")                                    return (await db.getTrustScore()) as T;
@@ -144,7 +144,7 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "POST" && s[0] === "wallet" && s[1] === "topup")                    return (await db.topupWallet(body)) as T;
     if (method === "POST" && s[0] === "wallet" && s[1] === "withdraw")                 return (await db.withdrawWallet(body)) as T;
     if (method === "POST" && s[0] === "wallet" && s[1] === "transfer")                 return (await db.transferWallet(body)) as T;
-    if (method === "POST" && s[0] === "wallet" && s[1] === "pay-contribution")         return (await db.payContributionWallet(body)) as T;
+    if (method === "POST" && s[0] === "wallet" && s[1] === "pay-contribution")         return db.rejectDirectPayment() as T;
 
     // ── KYC
     if (method === "POST" && s[0] === "kyc" && s[1] === "submit")                      return (await db.submitKyc()) as T;
@@ -152,12 +152,16 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     // ── Payments
     if (method === "GET"  && s[0] === "payments" && s[1] === "history")                 return (await db.listPayments()) as T;
     if (method === "GET"  && s[0] === "payments" && s[1] && s[2] === "status")          return (await db.getPaymentStatus(s[1])) as T;
+    if (method === "POST" && s[0] === "payments" && s[1] === "cinetpay" && s[2] === "initiate")
+      return (await db.initiateCinetpayPayment(body)) as T;
+    if (method === "POST" && s[0] === "payments" && s[1] === "cinetpay" && s[2] === "confirm")
+      return (await db.confirmCinetpayPayment(body)) as T;
     if (method === "POST" && s[0] === "payments" && s[1] === "contributions" && s[2] === "checkout")
       return (await db.createContributionCheckout(body)) as T;
     if (method === "POST" && s[0] === "payments" && s[1] === "mobile-money" && s[2] === "initiate")
-      return (await db.initiateMobileMoneyPayment(body)) as T;
+      return (await db.initiateCinetpayPayment(body)) as T;
     if (method === "POST" && s[0] === "payments" && s[1] === "mobile-money" && s[2] === "confirm")
-      return (await db.confirmMobileMoneyPayment(body)) as T;
+      return (await db.confirmCinetpayPayment(body)) as T;
 
     // ── Analytics (simplified chart series from existing data)
     if (method === "GET" && s[0] === "analytics" && s[1] === "savings-series")  return (await db.getSavingsSeries(14)) as T;

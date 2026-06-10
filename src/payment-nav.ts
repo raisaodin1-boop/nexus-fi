@@ -1,0 +1,46 @@
+import type { Router } from "expo-router";
+
+export type PaymentKind =
+  | "tontine_contribution"
+  | "savings_deposit"
+  | "association_contribution"
+  | "cooperative_contribution"
+  | "fund_contribution";
+
+export interface PaymentNavParams {
+  amount: number;
+  label?: string;
+  kind?: PaymentKind;
+  tontine_id?: string;
+  goal_id?: string;
+  association_id?: string;
+  cooperative_id?: string;
+  fund_id?: string;
+}
+
+/** Navigate to the unified electronic payment screen. */
+export function openPaymentScreen(router: Router, params: PaymentNavParams) {
+  if (!params.amount || params.amount <= 0) return;
+  router.push({
+    pathname: "/pay",
+    params: {
+      amount: String(params.amount),
+      ...(params.label ? { label: params.label } : {}),
+      ...(params.kind ? { kind: params.kind } : {}),
+      ...(params.tontine_id ? { tontine_id: params.tontine_id } : {}),
+      ...(params.goal_id ? { goal_id: params.goal_id } : {}),
+      ...(params.association_id ? { association_id: params.association_id } : {}),
+      ...(params.cooperative_id ? { cooperative_id: params.cooperative_id } : {}),
+      ...(params.fund_id ? { fund_id: params.fund_id } : {}),
+    },
+  } as any);
+}
+
+export function paymentReturnRoute(params: PaymentNavParams): string {
+  if (params.goal_id) return `/savings/${params.goal_id}`;
+  if (params.tontine_id) return `/tontines/${params.tontine_id}`;
+  if (params.association_id) return `/associations/${params.association_id}`;
+  if (params.cooperative_id) return `/cooperatives/${params.cooperative_id}`;
+  if (params.fund_id) return `/funds/${params.fund_id}`;
+  return "/(tabs)/community";
+}

@@ -1,8 +1,5 @@
-// HODIX Payment — Stripe / Orange Money / MTN Money
-// Business rules:
-//   - Mobile Money: member pays EXACT cotisation amount — no fee displayed
-//   - Stripe: member sees cotisation amount only — gross handled server-side
-//   - Commission 1.5% applied only on withdrawal, NEVER shown here
+// HODIX Payment — CinetPay (Orange / MTN / Moov / Carte)
+// Règle: aucun crédit dans l'app tant que CinetPay n'a pas confirmé le débit.
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator, Animated, Easing, Platform, ScrollView,
@@ -15,18 +12,19 @@ import { LinearGradient } from "expo-linear-gradient";
 import { CheckCircle2, XCircle, CreditCard, Smartphone, ArrowRight, Lock } from "lucide-react-native";
 
 import { api, ApiError, formatXAF } from "@/src/api";
+import { paymentReturnRoute, type PaymentKind } from "@/src/payment-nav";
 import { Button, Card, Field } from "@/src/ui";
 import { Colors, Radius, Spacing, Shadow } from "@/src/theme";
 
-type Method = "stripe" | "orange" | "mtn";
+type Method = "card" | "orange" | "mtn" | "moov";
 type Stage = "select" | "form" | "processing" | "done";
 type Status = "succeeded" | "failed" | "expired" | "canceled" | "polling";
 
-interface StripePaymentInfo {
+interface CinetpayInit {
   payment_id: string;
-  checkout_url: string;
-  displayed_amount_xaf: number;
-  currency: string;
+  payment_url?: string | null;
+  sandbox_mode?: boolean;
+  amount_xaf?: number;
 }
 
 const METHODS = [
@@ -47,27 +45,63 @@ const METHODS = [
     icon: "🟡",
   },
   {
-    key: "stripe" as Method,
+    key: "moov" as Method,
+    label: "Moov Money",
+    sub: "Paiement mobile instantané",
+    color: "#2563EB",
+    dark: "#1D4ED8",
+    icon: "🔵",
+  },
+  {
+    key: "card" as Method,
     label: "Carte bancaire",
-    sub: "Visa, Mastercard — 3-D Secure",
+    sub: "Visa, Mastercard via CinetPay",
     color: Colors.secondary,
     dark: "#1E40AF",
     icon: "💳",
   },
 ];
 
+function inferKind(params: Record<string, string | undefined>): PaymentKind {
+  if (params.kind) return params.kind as PaymentKind;
+  if (params.tontine_id) return "tontine_contribution";
+  if (params.goal_id) return "savings_deposit";
+  if (params.association_id) return "association_contribution";
+  if (params.cooperative_id) return "cooperative_contribution";
+  if (params.fund_id) return "fund_contribution";
+  return "savings_deposit";
+}
+
+function paymentTitle(kind: PaymentKind) {
+  switch (kind) {
+    case "tontine_contribution": return "COTISATION TONTINE";
+    case "association_contribution": return "COTISATION ASSOCIATION";
+    case "cooperative_contribution": return "COTISATION COOPÉRATIVE";
+    case "fund_contribution": return "CONTRIBUTION FONDS";
+    default: return "DÉPÔT ÉPARGNE";
+  }
+}
+
 export default function PayContribution() {
   const router = useRouter();
-  const { tontine_id, goal_id, amount, label } = useLocalSearchParams<{
-    tontine_id?: string; goal_id?: string; amount: string; label?: string;
+  const params = useLocalSearchParams<{
+    tontine_id?: string; goal_id?: string; association_id?: string;
+    cooperative_id?: string; fund_id?: string; amount: string; label?: string; kind?: PaymentKind;
   }>();
+  const { tontine_id, goal_id, association_id, cooperative_id, fund_id, amount, label } = params;
+  const paymentKind = inferKind(params);
   const amt = parseFloat(amount || "0");
+  const returnRoute = paymentReturnRoute({
+    amount: amt, kind: paymentKind, tontine_id, goal_id, association_id, cooperative_id, fund_id, label,
+  });
 
   const [method, setMethod] = useState<Method | null>(null);
   const [stage, setStage] = useState<Stage>("select");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
-  const [stripeInfo, setStripeInfo] = useState<StripePaymentInfo | null>(null);
+  const [paymentId, setPaymentId] = useState<string | null>(null);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  const [sandboxMode, setSandboxMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [webviewOpen, setWebviewOpen] = useState(false);
@@ -90,125 +124,80 @@ export default function PayContribution() {
 
   // Countdown for mobile money
   useEffect(() => {
-    if (stage !== "processing" || method === "stripe") return;
+    if (stage !== "processing" || method === "card") return;
     if (countdown <= 0) return;
     const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
     return () => clearTimeout(t);
   }, [countdown, stage, method]);
 
-  // Poll Stripe status
-  useEffect(() => {
-    if (!stripeInfo || method !== "stripe") return;
-    if (webviewOpen) return;
-    let stopped = false;
-    let t: any;
-    const poll = async () => {
-      try {
-        const s = await api.get<any>(`/payments/${stripeInfo.payment_id}/status`);
-        if (["succeeded", "failed", "expired"].includes(s.status)) {
-          setFinalStatus(s.status);
-          setStage("done");
-          return;
-        }
-      } catch {}
-      if (!stopped) t = setTimeout(poll, 2500);
-    };
-    poll();
-    return () => { stopped = true; if (t) clearTimeout(t); };
-  }, [stripeInfo, webviewOpen, method]);
-
   const selectedMethod = METHODS.find((m) => m.key === method);
 
-  // --- Stripe flow ---
-  const startStripe = async () => {
+  const buildInitPayload = () => ({
+    kind: paymentKind,
+    amount_xaf: amt,
+    label,
+    provider: method,
+    phone: method === "card" ? undefined : phone,
+    ...(tontine_id ? { tontine_id } : {}),
+    ...(goal_id ? { goal_id } : {}),
+    ...(association_id ? { association_id } : {}),
+    ...(cooperative_id ? { cooperative_id } : {}),
+    ...(fund_id ? { fund_id } : {}),
+  });
+
+  const initiatePayment = async () => {
+    if (method !== "card" && (!phone || phone.length < 9)) {
+      setError("Numéro invalide"); return;
+    }
     setError(null); setBusy(true);
     try {
-      const r = await api.post<StripePaymentInfo & { payment_id: string }>("/payments/contributions/checkout", {
-        tontine_id, amount_xaf: amt,
-      });
-      setStripeInfo(r);
-      setStage("processing");
-      if (Platform.OS === "web") {
-        window.open(r.checkout_url, "_blank");
+      const r = await api.post<CinetpayInit>("/payments/cinetpay/initiate", buildInitPayload());
+      setPaymentId(r.payment_id);
+      setSandboxMode(!!r.sandbox_mode);
+      if (r.payment_url) {
+        setCheckoutUrl(r.payment_url);
+        setStage("processing");
+        if (Platform.OS === "web") window.open(r.payment_url, "_blank");
+        else setWebviewOpen(true);
       } else {
-        setWebviewOpen(true);
+        setStage("processing");
+        setCountdown(120);
       }
     } catch (e) {
       setError(e instanceof ApiError ? e.detail : "Erreur de paiement");
     } finally { setBusy(false); }
   };
 
-  // --- Mobile Money flow ---
-  const sendMobileMoneyRequest = async () => {
-    if (!phone || phone.length < 9) { setError("Numéro invalide"); return; }
+  const confirmPayment = async () => {
+    if (!paymentId) { setError("Paiement introuvable"); return; }
+    if (!otp || otp.length < 4) { setError("Référence de transaction invalide"); return; }
     setError(null); setBusy(true);
     try {
-      await api.post("/payments/mobile-money/initiate", {
-        ...(tontine_id ? { tontine_id } : {}),
-        ...(goal_id ? { goal_id } : {}),
-        amount_xaf: amt,
+      await api.post("/payments/cinetpay/confirm", {
+        payment_id: paymentId,
+        transaction_id: otp,
         provider: method,
         phone,
       });
-      setStage("processing");
-      setCountdown(120);
-    } catch (e) {
-      setError(e instanceof ApiError ? e.detail : "Erreur");
-    } finally { setBusy(false); }
-  };
-
-  const confirmMobileMoney = async () => {
-    if (!otp || otp.length < 4) { setError("Code de confirmation invalide"); return; }
-    setError(null); setBusy(true);
-    try {
-      const mmResult = await api.post<{ payment_id?: string }>("/payments/mobile-money/confirm", {
-        ...(tontine_id ? { tontine_id } : {}),
-        ...(goal_id ? { goal_id } : {}),
-        amount_xaf: amt,
-        provider: method,
-        phone,
-        reference: otp,
-      });
-      // Credit savings goal after successful mobile money payment
-      if (goal_id) {
-        await api.post(`/savings/goals/${goal_id}/transactions`, { amount: amt, kind: "deposit" }).catch(() => null);
-      }
       setFinalStatus("succeeded");
       setStage("done");
-      if (tontine_id) {
-        router.replace(`/tontines/${tontine_id}` as any);
-        return;
-      }
-      if (mmResult?.payment_id) {
-        router.replace({
-          pathname: "/payments/receipt",
-          params: { paymentId: mmResult.payment_id, type: "deposit" },
-        } as any);
-        return;
-      }
+      router.replace(returnRoute as any);
     } catch (e) {
-      setError(e instanceof ApiError ? e.detail : "Erreur de confirmation");
+      setError(e instanceof ApiError ? e.detail : "Paiement non confirmé — aucun crédit appliqué.");
     } finally { setBusy(false); }
   };
 
   const onNavChange = (navState: { url: string }) => {
     const u = navState.url || "";
-    if (u.includes("/api/payments/return")) {
+    if (u.includes("cinetpay") || u.includes("return") || u.includes("success")) {
       setWebviewOpen(false);
-      if (u.includes("sc=success")) {
-        if (goal_id) {
-          api.post(`/savings/goals/${goal_id}/transactions`, { amount: amt, kind: "deposit" }).catch(() => null);
-        }
-        setFinalStatus("polling");
-      } else {
-        setFinalStatus("canceled");
-        setStage("done");
-      }
+      setStage("processing");
+      setCountdown(120);
     }
   };
 
   // ---- WEBVIEW ----
-  if (webviewOpen && stripeInfo) {
+  if (webviewOpen && checkoutUrl) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }} edges={["top", "bottom"]}>
         <View style={styles.webHeader}>
@@ -221,19 +210,15 @@ export default function PayContribution() {
           </View>
           <View style={{ width: 60 }} />
         </View>
-        <WebView source={{ uri: stripeInfo.checkout_url }} onNavigationStateChange={onNavChange} startInLoadingState />
+        <WebView source={{ uri: checkoutUrl }} onNavigationStateChange={onNavChange} startInLoadingState />
       </SafeAreaView>
     );
   }
 
   // ---- DONE ----
   if (stage === "done" && finalStatus) {
-    // Navigate to receipt for succeeded Stripe payments
-    if (finalStatus === "succeeded" && stripeInfo?.payment_id) {
-      router.replace({
-        pathname: "/payments/receipt",
-        params: { paymentId: stripeInfo.payment_id, type: "deposit" },
-      } as any);
+    if (finalStatus === "succeeded") {
+      router.replace(returnRoute as any);
       return null;
     }
     return (
@@ -305,7 +290,7 @@ export default function PayContribution() {
 
           {/* Payment card — shows cotisation amount, no fee mention */}
           <LinearGradient colors={[Colors.primary, Colors.gradMid]} style={[styles.hero, Shadow.cardDark]}>
-            <Text style={styles.heroLabel}>{goal_id ? "DÉPÔT ÉPARGNE" : "COTISATION TONTINE"}</Text>
+            <Text style={styles.heroLabel}>{paymentTitle(paymentKind)}</Text>
             {label ? (
               <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, fontWeight: "700", marginBottom: 2 }}>
                 {label}
@@ -366,33 +351,20 @@ export default function PayContribution() {
           <Text style={styles.amtDisplay}>{formatXAF(amt)}</Text>
           <Text style={styles.amtSub}>Montant à payer : {formatXAF(amt)}</Text>
 
-          {method === "stripe" ? (
+          {method === "card" ? (
             <Card style={{ marginTop: 20, gap: 12 }}>
-              <Text style={styles.formTitle}>Paiement par carte bancaire</Text>
+              <Text style={styles.formTitle}>Paiement par carte bancaire (CinetPay)</Text>
               <Text style={styles.formDesc}>
-                Vous allez être redirigé vers le formulaire Stripe sécurisé.
-                Visa, Mastercard, American Express acceptées.
+                Vous serez redirigé vers CinetPay. L'opération ne sera créditée qu'après confirmation du débit.
               </Text>
-              <View style={styles.cardBrands}>
-                {["VISA", "MC", "AMEX"].map((b) => (
-                  <View key={b} style={styles.cardBrand}>
-                    <Text style={styles.cardBrandText}>{b}</Text>
-                  </View>
-                ))}
-              </View>
-              <View style={styles.infoRow}>
-                <Lock size={14} color={Colors.accent} />
-                <Text style={styles.infoText}>3-D Secure · PCI DSS · Cryptage 256-bit</Text>
-              </View>
               {error ? <Text style={styles.error}>{error}</Text> : null}
               <Button
-                testID="pay-stripe-start"
+                testID="pay-card-start"
                 label={`Payer ${formatXAF(amt)} par carte`}
                 icon={<CreditCard color="#fff" size={16} />}
                 loading={busy}
-                onPress={startStripe}
+                onPress={initiatePayment}
               />
-              <Text style={styles.disclaimer}>Mode test : carte 4242 4242 4242 4242 · Date future · CVC 123</Text>
             </Card>
           ) : (
             <Card style={{ marginTop: 20, gap: 12 }}>
@@ -419,7 +391,7 @@ export default function PayContribution() {
                 label="Envoyer la demande de paiement"
                 icon={<Smartphone color="#fff" size={16} />}
                 loading={busy}
-                onPress={sendMobileMoneyRequest}
+                onPress={initiatePayment}
               />
             </Card>
           )}
@@ -429,7 +401,7 @@ export default function PayContribution() {
   }
 
   // ---- PROCESSING (mobile money OTP) ----
-  if (stage === "processing" && method !== "stripe") {
+  if (stage === "processing" && method !== "card") {
     return (
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 100 }}>
@@ -442,10 +414,12 @@ export default function PayContribution() {
             </LinearGradient>
           </Animated.View>
 
-          <Text style={styles.processingTitle}>Demande envoyée !</Text>
+          <Text style={styles.processingTitle}>Paiement en attente</Text>
           <Text style={styles.processingDesc}>
-            Vérifiez votre téléphone au numéro {phone}.{"\n"}
-            Validez la demande avec votre code PIN {selectedMethod?.label}, puis entrez le code de confirmation ci-dessous.
+            {sandboxMode
+              ? "Mode test CinetPay : entrez la référence de transaction reçue après paiement."
+              : `Validez le paiement ${selectedMethod?.label} sur votre téléphone (${phone}), puis entrez la référence CinetPay ci-dessous.`}
+            {"\n"}Aucun crédit ne sera appliqué sans confirmation.
           </Text>
 
           <View style={styles.countdownWrap}>
@@ -455,7 +429,7 @@ export default function PayContribution() {
 
           <Card style={{ gap: 12, marginTop: 8 }}>
             <Field
-              label="Code de confirmation SMS"
+              label="Référence transaction CinetPay"
               placeholder="Ex: 123456"
               value={otp}
               onChangeText={setOtp}
@@ -467,7 +441,7 @@ export default function PayContribution() {
               testID="pay-mm-confirm"
               label="Confirmer le paiement"
               loading={busy}
-              onPress={confirmMobileMoney}
+              onPress={confirmPayment}
               icon={<CheckCircle2 color="#fff" size={16} />}
             />
             <Button
@@ -483,13 +457,26 @@ export default function PayContribution() {
     );
   }
 
-  // Stripe processing (webview closed, polling)
+  // Card processing (webview closed) — enter CinetPay reference
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 16 }}>
-        <ActivityIndicator color={Colors.secondary} size="large" />
-        <Text style={{ color: Colors.text, fontWeight: "700" }}>Vérification du paiement...</Text>
-      </View>
+      <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 100 }}>
+        <Text style={styles.processingTitle}>Finaliser le paiement carte</Text>
+        <Text style={styles.processingDesc}>
+          Après paiement sur CinetPay, entrez la référence de transaction pour valider l'opération.
+        </Text>
+        <Card style={{ gap: 12, marginTop: 12 }}>
+          <Field
+            label="Référence transaction CinetPay"
+            placeholder="Ex: CP-123456"
+            value={otp}
+            onChangeText={setOtp}
+            testID="pay-card-ref"
+          />
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          <Button label="Confirmer le paiement" loading={busy} onPress={confirmPayment} testID="pay-card-confirm" />
+        </Card>
+      </ScrollView>
     </SafeAreaView>
   );
 }

@@ -27,7 +27,7 @@ import {
 
 import { api, ApiError, formatXAF } from "@/src/api";
 import { useAuth } from "@/src/auth-context";
-import { TransactionConsentModal } from "@/src/consent-modal";
+import { openPaymentScreen } from "@/src/payment-nav";
 import { supabase } from "@/src/supabase";
 import { Button, Card, Field, SkeletonBox, SkeletonCard } from "@/src/ui";
 import { DocumentButton } from "@/src/document-button";
@@ -417,14 +417,6 @@ export function TontineDetailView({ id }: { id: string }) {
   const [showDisbModal, setShowDisbModal] = useState(false);
   const [advanceBusy, setAdvanceBusy] = useState(false);
   const [activeTab, setActiveTab] = useState<"cycle" | "rotation" | "history" | "members" | "contributions">("cycle");
-  const [contributeAmount, setContributeAmount] = useState("");
-  const [contributeMemberId, setContributeMemberId] = useState<string | null>(null);
-  const [contributeBusy, setContributeBusy] = useState(false);
-  const [contributeError, setContributeError] = useState<string | null>(null);
-  const [walletBusy, setWalletBusy] = useState(false);
-  const [walletError, setWalletError] = useState<string | null>(null);
-  const [showWalletConsent, setShowWalletConsent] = useState(false);
-  const [walletBalance, setWalletBalance] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
@@ -462,67 +454,19 @@ export function TontineDetailView({ id }: { id: string }) {
     } finally { setAdvanceBusy(false); }
   };
 
-  const contributeManual = async () => {
-    if (!data) return;
-    const amt = parseFloat(contributeAmount);
-    if (!amt || amt <= 0) { setContributeError("Montant invalide"); return; }
-    const target = contributeMemberId ?? data.members[0]?.user_id;
-    if (!target) { setContributeError("Aucun membre"); return; }
-    setContributeError(null); setContributeBusy(true);
-    try {
-      await api.post(`/tontines/${id}/contribute`, { member_user_id: target, amount: amt });
-      setContributeAmount("");
-      await load();
-    } catch (e) {
-      setContributeError(e instanceof ApiError ? e.detail : "Erreur");
-    } finally { setContributeBusy(false); }
-  };
-
-  const openExternalPayment = () => {
+  const openPayment = () => {
     if (!data) return;
     const amount = data.tontine.contribution_amount;
     if (!amount || amount <= 0) {
       Alert.alert("Montant invalide", "Le montant de cotisation n'est pas configuré pour cette tontine.");
       return;
     }
-    router.push({
-      pathname: "/pay",
-      params: {
-        tontine_id: id,
-        amount: String(amount),
-        label: data.tontine.name,
-      },
-    } as any);
-  };
-
-  const loadWalletBalance = async () => {
-    try {
-      const wallet = await api.get<{ balance_xaf: number }>("/wallet");
-      setWalletBalance(Number(wallet.balance_xaf ?? 0));
-    } catch {
-      setWalletBalance(null);
-    }
-  };
-
-  const payFromWallet = async () => {
-    if (!data) return;
-    const amount = data.tontine.contribution_amount;
-    const cycle = data.tontine.current_cycle ?? 1;
-    setWalletBusy(true); setWalletError(null);
-    try {
-      await api.post("/wallet/pay-contribution", { tontine_id: id, amount, cycle });
-      setShowWalletConsent(false);
-      await load();
-      Alert.alert("Cotisation validée", "Votre paiement a été enregistré avec succès.");
-    } catch (e) {
-      setWalletError(e instanceof ApiError ? e.detail : (e as Error)?.message ?? "Erreur de paiement");
-    } finally { setWalletBusy(false); }
-  };
-
-  const startWalletPayment = async () => {
-    setWalletError(null);
-    await loadWalletBalance();
-    setShowWalletConsent(true);
+    openPaymentScreen(router, {
+      kind: "tontine_contribution",
+      tontine_id: id,
+      amount,
+      label: data.tontine.name,
+    });
   };
 
   const shareWhatsApp = async () => {
@@ -577,23 +521,14 @@ export function TontineDetailView({ id }: { id: string }) {
           <Text style={{ color: Colors.textMuted, fontSize: 13 }}>
             Montant du cycle : {formatXAF(tontine.contribution_amount, tontine.currency)}
           </Text>
-          {walletError ? <Text style={styles.errorText}>{walletError}</Text> : null}
           <Button
-            label={`Cotiser depuis mon portefeuille — ${formatXAF(tontine.contribution_amount, tontine.currency)}`}
-            onPress={startWalletPayment}
-            loading={walletBusy}
-            icon={<Wallet color="#fff" size={16} />}
-            testID="tontine-pay-wallet"
-          />
-          <Button
-            label="Payer via Mobile Money / Carte"
-            variant="secondary"
-            onPress={openExternalPayment}
-            icon={<Smartphone color={Colors.primary} size={16} />}
-            testID="tontine-pay-external"
+            label={`Cotiser — ${formatXAF(tontine.contribution_amount, tontine.currency)}`}
+            onPress={openPayment}
+            icon={<Smartphone color="#fff" size={16} />}
+            testID="tontine-pay"
           />
           <Text style={{ color: Colors.textSubtle, fontSize: 11, textAlign: "center" }}>
-            Orange Money, MTN ou carte bancaire — validation automatique après paiement
+            Paiement électronique CinetPay uniquement — crédit après confirmation du débit
           </Text>
         </Card>
       ) : (
@@ -723,41 +658,6 @@ export function TontineDetailView({ id }: { id: string }) {
               </TouchableOpacity>
             )}
 
-            {/* Admin: Manual contribution */}
-            {is_admin && (
-              <View style={{ marginTop: 20 }}>
-                <Text style={styles.sectionTitle}>Contribution manuelle (cash)</Text>
-                <Card style={{ padding: 16, gap: 12 }}>
-                  <Field
-                    label="Montant"
-                    value={contributeAmount}
-                    onChangeText={setContributeAmount}
-                    placeholder={tontine.contribution_amount?.toString()}
-                    keyboardType="numeric"
-                    testID="tontine-contrib-amount"
-                  />
-                  <Text style={styles.fieldLabel}>Membre</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View style={{ flexDirection: "row", gap: 8 }}>
-                      {members.map((m) => {
-                        const active = (contributeMemberId ?? members[0]?.user_id) === m.user_id;
-                        return (
-                          <TouchableOpacity
-                            key={m.id}
-                            onPress={() => setContributeMemberId(m.user_id)}
-                            style={[styles.memberChip, active && styles.memberChipActive]}
-                          >
-                            <Text style={[styles.memberChipText, active && { color: "#fff" }]}>{m.full_name}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  </ScrollView>
-                  {contributeError && <Text style={styles.errorText}>{contributeError}</Text>}
-                  <Button label="Enregistrer" onPress={contributeManual} loading={contributeBusy} testID="tontine-contrib-submit" />
-                </Card>
-              </View>
-            )}
           </>
         )}
 
@@ -843,23 +743,6 @@ export function TontineDetailView({ id }: { id: string }) {
           </View>
         )}
       </ScrollView>
-
-      <TransactionConsentModal
-        visible={showWalletConsent}
-        amount={tontine.contribution_amount}
-        currency={tontine.currency}
-        type="contribution"
-        onCancel={() => setShowWalletConsent(false)}
-        onConfirm={() => {
-          const balance = walletBalance ?? 0;
-          if (balance < tontine.contribution_amount) {
-            setShowWalletConsent(false);
-            setWalletError(`Solde insuffisant (${formatXAF(balance)}). Rechargez votre portefeuille.`);
-            return;
-          }
-          payFromWallet();
-        }}
-      />
 
       {/* Disbursement modal */}
       <DisbursementModal
