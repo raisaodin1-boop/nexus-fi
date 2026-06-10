@@ -31,6 +31,7 @@ export function OtpModal({ visible, onSuccess, onCancel, amountXaf }: OtpModalPr
   const [error, setError] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [deliveryHint, setDeliveryHint] = useState("Un code a été envoyé par notification à votre appareil");
 
   // Resend cooldown (seconds)
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -81,11 +82,16 @@ export function OtpModal({ visible, onSuccess, onCancel, amountXaf }: OtpModalPr
     setGenerating(true);
     setError(null);
     try {
-      const res = await api.post<{ code?: string; expires_at?: string }>("/wallet/otp/generate");
+      const res = await api.post<{ expires_at?: string; delivery?: "sms" | "app"; phone_masked?: string | null }>("/wallet/otp/generate");
+      setDeliveryHint(
+        res?.delivery === "sms"
+          ? `Un code a été envoyé par SMS au ${res.phone_masked ?? "numéro enregistré"}`
+          : "Un code a été envoyé dans vos notifications Hodix",
+      );
       startResendCooldown();
       startExpiryCountdown(res?.expires_at ?? null);
-    } catch {
-      setError("Impossible d'envoyer le code. Réessayez.");
+    } catch (e: any) {
+      setError(e?.message ?? "Impossible d'envoyer le code. Réessayez.");
     } finally {
       setGenerating(false);
     }
@@ -149,9 +155,7 @@ export function OtpModal({ visible, onSuccess, onCancel, amountXaf }: OtpModalPr
               <Text style={styles.generatingText}>Envoi du code...</Text>
             </View>
           ) : (
-            <Text style={styles.hint}>
-              Un code a été envoyé par notification à votre appareil
-            </Text>
+            <Text style={styles.hint}>{deliveryHint}</Text>
           )}
 
           {expiresIn !== null && expiresIn > 0 && (

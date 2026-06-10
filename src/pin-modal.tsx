@@ -3,7 +3,7 @@
  * PinSetupModal: first-time 4-digit PIN creation (enter + confirm).
  * PinConfirmModal: transaction confirmation with lockout logic.
  */
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Modal,
@@ -24,6 +24,7 @@ import {
   recordPinAttempt,
   getRemainingAttempts,
 } from "@/src/security";
+import { getBiometricInfo, isBiometricEnabled, authenticateBiometric } from "@/src/biometrics";
 
 // ─── Numpad ──────────────────────────────────────────────────────────────────
 
@@ -204,12 +205,40 @@ export function PinConfirmModal({ visible, userId, amount, onSuccess, onCancel }
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [bioLabel, setBioLabel] = useState<string | null>(null);
   const { shake, triggerShake } = usePinShake();
 
   const reset = () => {
     setPin("");
     setError(null);
   };
+
+  const tryBiometric = async () => {
+    const ok = await authenticateBiometric(
+      amount !== undefined ? `Confirmer ${formatXAF(amount)}` : "Confirmer la transaction",
+    );
+    if (ok) {
+      await recordPinAttempt(true);
+      reset();
+      onSuccess();
+    }
+  };
+
+  // When the user enabled biometrics, offer Face ID / fingerprint as a
+  // faster alternative to the PIN (auto-prompted once on open).
+  useEffect(() => {
+    if (!visible) return;
+    let active = true;
+    (async () => {
+      if (!(await isBiometricEnabled())) return;
+      const info = await getBiometricInfo();
+      if (!active || !info.available) return;
+      setBioLabel(info.label);
+      tryBiometric();
+    })();
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   const handleKey = async (key: string) => {
     if (loading) return;
@@ -291,6 +320,12 @@ export function PinConfirmModal({ visible, userId, amount, onSuccess, onCancel }
           <PinDots count={pin.length} shake={shake} />
 
           <Numpad onKey={handleKey} />
+
+          {bioLabel ? (
+            <TouchableOpacity onPress={tryBiometric} style={styles.bioBtn}>
+              <Text style={styles.bioBtnText}>Utiliser {bioLabel}</Text>
+            </TouchableOpacity>
+          ) : null}
 
           <TouchableOpacity onPress={handleCancel} style={styles.cancelBtn}>
             <Text style={styles.cancelText}>Annuler</Text>
@@ -399,6 +434,18 @@ const styles = StyleSheet.create({
   keyPlaceholder: {
     width: 72,
     height: 72,
+  },
+  bioBtn: {
+    marginTop: Spacing.lg,
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.primaryLight,
+  },
+  bioBtnText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: Colors.primaryDark,
   },
   cancelBtn: {
     marginTop: Spacing.xl,

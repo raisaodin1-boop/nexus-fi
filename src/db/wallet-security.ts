@@ -8,7 +8,6 @@ const LIMITS = {
   new_recipient: 100_000,
   cooling_hours: 2,
 };
-const OTP_TTL_MIN = 10;
 
 export async function logSecurityEvent(userId: string, eventType: string, metadata: Record<string, any>) {
   try {
@@ -45,30 +44,33 @@ export async function hasWalletPin(): Promise<boolean> {
   return !!data?.pin_hash;
 }
 
-export async function generateTransactionOtp(): Promise<{ code: string; expires_at: string }> {
+export interface OtpSendResult {
+  expires_at: string;
+  delivery: "sms" | "app";
+  phone_masked?: string | null;
+}
+
+// OTP generation + verification are fully server-side (send-otp edge
+// function): the code is hashed in otp_codes, sent by SMS via Twilio when
+// configured, otherwise delivered as an in-app notification. The client
+// never sees the code.
+export async function generateTransactionOtp(): Promise<OtpSendResult> {
   const me = await uid();
-  const code = String(Math.floor(100000 + Math.random() * 900000));
-  const expiresAt = new Date(Date.now() + OTP_TTL_MIN * 60_000).toISOString();
-  await getSupabase().from("notifications").upsert({
-    user_id: me, title: "Code de vérification HODIX",
-    body: `Votre code : ${code}. Valable ${OTP_TTL_MIN} min. Ne le communiquez jamais.`,
-    type: "otp", metadata: { code, expires_at: expiresAt }, is_read: false,
-  });
-  await logSecurityEvent(me, "otp_generated", {});
-  return { code, expires_at: expiresAt };
+  const { data, error } = await getSupabase().functions.invoke("send-otp", { body: { action: "send" } });
+  if (error) throw new Error("Impossible d'envoyer le code. Réessayez.");
+  if (!data?.ok) throw new Error(data?.error ?? "Impossible d'envoyer le code.");
+  await logSecurityEvent(me, "otp_generated", { delivery: data.delivery });
+  return { expires_at: data.expires_at, delivery: data.delivery, phone_masked: data.phone_masked ?? null };
 }
 
 export async function verifyTransactionOtp(inputCode: string): Promise<{ valid: boolean; reason?: string }> {
   const me = await uid();
-  const { data } = await getSupabase().from("notifications")
-    .select("metadata, created_at").eq("user_id", me).eq("type", "otp").order("created_at", { ascending: false }).limit(1).maybeSingle();
-  if (!data?.metadata) return { valid: false, reason: "Aucun OTP actif" };
-  const meta = data.metadata as any;
-  if (new Date() > new Date(meta.expires_at)) return { valid: false, reason: "Code expiré. Demandez un nouveau code." };
-  if (meta.code !== inputCode.trim()) { await logSecurityEvent(me, "otp_fail", {}); return { valid: false, reason: "Code incorrect" }; }
-  await getSupabase().from("notifications").update({ is_read: true, metadata: { ...meta, used: true } }).eq("user_id", me).eq("type", "otp");
-  await logSecurityEvent(me, "otp_ok", {});
-  return { valid: true };
+  const { data, error } = await getSupabase().functions.invoke("send-otp", {
+    body: { action: "verify", code: inputCode.trim() },
+  });
+  if (error) return { valid: false, reason: "Erreur de vérification. Réessayez." };
+  await logSecurityEvent(me, data?.valid ? "otp_ok" : "otp_fail", {});
+  return { valid: !!data?.valid, reason: data?.reason };
 }
 
 export async function checkTransactionLimits(amountXaf: number): Promise<{ allowed: boolean; reason?: string }> {

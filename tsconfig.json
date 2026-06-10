@@ -28,6 +28,7 @@
     "node_modules",
     "dist",
     "web-build",
+    "supabase/functions",
     "*.py"
   ]
 }
