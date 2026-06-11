@@ -7,7 +7,12 @@ export function getSupabase(): SupabaseClient {
     const url = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
     const key = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
     _client = createClient(url, key, {
-      auth: { persistSession: true, autoRefreshToken: true },
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: typeof window !== "undefined",
+        flowType: "pkce",
+      },
     });
   }
   return _client;

@@ -57,6 +57,8 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     // ── Users
     if (method === "GET"   && s[0] === "users" && s[1] === "me" && !s[2])              return (await db.getMe()) as T;
     if (method === "PATCH" && s[0] === "users" && s[1] === "me")                        return (await db.updateMe(body)) as T;
+    if (method === "POST" && s[0] === "users" && s[1] === "me" && s[2] === "data-export") return (await db.requestDataExport()) as T;
+    if (method === "POST" && s[0] === "users" && s[1] === "me" && s[2] === "delete-request") return (await db.requestAccountDeletion()) as T;
     if (method === "GET"   && s[0] === "users" && s[1] === "me" && s[2] === "kyc")      return (await db.getKycStatus()) as T;
 
     // ── Tontines

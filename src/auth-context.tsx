@@ -4,6 +4,7 @@ import { Platform } from "react-native";
 import { supabase } from "@/src/supabase";
 import { sendWelcomeMessage, applyReferralBonus } from "@/src/db";
 import { normalizeEmail } from "@/src/db/helpers";
+import { getOAuthRedirectUrl } from "@/src/oauth-redirect";
 
 // Complete auth session on mobile (no-op on web)
 if (Platform.OS !== "web") {
@@ -179,37 +180,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const loginWithGoogle = useCallback(async () => {
+    const redirectTo = getOAuthRedirectUrl();
+
     if (Platform.OS === "web") {
-      // On web: Supabase handles the full redirect — no expo-auth-session needed
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: window.location.origin + "/auth/callback" },
+        options: { redirectTo },
       });
-      if (error) throw { detail: error.message };
-      return; // Browser will redirect
+      if (error) {
+        const msg = error.message.includes("redirect_uri")
+          ? "Connexion Google indisponible : vérifiez la configuration OAuth (Google Cloud + Supabase). Ajoutez cette URL dans Supabase → Auth → Redirect URLs : " + redirectTo
+          : error.message;
+        throw { detail: msg };
+      }
+      return;
     }
 
     // On native: use expo-auth-session + expo-web-browser
     const { makeRedirectUri } = await import("expo-auth-session");
     const WebBrowser = await import("expo-web-browser");
-    const redirectTo = makeRedirectUri({ scheme: "hodix", path: "auth/callback" });
+    const nativeRedirect = makeRedirectUri({ scheme: "hodix", path: "auth/callback" });
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo, skipBrowserRedirect: true },
+      options: { redirectTo: nativeRedirect, skipBrowserRedirect: true },
     });
     if (error) throw { detail: error.message };
     if (!data.url) throw { detail: "Impossible d'ouvrir Google Sign-In." };
 
-    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+    const result = await WebBrowser.openAuthSessionAsync(data.url, nativeRedirect);
     if (result.type !== "success") return;
 
     const url = result.url;
     const params = new URLSearchParams(url.includes("#") ? url.split("#")[1] : url.split("?")[1] ?? "");
     const accessToken = params.get("access_token");
     const refreshToken = params.get("refresh_token");
+    const code = params.get("code");
 
-    if (accessToken) {
+    if (code) {
+      const { error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+      if (sessionError) throw { detail: sessionError.message };
+    } else if (accessToken) {
       const { error: sessionError } = await supabase.auth.setSession({
         access_token: accessToken,
         refresh_token: refreshToken ?? "",

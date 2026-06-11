@@ -10,11 +10,10 @@
  *   Level 2 — admin-approved KYC (kyc_status === "approved")
  */
 import { useState, useCallback } from "react";
-import { Alert, Modal, Text, TouchableOpacity, View, StyleSheet, Platform } from "react-native";
-import * as Print from "expo-print";
-import * as Sharing from "expo-sharing";
+import { Alert, Modal, Text, TouchableOpacity, View, StyleSheet } from "react-native";
 import { router } from "expo-router";
 import { api } from "@/src/api";
+import { downloadOrSharePdf } from "@/src/pdf-download";
 import { getSupabase } from "@/src/supabase";
 import { wrapYorixDocumentHtml } from "@/src/yorix-document-html";
 
@@ -215,19 +214,8 @@ export function useDocument() {
 
         setDownloading(true);
 
-        if (Platform.OS === "web") {
-          const blob = new Blob([html], { type: "text/html" });
-          const url = URL.createObjectURL(blob);
-          window.open(url, "_blank");
-          return;
-        }
-
-        const { uri } = await Print.printToFileAsync({ html, base64: false });
-        await Sharing.shareAsync(uri, {
-          mimeType: "application/pdf",
-          dialogTitle: "Enregistrer le certificat",
-          UTI: "com.adobe.pdf",
-        });
+        const filename = `hodix-${params.kind}.pdf`;
+        await downloadOrSharePdf(html, filename, "Enregistrer le certificat");
       } catch (e: any) {
         const msg = e?.message ?? "Erreur lors de la génération du document.";
         setError(msg);

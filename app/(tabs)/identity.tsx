@@ -23,7 +23,7 @@ import { Card, SectionTitle } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { TrustGauge } from "@/src/trust-gauge";
 import { useAuth } from "@/src/auth-context";
-import { useDocument } from "@/src/hooks/use-document";
+import { sharePdfCertificate } from "@/src/share";
 
 interface TS {
   score: number; level: string; risk: string; color: string;
@@ -56,7 +56,7 @@ interface IdentityProfile {
 export default function Identity() {
   const router = useRouter();
   const { user } = useAuth();
-  const { generateAndDownload, generating } = useDocument();
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [profile, setProfile] = useState<IdentityProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,8 +79,14 @@ export default function Identity() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const openPDF = async (kind: "identity" | "trust-score" | "savings") => {
-    const docKind = kind === "savings" ? "savings_summary" : "trust_score";
-    await generateAndDownload({ kind: docKind, freeDoc: true });
+    setPdfLoading(true);
+    try {
+      await sharePdfCertificate(kind);
+    } catch (e: any) {
+      Alert.alert("Erreur", e?.message ?? "Impossible de générer le document. Réessayez.");
+    } finally {
+      setPdfLoading(false);
+    }
   };
 
   const downloadCertified = async (kind: "identity" | "trust-score" | "savings") => {
@@ -339,8 +345,8 @@ export default function Identity() {
         {/* FREE certificates */}
         <SectionTitle>Documents gratuits</SectionTitle>
         <View style={{ paddingHorizontal: Spacing.xl, gap: 10 }}>
-          <PDFButton testID="pdf-identity" icon={<ShieldCheck color={Colors.accent} size={20} />} title="Identité Financière" subtitle="Profil complet et vérifié" onPress={() => openPDF("identity")} loading={generating} />
-          <PDFButton testID="pdf-savings" icon={<FileText color={Colors.primary} size={20} />} title="Résumé d'épargne" subtitle="Total et engagement" onPress={() => openPDF("savings")} loading={generating} />
+          <PDFButton testID="pdf-identity" icon={<ShieldCheck color={Colors.accent} size={20} />} title="Identité Financière" subtitle="Profil complet et vérifié" onPress={() => openPDF("identity")} loading={pdfLoading} />
+          <PDFButton testID="pdf-savings" icon={<FileText color={Colors.primary} size={20} />} title="Résumé d'épargne" subtitle="Total et engagement" onPress={() => openPDF("savings")} loading={pdfLoading} />
           <Text style={styles.shareHint}>📱 Partagez par WhatsApp, Email, ou enregistrez-les directement.</Text>
         </View>
 

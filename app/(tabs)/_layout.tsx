@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { Animated, StyleSheet, TouchableOpacity, View } from "react-native";
 import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Users, PiggyBank, User, Award } from "lucide-react-native";
+import { Users, PiggyBank, User, Award, Home } from "lucide-react-native";
 import { Colors } from "@/src/theme";
 
 function AnimatedTabIcon({ Icon, focused, color }: { Icon: any; focused: boolean; color: string }) {
@@ -43,6 +43,13 @@ export default function TabsLayout() {
         tabBarHideOnKeyboard: true,
       }}
     >
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: "Accueil",
+          tabBarIcon: ({ color, focused }) => <AnimatedTabIcon Icon={Home} focused={focused} color={color} />,
+        }}
+      />
       <Tabs.Screen
         name="groups"
         options={{
