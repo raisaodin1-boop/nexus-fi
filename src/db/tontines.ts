@@ -1,5 +1,5 @@
 import { getSupabase } from "@/src/supabase";
-import { uid, throwSb, inviteCode, invalidateCache } from "./helpers";
+import { uid, throwSb, inviteCode, invalidateCache, isUniqueViolation } from "./helpers";
 import { addIdentityEvent } from "./identity";
 import { notifyUser } from "./notifications";
 
@@ -107,13 +107,17 @@ export async function getTontine(id: string) {
 
 export async function createTontine(body: Record<string, any>) {
   const me = await uid();
-  const code = inviteCode();
-  const { data, error } = await getSupabase()
-    .from("tontines")
-    .insert({ ...body, owner_id: me, invite_code: code })
-    .select().single();
-  throwSb(error);
-  await getSupabase().from("tontine_members").insert({
+  const sb = getSupabase();
+  let data: any;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data: row, error } = await sb
+      .from("tontines")
+      .insert({ ...body, owner_id: me, invite_code: inviteCode() })
+      .select().single();
+    if (!error) { data = row; break; }
+    if (!isUniqueViolation(error) || attempt === 4) throwSb(error);
+  }
+  await sb.from("tontine_members").insert({
     tontine_id: data.id, user_id: me, role: "admin", rotation_position: 1,
   });
   return data;
@@ -273,20 +277,25 @@ export async function createTontineSecure(body: Record<string, any>) {
     }
   }
 
-  const code = inviteCode();
   const insertRow: Record<string, any> = {
     name: body.name, description: body.description ?? null,
     amount_per_cycle: amountPerCycle,
     contribution_amount: amountPerCycle,
     frequency: body.frequency ?? "monthly",
     max_members: Number(body.max_members ?? 12), is_public: body.is_public ?? false,
-    owner_id: me, invite_code: code,
+    owner_id: me,
   };
   if (body.language) insertRow.language = body.language;
   if (body.country) insertRow.country = body.country;
 
-  const { data, error } = await sb.from("tontines").insert(insertRow).select().single();
-  throwSb(error);
+  let data: any;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data: row, error } = await sb.from("tontines")
+      .insert({ ...insertRow, invite_code: inviteCode() })
+      .select().single();
+    if (!error) { data = row; break; }
+    if (!isUniqueViolation(error) || attempt === 4) throwSb(error);
+  }
 
   const maxMembers = Number(body.max_members ?? 12);
   const memberRow: Record<string, any> = { tontine_id: data.id, user_id: me, role: "admin", rotation_position: maxMembers };

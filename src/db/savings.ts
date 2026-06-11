@@ -50,6 +50,8 @@ export async function depositSaving(id: string, amount: number, note?: string) {
   await getSupabase().from("savings_goals").update({ current_amount: total }).eq("id", id);
   await addIdentityEvent(me, "savings_deposit", amount >= 50000 ? 1 : 0.5);
   invalidateCache(`savings-${me}`);
+  invalidateCache(`savings-summary-${me}`);
+  invalidateCache(`credit-score-${me}`);
   invalidateCache(`identity-${me}`);
   return { detail: "Dépôt enregistré" };
 }

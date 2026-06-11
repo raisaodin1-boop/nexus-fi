@@ -1,5 +1,5 @@
 import { getSupabase } from "@/src/supabase";
-import { uid, throwSb, inviteCode } from "./helpers";
+import { uid, throwSb, inviteCode, isUniqueViolation } from "./helpers";
 
 /* ── ASSOCIATIONS ────────────────────────────────────────────── */
 
@@ -22,10 +22,17 @@ export async function getAssociation(id: string) {
 
 export async function createAssociation(body: Record<string, any>) {
   const me = await uid();
-  const { data, error } = await getSupabase()
-    .from("associations").insert({ ...body, owner_id: me, invite_code: inviteCode() }).select().single();
-  throwSb(error);
-  await getSupabase().from("association_members").insert({ association_id: data.id, user_id: me, role: "admin" });
+  const sb = getSupabase();
+  let data: any;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data: row, error } = await sb
+      .from("associations")
+      .insert({ ...body, owner_id: me, invite_code: inviteCode() })
+      .select().single();
+    if (!error) { data = row; break; }
+    if (!isUniqueViolation(error) || attempt === 4) throwSb(error);
+  }
+  await sb.from("association_members").insert({ association_id: data.id, user_id: me, role: "admin" });
   return data;
 }
 
@@ -69,10 +76,17 @@ export async function getCooperative(id: string) {
 
 export async function createCooperative(body: Record<string, any>) {
   const me = await uid();
-  const { data, error } = await getSupabase()
-    .from("cooperatives").insert({ ...body, owner_id: me, invite_code: inviteCode() }).select().single();
-  throwSb(error);
-  await getSupabase().from("cooperative_members").insert({ cooperative_id: data.id, user_id: me, role: "admin" });
+  const sb = getSupabase();
+  let data: any;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data: row, error } = await sb
+      .from("cooperatives")
+      .insert({ ...body, owner_id: me, invite_code: inviteCode() })
+      .select().single();
+    if (!error) { data = row; break; }
+    if (!isUniqueViolation(error) || attempt === 4) throwSb(error);
+  }
+  await sb.from("cooperative_members").insert({ cooperative_id: data.id, user_id: me, role: "admin" });
   return data;
 }
 

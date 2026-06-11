@@ -3,6 +3,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { Platform } from "react-native";
 import { supabase } from "@/src/supabase";
 import { sendWelcomeMessage, applyReferralBonus } from "@/src/db";
+import { normalizeEmail } from "@/src/db/helpers";
 
 // Complete auth session on mobile (no-op on web)
 if (Platform.OS !== "web") {
@@ -68,8 +69,11 @@ async function fetchProfile(userId: string): Promise<Partial<User>> {
 async function buildUser(sbUser: any): Promise<User> {
   const profile = await fetchProfile(sbUser.id);
   // Keep profiles.email in sync so P2P transfer lookup by email works.
-  if (sbUser.email && (profile as any).email !== sbUser.email) {
-    supabase.from("profiles").update({ email: sbUser.email }).eq("id", sbUser.id).then(() => {}, () => {});
+  if (sbUser.email) {
+    const normalized = normalizeEmail(sbUser.email);
+    if ((profile as any).email !== normalized) {
+      supabase.from("profiles").update({ email: normalized }).eq("id", sbUser.id).then(() => {}, () => {});
+    }
   }
   const rawRole = profile.role || sbUser.user_metadata?.role || "member";
   const role = (rawRole === "admin" || rawRole === "super_admin") ? "super_admin" : rawRole as string;
@@ -133,7 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({ email: normalizeEmail(email), password });
     if (error) {
       const msg = error.message.includes("Invalid login")
         ? "Email ou mot de passe incorrect."
@@ -148,15 +152,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const register = useCallback(async (email: string, password: string, full_name: string, referralCode?: string) => {
+    const normalizedEmail = normalizeEmail(email);
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: normalizedEmail,
       password,
       options: { data: { full_name, role: "member" } },
     });
     if (error) throw { detail: error.message };
 
-    // Welcome email via onAuthStateChange (SIGNED_IN). Referral bonus only here.
+    // Keep profiles.email lowercase for P2P transfer lookup.
     const newUserId = data.user?.id;
+    if (newUserId) {
+      supabase.from("profiles").update({ email: normalizedEmail }).eq("id", newUserId).then(() => {}, () => {});
+    }
+
+    // Welcome email via onAuthStateChange (SIGNED_IN). Referral bonus only here.
     if (newUserId && referralCode?.trim()) {
       setTimeout(async () => {
         try {

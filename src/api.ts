@@ -4,6 +4,7 @@
  * No more FastAPI/Railway/MongoDB.
  */
 import * as db from "@/src/db";
+import { normalizeEmail } from "@/src/db/helpers";
 import { getSupabase } from "@/src/supabase";
 
 /* ── Types ─────────────────────────────────────────────────── */
@@ -253,7 +254,8 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
 
     // ── Forgot / Reset password (delegated to Supabase Auth)
     if (method === "POST" && s[0] === "auth" && s[1] === "forgot-password") {
-      const { error } = await getSupabase().auth.resetPasswordForEmail(body?.email);
+      const email = normalizeEmail(body?.email ?? "");
+      const { error } = await getSupabase().auth.resetPasswordForEmail(email);
       if (error) throw { status: 400, detail: error.message };
       return { detail: "Email de réinitialisation envoyé" } as T;
     }

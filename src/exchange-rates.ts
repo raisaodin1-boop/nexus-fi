@@ -24,6 +24,8 @@ export interface Rates {
   base: "USD";
   rates: Record<Currency, number>;
   fetched_at: string;
+  /** live = API ok, stale = expired cache reused, fallback = static defaults */
+  source: "live" | "stale" | "fallback";
 }
 
 const XAF_PER_EUR = 655.957;
@@ -32,22 +34,21 @@ let _cache: Rates | null = null;
 let _cacheAt = 0;
 const TTL_MS = 5 * 60 * 1000;
 
-// Fallback rates (approximate, updated 2024)
+// Static fallback (mid-2026 approx.) — only used when API and stale cache unavailable
 const FALLBACK_USD: Record<Currency, number> = {
   USD: 1,
-  EUR: 0.926,
-  XAF: 608,
-  NGN: 1580,
-  GHS: 15.5,
-  KES: 130,
-  ZAR: 18.5,
+  EUR: 0.92,
+  XAF: XAF_PER_EUR * 0.92,
+  NGN: 1650,
+  GHS: 15.8,
+  KES: 132,
+  ZAR: 18.2,
 };
 
 export async function getRates(): Promise<Rates> {
   if (_cache && Date.now() - _cacheAt < TTL_MS) return _cache;
 
   try {
-    // ExchangeRate-API free endpoint — USD base, 170+ currencies, no key required
     const res = await fetch("https://open.er-api.com/v6/latest/USD");
     const json = await res.json();
     if (json?.result !== "success") throw new Error("API error");
@@ -56,7 +57,6 @@ export async function getRates(): Promise<Rates> {
     const rates: Record<Currency, number> = {
       USD: 1,
       EUR: r.EUR ?? FALLBACK_USD.EUR,
-      // XAF: legally pegged, override API value for accuracy
       XAF: XAF_PER_EUR * (r.EUR ?? FALLBACK_USD.EUR),
       NGN: r.NGN ?? FALLBACK_USD.NGN,
       GHS: r.GHS ?? FALLBACK_USD.GHS,
@@ -64,14 +64,21 @@ export async function getRates(): Promise<Rates> {
       ZAR: r.ZAR ?? FALLBACK_USD.ZAR,
     };
 
-    _cache = { base: "USD", rates, fetched_at: new Date().toISOString() };
+    _cache = { base: "USD", rates, fetched_at: new Date().toISOString(), source: "live" };
     _cacheAt = Date.now();
     return _cache;
-  } catch {
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (_cache) {
+      console.warn("[exchange-rates] API unavailable, using stale cache:", msg);
+      return { ..._cache, source: "stale" };
+    }
+    console.warn("[exchange-rates] API unavailable, using static fallback rates:", msg);
     return {
       base: "USD",
       rates: { ...FALLBACK_USD },
       fetched_at: new Date().toISOString(),
+      source: "fallback",
     };
   }
 }
