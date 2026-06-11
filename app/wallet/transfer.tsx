@@ -6,6 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { ChevronLeft, CheckCircle2, Info } from "lucide-react-native";
 
 import { api, formatXAF } from "@/src/api";
+import { useDisplayCurrency } from "@/src/hooks/use-display-currency";
 import { Button, Field } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { formatAmount, type Currency } from "@/src/exchange-rates";
@@ -16,9 +17,9 @@ const CURRENCIES: Currency[] = ["XAF", "EUR", "USD"];
 
 export default function TransferScreen() {
   const router = useRouter();
+  const { currency, setCurrency } = useDisplayCurrency();
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount]       = useState("");
-  const [currency, setCurrency]   = useState<Currency>("XAF");
   const [note, setNote]           = useState("");
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState<string | null>(null);

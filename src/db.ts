@@ -22,6 +22,7 @@ import { getRates } from "@/src/exchange-rates";
 
 export async function getWallet() { return walletDb.getWallet(); }
 export async function getWalletTransactions() { return walletDb.getWalletTransactions(); }
+export async function getWalletTransaction(id: string) { return walletDb.getWalletTransaction(id); }
 export async function getExchangeRates() { return getRates(); }
 export async function topupWallet(body: any) { return walletDb.topupFromMobileMoney(body); }
 export async function withdrawWallet(body: any) { return walletDb.withdrawToMobileMoney(body); }

@@ -57,29 +57,49 @@ export interface WalletTx {
   currency: string;
   amount_xaf: number;
   counterpart_name: string | null;
+  counterpart_id?: string | null;
   note: string | null;
   status: string;
   mobile_money_provider: string | null;
   mobile_money_number: string | null;
   created_at: string;
   tontine_id?: string | null;
-  reference_id?: string | null;
+  reference?: string | null;
   balance_after?: number | null;
+}
+
+const TX_FIELDS =
+  "id,type,amount,currency,amount_xaf,counterpart_name,counterpart_id,note,status,mobile_money_provider,mobile_money_number,created_at,tontine_id,reference,balance_after";
+
+function mapTx(r: Record<string, unknown>): WalletTx {
+  return {
+    ...r,
+    amount: Number(r.amount),
+    amount_xaf: Number(r.amount_xaf),
+  } as WalletTx;
 }
 
 export async function getWalletTransactions(limit = 50): Promise<WalletTx[]> {
   const me = await currentUserId();
   const { data } = await getSupabase()
     .from("wallet_transactions")
-    .select("id,type,amount,currency,amount_xaf,counterpart_name,note,status,mobile_money_provider,mobile_money_number,created_at")
+    .select(TX_FIELDS)
     .eq("user_id", me)
     .order("created_at", { ascending: false })
     .limit(limit);
-  return (data ?? []).map(r => ({
-    ...r,
-    amount: Number(r.amount),
-    amount_xaf: Number(r.amount_xaf),
-  }));
+  return (data ?? []).map(mapTx);
+}
+
+export async function getWalletTransaction(id: string): Promise<WalletTx> {
+  const me = await currentUserId();
+  const { data, error } = await getSupabase()
+    .from("wallet_transactions")
+    .select(TX_FIELDS)
+    .eq("id", id)
+    .eq("user_id", me)
+    .single();
+  if (error || !data) throw new Error("Transaction introuvable.");
+  return mapTx(data);
 }
 
 // ─── Top-up from Mobile Money ─────────────────────────────────────────────────

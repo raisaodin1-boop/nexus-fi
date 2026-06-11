@@ -163,6 +163,7 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
 
     // ── Wallet
     if (method === "GET"  && s[0] === "wallet" && !s[1])                               return (await db.getWallet()) as T;
+    if (method === "GET"  && s[0] === "wallet" && s[1] === "transactions" && s[2])     return (await db.getWalletTransaction(s[2])) as T;
     if (method === "GET"  && s[0] === "wallet" && s[1] === "transactions")             return (await db.getWalletTransactions()) as T;
     if (method === "GET"  && s[0] === "wallet" && s[1] === "rates")                    return (await db.getExchangeRates()) as T;
     if (method === "POST" && s[0] === "wallet" && s[1] === "topup")                    return db.rejectDirectPayment() as T;
@@ -223,7 +224,12 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     // ── Admin
     if (method === "GET" && s[0] === "admin" && s[1] === "stats")                      return (await db.getAdminStats()) as T;
     if (method === "GET"   && s[0] === "admin" && s[1] === "analytics")                         return (await db.getAdminAnalytics()) as T;
-    if (method === "GET"   && s[0] === "admin" && s[1] === "users")                             return (await db.adminListUsers(body?.search)) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "users")
+      return (await db.adminListUsers(
+        query.get("search") ?? "",
+        Number(query.get("offset")) || 0,
+        Number(query.get("limit")) || 50,
+      )) as T;
     if (method === "PATCH" && s[0] === "admin" && s[1] === "users" && s[2] === "role")          return (await db.adminUpdateUserRole(body?.user_id, body?.role)) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "users" && s[2] === "deactivate")    return (await db.adminDeactivateUser(body?.user_id)) as T;
     if (method === "GET"   && s[0] === "admin" && s[1] === "tontines")                          return (await db.adminListTontines(body?.search)) as T;

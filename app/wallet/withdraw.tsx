@@ -6,10 +6,12 @@ import { LinearGradient } from "expo-linear-gradient";
 import { ChevronLeft, CheckCircle2, Shield } from "lucide-react-native";
 
 import { api } from "@/src/api";
+import { useDisplayCurrency } from "@/src/hooks/use-display-currency";
 import { Button, Field } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { formatAmount, type Currency } from "@/src/exchange-rates";
-import type { WalletBalance, MobileMoneyProvider } from "@/src/wallet-db";
+import type { WalletBalance, MobileMoneyProvider, WalletTx } from "@/src/wallet-db";
+import { txStatusLabel } from "@/src/wallet-tx-meta";
 import { PinConfirmModal } from "@/src/pin-modal";
 import { OtpModal } from "@/src/otp-modal";
 
@@ -18,14 +20,16 @@ const CURRENCIES: Currency[] = ["XAF", "EUR", "USD"];
 
 export default function WithdrawScreen() {
   const router = useRouter();
+  const { currency, setCurrency } = useDisplayCurrency();
   const [wallet, setWallet]       = useState<WalletBalance | null>(null);
   const [amount, setAmount]       = useState("");
-  const [currency, setCurrency]   = useState<Currency>("XAF");
   const [provider, setProvider]   = useState<MobileMoneyProvider>("MTN MoMo");
   const [phone, setPhone]         = useState("");
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [success, setSuccess]     = useState(false);
+  const [txRef, setTxRef]         = useState<string | null>(null);
+  const [txStatus, setTxStatus]   = useState<string>("completed");
   const [showPin, setShowPin]     = useState(false);
   const [showOtp, setShowOtp]     = useState(false);
   const [pendingOtp, setPendingOtp] = useState(false);
@@ -47,7 +51,9 @@ export default function WithdrawScreen() {
     const amt = parseFloat(amount.replace(/\s/g, "").replace(",", "."));
     setLoading(true);
     try {
-      await api.post("/wallet/withdraw", { amount: amt, currency, provider, phone: phone.trim() });
+      const tx = await api.post<WalletTx>("/wallet/withdraw", { amount: amt, currency, provider, phone: phone.trim() });
+      setTxRef(tx.reference ?? tx.id);
+      setTxStatus(tx.status ?? "completed");
       setSuccess(true);
     } catch (e: any) {
       setError(e?.detail ?? e?.message ?? "Erreur lors du retrait.");
@@ -85,13 +91,22 @@ export default function WithdrawScreen() {
   };
 
   if (success) {
+    const st = txStatusLabel(txStatus);
     return (
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <View style={styles.successBox}>
           <CheckCircle2 size={64} color="#10B981" />
-          <Text style={styles.successTitle}>Retrait initié !</Text>
-          <Text style={styles.successSub}>Les fonds seront envoyés sur votre {provider} sous quelques minutes.</Text>
-          <Button label="Retour au wallet" onPress={() => router.replace("/wallet")} />
+          <Text style={styles.successTitle}>Retrait enregistré</Text>
+          <View style={[styles.statusPill, { backgroundColor: st.color + "22" }]}>
+            <Text style={[styles.statusPillText, { color: st.color }]}>{st.label}</Text>
+          </View>
+          {txRef ? <Text style={styles.refText}>Réf. {txRef}</Text> : null}
+          <Text style={styles.successSub}>
+            {txStatus === "completed"
+              ? `Débit wallet confirmé. Envoi ${provider} sur ${phone.trim()} en cours de traitement.`
+              : `Demande enregistrée — suivi dans l'historique wallet.`}
+          </Text>
+          <Button label="Voir le wallet" onPress={() => router.replace("/wallet")} />
         </View>
       </SafeAreaView>
     );
@@ -219,4 +234,7 @@ const styles = StyleSheet.create({
   successBox: { flex: 1, alignItems: "center", justifyContent: "center", padding: Spacing.xxxl, gap: 16 },
   successTitle: { fontSize: 24, fontWeight: "800", color: Colors.text },
   successSub: { fontSize: 14, color: Colors.textMuted, textAlign: "center", lineHeight: 20 },
+  statusPill: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999 },
+  statusPillText: { fontSize: 13, fontWeight: "800" },
+  refText: { fontSize: 13, fontWeight: "700", color: Colors.text, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" },
 });

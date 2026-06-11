@@ -271,10 +271,10 @@ export default function ReceiptScreen() {
               <Share2 color={Colors.secondary} size={16} />
               <Text style={styles.shareBtnText}>Partager ce reçu</Text>
             </TouchableOpacity>
-            {/* Primary: home */}
+            {/* Primary CTA */}
             <Button
-              label="Retour à l'accueil"
-              onPress={() => router.replace("/(tabs)" as any)}
+              label={type === "wallet_topup" ? "Retour au wallet" : "Retour à l'accueil"}
+              onPress={() => router.replace(type === "wallet_topup" ? "/wallet" : "/(tabs)" as any)}
               icon={<Home color="#fff" size={16} />}
               testID="receipt-home"
             />

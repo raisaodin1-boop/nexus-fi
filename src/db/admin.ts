@@ -69,18 +69,24 @@ export async function getAdminStats() {
   return { total_users: users.count ?? 0, total_tontines: tontines.count ?? 0, pending_kyc: kyc.count ?? 0 };
 }
 
-export async function adminListUsers(search = "") {
+export async function adminListUsers(search = "", offset = 0, limit = 50) {
+  const pageSize = Math.min(Math.max(limit, 1), 100);
+  const from = Math.max(offset, 0);
   let q = getSupabase().from("profiles")
-    .select("id, full_name, phone, email, role, created_at, country, city, kyc_status")
-    .order("created_at", { ascending: false }).limit(100);
-  if (search) q = q.ilike("full_name", `%${search}%`);
-  const { data, error } = await q;
-  if (error) return [];
-  return (data ?? []).map((u: any) => ({
+    .select("id, full_name, phone, email, role, created_at, country, city, kyc_status", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, from + pageSize - 1);
+  const term = search.trim();
+  if (term) q = q.or(`full_name.ilike.%${term}%,email.ilike.%${term}%,phone.ilike.%${term}%`);
+  const { data, error, count } = await q;
+  if (error) return { items: [], total: 0, offset: from, limit: pageSize, has_more: false };
+  const items = (data ?? []).map((u: any) => ({
     ...u,
     email: u.email ?? "",
     is_active: u.role !== "suspended",
   }));
+  const total = count ?? items.length;
+  return { items, total, offset: from, limit: pageSize, has_more: from + items.length < total };
 }
 
 export async function adminUpdateUserRole(userId: string, role: string) {

@@ -6,6 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { ChevronLeft } from "lucide-react-native";
 
 import { openPaymentScreen } from "@/src/payment-nav";
+import { useDisplayCurrency } from "@/src/hooks/use-display-currency";
 import { Button, Field } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import type { MobileMoneyProvider } from "@/src/wallet-db";
@@ -16,8 +17,8 @@ const CURRENCIES: Currency[] = ["XAF", "EUR", "USD"];
 
 export default function TopupScreen() {
   const router = useRouter();
+  const { currency, setCurrency } = useDisplayCurrency();
   const [amount, setAmount]       = useState("");
-  const [currency, setCurrency]   = useState<Currency>("XAF");
   const [provider, setProvider]   = useState<MobileMoneyProvider>("MTN MoMo");
   const [phone, setPhone]         = useState("");
   const [error, setError]         = useState<string | null>(null);
@@ -29,7 +30,7 @@ export default function TopupScreen() {
     openPaymentScreen(router, {
       kind: "wallet_topup",
       amount: amt,
-      label: `Recharge wallet ${provider}`,
+      label: `Recharge wallet ${provider} (${currency})`,
     });
   };
 
@@ -79,7 +80,7 @@ export default function TopupScreen() {
         <Button label="Continuer vers le paiement" onPress={submit} />
 
         <Text style={styles.note}>
-          Paiement électronique CinetPay requis. Votre wallet sera crédité uniquement après confirmation du débit.
+          Paiement électronique CinetPay requis. Après confirmation, votre wallet sera crédité et un reçu s'affichera avec le statut « Confirmé » ou « En attente ».
         </Text>
       </ScrollView>
       </KeyboardAvoidingView>

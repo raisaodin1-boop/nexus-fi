@@ -1,5 +1,5 @@
 // Admin Console — premium redesign
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -57,6 +57,18 @@ interface PromoRequest {
 interface AdminTontine {
   id: string; name: string; invite_code: string; status: string; members_count: number; created_at: string;
 }
+interface AdminUsersPage {
+  items: AdminUser[];
+  total: number;
+  offset: number;
+  limit: number;
+  has_more: boolean;
+}
+interface AdminStats {
+  total_users: number;
+  total_tontines: number;
+  pending_kyc: number;
+}
 
 const ROLE_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
   super_admin: { label: "Super Admin", bg: "#7C3AED", color: "#fff" },
@@ -104,6 +116,12 @@ export default function AdminConsole() {
   const [search, setSearch] = useState("");
 
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [userTotal, setUserTotal] = useState(0);
+  const [usersHasMore, setUsersHasMore] = useState(false);
+  const [usersLoadingMore, setUsersLoadingMore] = useState(false);
+  const [adminStats, setAdminStats] = useState<AdminStats>({ total_users: 0, total_tontines: 0, pending_kyc: 0 });
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipSearchDebounce = useRef(true);
   const [kyc, setKyc] = useState<KycEntry[]>([]);
   const [promos, setPromos] = useState<PromoRequest[]>([]);
   const [tontines, setTontines] = useState<AdminTontine[]>([]);
@@ -123,18 +141,33 @@ export default function AdminConsole() {
     );
   }
 
+  const loadUsers = useCallback(async (searchTerm: string, offset = 0, append = false) => {
+    if (append) setUsersLoadingMore(true);
+    else if (offset === 0) setLoading(true);
+    try {
+      const qs = new URLSearchParams({ offset: String(offset), limit: "50" });
+      if (searchTerm.trim()) qs.set("search", searchTerm.trim());
+      const res = await api.get<AdminUsersPage>(`/admin/users?${qs.toString()}`);
+      setUserTotal(res.total);
+      setUsersHasMore(res.has_more);
+      setUsers((prev) => (append ? [...prev, ...res.items] : res.items));
+    } catch {}
+    setLoading(false);
+    setUsersLoadingMore(false);
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch { return null; }
     };
-    const [usersData, kycData, promosData, tontinesData] = await Promise.all([
-      safe(() => api.get<AdminUser[]>("/admin/users")),
+    const [statsData, kycData, promosData, tontinesData] = await Promise.all([
+      safe(() => api.get<AdminStats>("/admin/stats")),
       safe(() => api.get<KycEntry[]>("/admin/kyc")),
       safe(() => api.get<PromoRequest[]>("/admin/promotion-requests")),
       safe(() => api.get<AdminTontine[]>("/admin/tontines")),
     ]);
-    if (usersData) setUsers(usersData);
+    if (statsData) setAdminStats(statsData);
     if (kycData) setKyc(kycData);
     if (promosData) setPromos(promosData);
     if (tontinesData) setTontines(tontinesData);
@@ -143,21 +176,34 @@ export default function AdminConsole() {
 
   useFocusEffect(useCallback(() => {
     load();
+    loadUsers(search, 0, false);
     const ch = supabase
       .channel("rt-admin-console")
-      .on("postgres_changes", { event: "*", schema: "public", table: "kyc_submissions" }, () => { load(); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => { load(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "kyc_submissions" }, () => { load(); loadUsers(search, 0, false); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => { load(); loadUsers(search, 0, false); })
       .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () => { load(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "tontines" }, () => { load(); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [load]));
+  }, [load, loadUsers, search]));
+
+  useEffect(() => {
+    if (tab !== "users") return;
+    if (skipSearchDebounce.current) {
+      skipSearchDebounce.current = false;
+      return;
+    }
+    if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    searchDebounce.current = setTimeout(() => loadUsers(search, 0, false), 350);
+    return () => { if (searchDebounce.current) clearTimeout(searchDebounce.current); };
+  }, [search, tab, loadUsers]);
 
   const handleKyc = async (userId: string, approve: boolean) => {
     try {
       await api.post(approve ? "/admin/kyc/approve" : "/admin/kyc/reject", { user_id: userId });
       show(approve ? "KYC approuvé ✓" : "KYC rejeté", approve ? "success" : "error");
       load();
+      loadUsers(search, 0, false);
     } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
   };
 
@@ -167,6 +213,7 @@ export default function AdminConsole() {
         await api.del(`/admin/kyc/${userId}`);
         show("Dossier KYC supprimé", "success");
         load();
+        loadUsers(search, 0, false);
       } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
     };
     if (Platform.OS === "web") {
@@ -192,6 +239,7 @@ export default function AdminConsole() {
       await api.patch("/admin/users/role", { user_id: userId, role: newRole });
       show("Rôle mis à jour", "success");
       load();
+      loadUsers(search, 0, false);
     } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
   };
 
@@ -201,6 +249,7 @@ export default function AdminConsole() {
         await api.post("/admin/users/deactivate", { user_id: userId });
         show("Compte désactivé", "success");
         load();
+        loadUsers(search, 0, false);
       } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
     };
     if (Platform.OS === "web") {
@@ -225,17 +274,12 @@ export default function AdminConsole() {
   };
 
   const TABS: { key: Tab; label: string; icon: any; count?: number }[] = [
-    { key: "users", label: "Membres", icon: Users, count: users.length || undefined },
+    { key: "users", label: "Membres", icon: Users, count: userTotal || undefined },
     { key: "kyc", label: "KYC", icon: ShieldCheck, count: kyc.filter(k => isPendingKyc(k.kyc_status)).length || undefined },
     { key: "promotions", label: "Promos", icon: Crown, count: promos.filter(p => p.status === "pending").length || undefined },
     { key: "tontines", label: "Tontines", icon: BarChart3 },
     { key: "broadcast", label: "Broadcast", icon: Bell },
   ];
-
-  const filteredUsers = users.filter(u =>
-    u.full_name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
-  );
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -257,9 +301,9 @@ export default function AdminConsole() {
       {/* Stats strip */}
       <LinearGradient colors={["#1E3A5F", "#0F172A"]} style={styles.statsStrip}>
         {[
-          { label: "Membres", value: users.length, color: "#60A5FA" },
-          { label: "KYC pending", value: kyc.filter(k => isPendingKyc(k.kyc_status)).length, color: "#FBBF24" },
-          { label: "Tontines", value: tontines.length, color: "#34D399" },
+          { label: "Membres", value: adminStats.total_users, color: "#60A5FA" },
+          { label: "KYC pending", value: adminStats.pending_kyc, color: "#FBBF24" },
+          { label: "Tontines", value: adminStats.total_tontines, color: "#34D399" },
         ].map((s) => (
           <View key={s.label} style={styles.statItem}>
             <Text style={[styles.statValue, { color: s.color }]}>{s.value}</Text>
@@ -310,9 +354,27 @@ export default function AdminConsole() {
             />
           </View>
           <FlatList
-            data={filteredUsers}
+            data={users}
             keyExtractor={(u) => u.id}
             contentContainerStyle={{ paddingHorizontal: Spacing.xl, paddingBottom: 100, gap: 10 }}
+            onEndReached={() => {
+              if (usersHasMore && !usersLoadingMore && !loading) {
+                loadUsers(search, users.length, true);
+              }
+            }}
+            onEndReachedThreshold={0.35}
+            ListHeaderComponent={
+              users.length < userTotal ? (
+                <Text style={styles.pageHint}>
+                  Affichage de {users.length} sur {userTotal} membres
+                </Text>
+              ) : null
+            }
+            ListFooterComponent={
+              usersLoadingMore ? (
+                <ActivityIndicator color={Colors.secondary} style={{ marginVertical: 16 }} />
+              ) : null
+            }
             renderItem={({ item: u }) => {
               const roleConf = ROLE_CONFIG[u.role] ?? ROLE_CONFIG.member;
               const isDeactivated = u.is_active === false;
@@ -587,6 +649,7 @@ const styles = StyleSheet.create({
   },
   rejectBtnText: { color: "#fff", fontSize: 11, fontWeight: "800" },
   empty: { textAlign: "center", color: "#94A3B8", fontWeight: "600", marginTop: 48, fontSize: 14 },
+  pageHint: { fontSize: 12, color: Colors.textMuted, marginBottom: 10, textAlign: "center" },
   broadcastCard: {
     backgroundColor: "#fff", borderRadius: 20, padding: 20, gap: 14,
     shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
