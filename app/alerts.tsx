@@ -4,8 +4,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { AlertTriangle, TrendingDown, Target, Flame, Bell, X } from "lucide-react-native";
 import { api } from "@/src/api";
-import { Card, EmptyState } from "@/src/ui";
+import { EmptyState } from "@/src/ui";
 import { Colors, Spacing } from "@/src/theme";
+import { MIN_TOUCH, useResponsive } from "@/src/hooks/use-responsive";
 
 interface SmartAlert {
   id: string;
@@ -45,6 +46,7 @@ function alertIconColor(type: string): string {
 
 function AlertCard({ alert, onDismiss }: { alert: SmartAlert; onDismiss: (id: string) => void }) {
   const router = useRouter();
+  const { isCompact } = useResponsive();
   const cfg = severityConfig[alert.severity] ?? severityConfig.info;
   const Icon = alertIcon(alert.type);
   const iconColor = alertIconColor(alert.type);
@@ -55,12 +57,16 @@ function AlertCard({ alert, onDismiss }: { alert: SmartAlert; onDismiss: (id: st
         <View style={[styles.iconWrap, { backgroundColor: cfg.borderColor + "20" }]}>
           <Icon color={iconColor} size={18} />
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.alertTitle}>{alert.title}</Text>
+        <View style={styles.alertContent}>
+          <Text style={styles.alertTitle} numberOfLines={2}>{alert.title}</Text>
           <Text style={styles.alertBody}>{alert.body}</Text>
           {alert.action_label && alert.action_route ? (
             <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: cfg.borderColor }]}
+              style={[
+                styles.actionBtn,
+                { backgroundColor: cfg.borderColor },
+                isCompact && styles.actionBtnFull,
+              ]}
               onPress={() => router.push(alert.action_route as any)}
               activeOpacity={0.8}
             >
@@ -71,10 +77,10 @@ function AlertCard({ alert, onDismiss }: { alert: SmartAlert; onDismiss: (id: st
         <TouchableOpacity
           onPress={() => onDismiss(alert.id)}
           style={styles.dismissBtn}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           accessibilityLabel="Masquer l'alerte"
         >
-          <X color={Colors.textMuted} size={18} />
+          <X color={Colors.textMuted} size={20} />
         </TouchableOpacity>
       </View>
     </View>
@@ -85,6 +91,7 @@ export default function AlertsScreen() {
   const [alerts, setAlerts] = useState<SmartAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const { horizontalPad, titleSize } = useResponsive();
 
   const load = useCallback(async () => {
     try {
@@ -111,14 +118,16 @@ export default function AlertsScreen() {
   }, [load]);
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
-      <View style={styles.header}>
+    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+      <View style={[styles.header, { paddingHorizontal: horizontalPad }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
           <Text style={styles.backText}>‹</Text>
         </TouchableOpacity>
-        <View style={{ flex: 1 }}>
+        <View style={styles.headerText}>
           <View style={styles.titleRow}>
-            <Text style={styles.h1}>Alertes intelligentes</Text>
+            <Text style={[styles.h1, { fontSize: titleSize }]} numberOfLines={2}>
+              Alertes intelligentes
+            </Text>
             {alerts.length > 0 ? (
               <View style={styles.countBadge}>
                 <Bell color="#fff" size={12} />
@@ -142,8 +151,12 @@ export default function AlertsScreen() {
           />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 100, paddingTop: 8 }} showsVerticalScrollIndicator={false}>
-          <View style={{ paddingHorizontal: Spacing.xl, gap: 10 }}>
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: 32, paddingTop: 8, paddingHorizontal: horizontalPad }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={{ gap: 10 }}>
             {alerts.map((alert) => (
               <AlertCard key={alert.id} alert={alert} onDismiss={dismiss} />
             ))}
@@ -156,19 +169,19 @@ export default function AlertsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bg },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 20 },
   header: {
     flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing.xl,
+    alignItems: "flex-start",
     paddingTop: Spacing.lg,
     paddingBottom: Spacing.md,
     gap: 8,
   },
-  backBtn: { paddingRight: 8, paddingVertical: 4 },
+  headerText: { flex: 1, minWidth: 0 },
+  backBtn: { paddingRight: 4, paddingVertical: 4, minWidth: MIN_TOUCH, minHeight: MIN_TOUCH, justifyContent: "center" },
   backText: { color: Colors.primary, fontSize: 28, fontWeight: "300", lineHeight: 32 },
-  titleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  h1: { color: Colors.text, fontSize: 22, fontWeight: "900", letterSpacing: -0.3 },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  h1: { color: Colors.text, fontWeight: "900", letterSpacing: -0.3, flexShrink: 1 },
   subtitle: { color: Colors.textMuted, fontSize: 12, marginTop: 2 },
   countBadge: {
     flexDirection: "row",
@@ -185,7 +198,8 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     padding: 14,
   },
-  alertRow: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
+  alertRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
+  alertContent: { flex: 1, minWidth: 0 },
   iconWrap: {
     width: 36,
     height: 36,
@@ -194,15 +208,24 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexShrink: 0,
   },
-  alertTitle: { color: Colors.text, fontWeight: "800", fontSize: 14, marginBottom: 3 },
-  alertBody: { color: Colors.textMuted, fontSize: 13, lineHeight: 18 },
+  alertTitle: { color: Colors.text, fontWeight: "800", fontSize: 14, marginBottom: 4 },
+  alertBody: { color: Colors.textMuted, fontSize: 13, lineHeight: 20 },
   actionBtn: {
-    marginTop: 10,
+    marginTop: 12,
     alignSelf: "flex-start",
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    minHeight: MIN_TOUCH,
+    justifyContent: "center",
   },
-  actionBtnText: { color: "#fff", fontSize: 12, fontWeight: "700" },
-  dismissBtn: { padding: 4, marginTop: -2 },
+  actionBtnFull: { alignSelf: "stretch" },
+  actionBtnText: { color: "#fff", fontSize: 13, fontWeight: "700", textAlign: "center" },
+  dismissBtn: {
+    minWidth: MIN_TOUCH,
+    minHeight: MIN_TOUCH,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
 });

@@ -13,6 +13,7 @@ import {
 
 import { api } from "@/src/api";
 import { useDisplayCurrency } from "@/src/hooks/use-display-currency";
+import { useResponsive } from "@/src/hooks/use-responsive";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { SkeletonBox } from "@/src/ui";
 import { formatAmount, type Currency, type Rates } from "@/src/exchange-rates";
@@ -82,6 +83,7 @@ const TxRow = memo(function TxRow({ tx, router }: { tx: WalletTx; router: Return
 export default function WalletScreen() {
   const router = useRouter();
   const { currency, setCurrency } = useDisplayCurrency();
+  const { horizontalPad, heroSize, isCompact } = useResponsive();
   const [wallet, setWallet]   = useState<WalletBalance | null>(null);
   const [txs, setTxs]         = useState<WalletTx[]>([]);
   const [rates, setRates]     = useState<Rates | null>(null);
@@ -134,7 +136,7 @@ export default function WalletScreen() {
         contentContainerStyle={{ paddingBottom: 100 }}
         ListHeaderComponent={
           <Animated.View style={{ opacity: fadeAnim }}>
-            <LinearGradient colors={["#0B1F3A", "#1D4ED8"]} style={styles.balanceCard}>
+            <LinearGradient colors={["#0B1F3A", "#1D4ED8"]} style={[styles.balanceCard, { marginHorizontal: horizontalPad }]}>
               <View style={styles.balanceHeader}>
                 <WalletIcon color="rgba(255,255,255,0.7)" size={18} />
                 <Text style={styles.balanceHeaderText}>Solde disponible</Text>
@@ -143,7 +145,7 @@ export default function WalletScreen() {
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.balanceAmount}>{formatAmount(balance, currency)}</Text>
+              <Text style={[styles.balanceAmount, { fontSize: heroSize }]}>{formatAmount(balance, currency)}</Text>
 
               <View style={styles.currencyRow}>
                 {CURRENCIES.map(c => (
@@ -168,7 +170,7 @@ export default function WalletScreen() {
               )}
             </LinearGradient>
 
-            <View style={styles.actions}>
+            <View style={[styles.actions, { marginHorizontal: horizontalPad }]}>
               {[
                 { label: "Recharger",  icon: ArrowDownLeft,  route: "/wallet/topup",    color: "#10B981" },
                 { label: "Retirer",    icon: ArrowUpRight,   route: "/wallet/withdraw",  color: "#EF4444" },
@@ -190,14 +192,14 @@ export default function WalletScreen() {
             </View>
 
             {rates && (
-              <View style={[styles.ratesCard, Shadow.card]}>
+              <View style={[styles.ratesCard, Shadow.card, { marginHorizontal: horizontalPad }]}>
                 <Text style={styles.ratesTitle}>Taux de change en direct</Text>
                 {rates.source !== "live" ? (
                   <Text style={styles.ratesWarn}>
                     {rates.source === "stale" ? "⚠️ Taux en cache — API indisponible" : "⚠️ Taux estimés — API indisponible"}
                   </Text>
                 ) : null}
-                <View style={styles.ratesRow}>
+                <View style={[styles.ratesRow, isCompact && styles.ratesRowWrap]}>
                   <RateChip label="1 EUR" value={`${(rates.rates?.XAF ?? 655.957).toFixed(0)} XAF`} fixed />
                   <RateChip label="1 USD" value={`${((rates.rates?.XAF ?? 655.957) / (rates.rates?.EUR ?? 1)).toFixed(0)} XAF`} />
                   <RateChip label="1 EUR" value={`${(1 / (rates.rates?.EUR ?? 1)).toFixed(4)} USD`} />
@@ -208,7 +210,7 @@ export default function WalletScreen() {
               </View>
             )}
 
-            <Text style={styles.histTitle}>Historique des transactions</Text>
+            <Text style={[styles.histTitle, { paddingHorizontal: horizontalPad }]}>Historique des transactions</Text>
             {txs.length === 0 && (
               <View style={styles.empty}>
                 <Text style={styles.emptyText}>Aucune transaction pour l'instant.</Text>
@@ -217,7 +219,7 @@ export default function WalletScreen() {
           </Animated.View>
         }
         ItemSeparatorComponent={() => <View style={styles.sep} />}
-        style={{ paddingHorizontal: Spacing.xl }}
+        style={{ paddingHorizontal: horizontalPad }}
       />
     </SafeAreaView>
   );
@@ -236,7 +238,7 @@ function RateChip({ label, value, fixed }: { label: string; value: string; fixed
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bg },
   balanceCard: {
-    borderRadius: Radius.xxl, padding: Spacing.xl, margin: Spacing.xl,
+    borderRadius: Radius.xxl, padding: Spacing.xl,
     marginBottom: Spacing.md, gap: 8,
   },
   balanceHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
@@ -252,18 +254,19 @@ const styles = StyleSheet.create({
   currencyChipTextActive: { color: "#0B1F3A" },
   allBalances: { flexDirection: "row", gap: 8, marginTop: 2, flexWrap: "wrap" },
   balSub: { fontSize: 11, color: "rgba(255,255,255,0.45)" },
-  actions: { flexDirection: "row", gap: Spacing.md, marginHorizontal: Spacing.xl, marginBottom: Spacing.xl },
-  actionBtn: { flex: 1, alignItems: "center", gap: 8 },
-  actionIcon: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center" },
-  actionLabel: { fontSize: 12, fontWeight: "600", color: Colors.text },
+  actions: { flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.xl },
+  actionBtn: { flex: 1, alignItems: "center", gap: 6, minWidth: 0 },
+  actionIcon: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
+  actionLabel: { fontSize: 11, fontWeight: "600", color: Colors.text, textAlign: "center" },
   ratesCard: {
     backgroundColor: Colors.surface, borderRadius: Radius.xl,
-    padding: Spacing.lg, marginHorizontal: Spacing.xl, marginBottom: Spacing.xl,
+    padding: Spacing.lg, marginBottom: Spacing.xl,
     borderWidth: 1, borderColor: Colors.border,
   },
   ratesTitle: { fontSize: 13, fontWeight: "700", color: Colors.text, marginBottom: 10 },
   ratesWarn: { fontSize: 11, color: Colors.warning, fontWeight: "600", marginBottom: 8 },
   ratesRow: { flexDirection: "row", gap: 8 },
+  ratesRowWrap: { flexWrap: "wrap" },
   rateChip: {
     flex: 1, backgroundColor: Colors.surfaceAlt, borderRadius: Radius.lg,
     padding: 10, alignItems: "center", gap: 2,

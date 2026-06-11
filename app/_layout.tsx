@@ -29,6 +29,7 @@ import { useFirstLaunch } from "@/src/use-first-launch";
 import { useDeviceFingerprint } from "@/src/device-fingerprint";
 import { isBiometricEnabled, authenticateBiometric } from "@/src/biometrics";
 import { Colors } from "@/src/theme";
+import { APP_MAX_WIDTH } from "@/src/hooks/use-responsive";
 
 if (Platform.OS !== "web") {
   SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -159,7 +160,7 @@ function RootLayoutInner() {
   // On web, always render — no splash screen blocking
   if (Platform.OS !== "web" && !loaded && !error) return null;
 
-  return (
+  const stack = (
     <BiometricGate>
       <PushSetup />
       <FirstLaunchGuard />
@@ -168,7 +169,32 @@ function RootLayoutInner() {
       <Stack screenOptions={{ headerShown: false, animation: "fade" }} />
     </BiometricGate>
   );
+
+  if (Platform.OS === "web") {
+    return (
+      <View style={webFrameStyles.root}>
+        <View style={webFrameStyles.frame}>{stack}</View>
+      </View>
+    );
+  }
+
+  return stack;
 }
+
+const webFrameStyles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: "#CBD5E1",
+    alignItems: "center",
+  },
+  frame: {
+    flex: 1,
+    width: "100%",
+    maxWidth: APP_MAX_WIDTH,
+    backgroundColor: Colors.bg,
+    overflow: "hidden",
+  },
+});
 
 export default function RootLayout() {
   return (

@@ -27,6 +27,7 @@ import { useAuth } from "@/src/auth-context";
 import { SkeletonCard } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { useToast } from "@/src/toast";
+import { MIN_TOUCH, useResponsive } from "@/src/hooks/use-responsive";
 
 type Tab = "users" | "kyc" | "promotions" | "tontines" | "broadcast";
 
@@ -111,6 +112,7 @@ export default function AdminConsole() {
   const router = useRouter();
   const { user } = useAuth();
   const { show } = useToast();
+  const { isCompact, horizontalPad } = useResponsive();
   const [tab, setTab] = useState<Tab>("users");
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -343,7 +345,7 @@ export default function AdminConsole() {
         </ScrollView>
       ) : tab === "users" ? (
         <View style={{ flex: 1 }}>
-          <View style={styles.searchRow}>
+          <View style={[styles.searchRow, { marginHorizontal: horizontalPad }]}>
             <Search color={Colors.textMuted} size={15} />
             <TextInput
               style={styles.searchInput}
@@ -356,7 +358,7 @@ export default function AdminConsole() {
           <FlatList
             data={users}
             keyExtractor={(u) => u.id}
-            contentContainerStyle={{ paddingHorizontal: Spacing.xl, paddingBottom: 100, gap: 10 }}
+            contentContainerStyle={{ paddingHorizontal: horizontalPad, paddingBottom: 100, gap: 10 }}
             onEndReached={() => {
               if (usersHasMore && !usersLoadingMore && !loading) {
                 loadUsers(search, users.length, true);
@@ -379,11 +381,11 @@ export default function AdminConsole() {
               const roleConf = ROLE_CONFIG[u.role] ?? ROLE_CONFIG.member;
               const isDeactivated = u.is_active === false;
               return (
-                <View style={styles.userCard}>
+                <View style={[styles.userCard, isCompact && styles.userCardStack]}>
                   <View style={styles.userCardLeft}>
                     <Avatar name={u.full_name} size={44} />
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                         <Text style={styles.userName} numberOfLines={1}>{u.full_name}</Text>
                         {isDeactivated && (
                           <View style={{ backgroundColor: "#FEE2E2", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999 }}>
@@ -397,7 +399,7 @@ export default function AdminConsole() {
                       </View>
                     </View>
                   </View>
-                  <View style={styles.userActions}>
+                  <View style={[styles.userActions, isCompact && styles.userActionsStack]}>
                     {u.role === "member" && (
                       <TouchableOpacity style={styles.promoteBtn} onPress={() => handleRoleChange(u.id, "tontine_manager")}>
                         <Text style={styles.promoteBtnText}>↑ Manager</Text>
@@ -625,8 +627,10 @@ const styles = StyleSheet.create({
     shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  userCardLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
-  userActions: { flexDirection: "row", alignItems: "center", gap: 6 },
+  userCardStack: { flexDirection: "column", alignItems: "stretch", gap: 12 },
+  userCardLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1, minWidth: 0 },
+  userActions: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 },
+  userActionsStack: { flexWrap: "wrap", justifyContent: "flex-end" },
   userName: { fontSize: 14, fontWeight: "800", color: "#1E293B" },
   userEmail: { fontSize: 11, color: "#94A3B8", fontWeight: "500", marginTop: 1 },
   promoteBtn: {
@@ -635,7 +639,7 @@ const styles = StyleSheet.create({
   },
   promoteBtnText: { fontSize: 11, fontWeight: "800", color: "#2563EB" },
   deactivateBtn: {
-    width: 30, height: 30, borderRadius: 8,
+    width: MIN_TOUCH, height: MIN_TOUCH, borderRadius: 8,
     backgroundColor: "#FEF2F2", alignItems: "center", justifyContent: "center",
   },
   approveBtn: {

@@ -58,16 +58,24 @@ export default function Root({ children }: PropsWithChildren) {
               html, body { height: 100%; margin: 0; padding: 0; }
               body {
                 margin: 0;
-                height: 100%;
+                min-height: 100%;
+                min-height: 100dvh;
                 overflow: hidden;
+                overflow-x: hidden;
                 display: flex;
                 flex-direction: column;
-                background-color: #F8FAFC;
+                background-color: #CBD5E1;
                 font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                 -webkit-font-smoothing: antialiased;
                 -moz-osx-font-smoothing: grayscale;
+                -webkit-text-size-adjust: 100%;
+                touch-action: manipulation;
+                -webkit-tap-highlight-color: transparent;
+                padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
               }
-              body > div:first-child { position: fixed !important; top: 0; left: 0; right: 0; bottom: 0; }
+              body > div:first-child { position: fixed !important; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; }
+              input, textarea, select { font-size: 16px !important; }
+              button, [role="button"], a { touch-action: manipulation; }
               [role="tablist"] [role="tab"] * { overflow: visible !important; }
               [role="heading"], [role="heading"] * { overflow: visible !important; }
               /* Scrollbar styling */

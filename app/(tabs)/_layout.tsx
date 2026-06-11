@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { Animated, StyleSheet, TouchableOpacity, View } from "react-native";
 import { Tabs } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Users, PiggyBank, User, Award } from "lucide-react-native";
 import { Colors } from "@/src/theme";
 
@@ -21,6 +22,9 @@ function AnimatedTabIcon({ Icon, focused, color }: { Icon: any; focused: boolean
 }
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+  const tabBarBottom = Math.max(10, insets.bottom);
+
   return (
     <Tabs
       screenOptions={{
@@ -31,8 +35,8 @@ export default function TabsLayout() {
           backgroundColor: Colors.surface,
           borderTopColor: Colors.border,
           borderTopWidth: 1,
-          height: 62,
-          paddingBottom: 10,
+          height: 52 + tabBarBottom,
+          paddingBottom: tabBarBottom,
           paddingTop: 8,
         },
         tabBarLabelStyle: { fontSize: 10, fontWeight: "700", letterSpacing: 0.3 },

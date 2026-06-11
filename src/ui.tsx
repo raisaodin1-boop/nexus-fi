@@ -305,11 +305,12 @@ const skeletonStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   btn: {
-    paddingVertical: 16,
+    paddingVertical: 14,
     paddingHorizontal: 20,
     borderRadius: Radius.xl,
     alignItems: "center",
     justifyContent: "center",
+    minHeight: 48,
   },
   btnRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   btnText: { fontSize: 16, fontWeight: "700", letterSpacing: 0.2 },
