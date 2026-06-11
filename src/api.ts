@@ -143,7 +143,12 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET" && s[0] === "identity-profile" && s[1] === "me")              return (await db.getIdentityProfile()) as T;
 
     // ── Notifications
-    if (method === "GET"  && s[0] === "notifications")                                 return (await db.listNotifications()) as T;
+    if (method === "GET"  && s[0] === "notifications" && !s[1])                          return (await db.listNotifications()) as T;
+    if (method === "POST" && s[0] === "notifications" && s[1] === "read-all")          return (await db.markAllNotificationsRead()) as T;
+    if (method === "POST" && s[0] === "notifications" && s[1] && s[2] === "read") {
+      await db.markNotifRead(s[1]);
+      return { detail: "Lu" } as T;
+    }
     if (method === "POST" && s[0] === "notifications" && s[1] === "push-token")        return (await db.savePushToken(body?.token)) as T;
     if (method === "POST" && s[0] === "notifications" && s[1] === "consent")          return (await db.saveNotificationConsent(!!body?.push_consent, body?.marketing_consent)) as T;
 
