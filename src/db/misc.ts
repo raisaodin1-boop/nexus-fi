@@ -157,16 +157,20 @@ export async function getSmartAlerts(): Promise<SmartAlert[]> {
   const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
   const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString();
 
-  const [savingsTxRes, goalsRes, contribRes] = await Promise.all([
-    sb.from("savings_transactions").select("amount, type, created_at").eq("user_id", me).gte("created_at", twoMonthsAgo),
-    sb.from("savings_goals").select("id, name, current_amount, target_amount, deadline").eq("user_id", me),
+  const [savingsTxRes, goalsRes, contribRes, dismissalsRes] = await Promise.all([
+    sb.from("savings_transactions").select("goal_id, amount, type, created_at").eq("user_id", me).gte("created_at", twoMonthsAgo),
+    sb.from("savings_goals").select("id, name, current_amount, target_amount, deadline, is_active").eq("user_id", me).eq("is_active", true),
     sb.from("tontine_contributions").select("created_at, tontine_id").eq("user_id", me).gte("created_at", twoMonthsAgo),
+    sb.from("smart_alert_dismissals").select("alert_id").eq("user_id", me).gt("dismissed_until", now.toISOString()),
   ]);
 
+  const dismissed = dismissalsRes.error
+    ? new Set<string>()
+    : new Set((dismissalsRes.data ?? []).map((d: { alert_id: string }) => d.alert_id));
   const tx = savingsTxRes.data ?? [];
   const goals = goalsRes.data ?? [];
-  const thisMonthDeposits = tx.filter((t: any) => t.type === "deposit" && t.created_at >= oneMonthAgo).reduce((s: number, t: any) => s + Number(t.amount), 0);
-  const prevMonthDeposits = tx.filter((t: any) => t.type === "deposit" && t.created_at < oneMonthAgo).reduce((s: number, t: any) => s + Number(t.amount), 0);
+  const thisMonthDeposits = tx.filter((t: any) => t.type !== "withdrawal" && t.created_at >= oneMonthAgo).reduce((s: number, t: any) => s + Number(t.amount), 0);
+  const prevMonthDeposits = tx.filter((t: any) => t.type !== "withdrawal" && t.created_at < oneMonthAgo).reduce((s: number, t: any) => s + Number(t.amount), 0);
 
   if (prevMonthDeposits > 0 && thisMonthDeposits < prevMonthDeposits * 0.6) {
     const dropPct = Math.round((1 - thisMonthDeposits / prevMonthDeposits) * 100);
@@ -175,14 +179,28 @@ export async function getSmartAlerts(): Promise<SmartAlert[]> {
 
   for (const g of goals as any[]) {
     if (!g.deadline || !g.target_amount) continue;
+    const remaining = Number(g.target_amount) - Number(g.current_amount);
+    if (remaining <= 0) continue;
+
     const deadline = new Date(g.deadline);
     const monthsLeft = (deadline.getFullYear() - now.getFullYear()) * 12 + (deadline.getMonth() - now.getMonth());
-    const remaining = Number(g.target_amount) - Number(g.current_amount);
-    if (monthsLeft > 0 && remaining > 0) {
-      const neededPerMonth = remaining / monthsLeft;
-      if (thisMonthDeposits > 0 && thisMonthDeposits < neededPerMonth * 0.7) {
-        alerts.push({ id: `goal_behind_${g.id}`, type: "goal_behind", severity: "warning", title: `🎯 "${g.name}" en retard`, body: `Il vous faut ${Math.round(neededPerMonth).toLocaleString()} XAF/mois pour atteindre votre objectif à temps.`, action_label: "Voir l'objectif", action_route: `/savings/${g.id}` });
-      }
+    if (monthsLeft <= 0) continue;
+
+    const goalDepositsThisMonth = tx
+      .filter((t: any) => t.goal_id === g.id && t.type !== "withdrawal" && t.created_at >= oneMonthAgo)
+      .reduce((s: number, t: any) => s + Number(t.amount), 0);
+    const neededPerMonth = remaining / monthsLeft;
+
+    if (goalDepositsThisMonth < neededPerMonth * 0.7) {
+      alerts.push({
+        id: `goal_behind_${g.id}`,
+        type: "goal_behind",
+        severity: "warning",
+        title: `🎯 "${g.name}" en retard`,
+        body: `Il vous faut ${Math.round(neededPerMonth).toLocaleString("fr-FR")} XAF/mois pour atteindre votre objectif à temps.`,
+        action_label: "Voir l'objectif",
+        action_route: `/savings/${g.id}`,
+      });
     }
   }
 
@@ -193,7 +211,21 @@ export async function getSmartAlerts(): Promise<SmartAlert[]> {
     alerts.push({ id: "streak_risk", type: "streak_risk", severity: "critical", title: "🔥 Votre streak est en danger !", body: "Vous n'avez pas encore cotisé cette semaine. Cotisez avant dimanche pour maintenir votre série !", action_label: "Cotiser maintenant", action_route: "/(tabs)/community" });
   }
 
-  return alerts;
+  return alerts.filter((a) => !dismissed.has(a.id));
+}
+
+export async function dismissSmartAlert(alertId: string, days = 7) {
+  const id = alertId?.trim();
+  if (!id) throw { status: 400, detail: "Identifiant d'alerte requis." };
+  const me = await uid();
+  const until = new Date();
+  until.setDate(until.getDate() + days);
+  const { error } = await getSupabase().from("smart_alert_dismissals").upsert(
+    { user_id: me, alert_id: alertId, dismissed_until: until.toISOString() },
+    { onConflict: "user_id,alert_id" },
+  );
+  throwSb(error);
+  return { dismissed: true, alert_id: alertId, dismissed_until: until.toISOString() };
 }
 
 /* ── FAMILY ACCOUNTS ─────────────────────────────────────── */

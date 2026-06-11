@@ -214,6 +214,7 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
 
     // ── Smart alerts
     if (method === "GET"  && s[0] === "alerts")                                           return (await db.getSmartAlerts()) as T;
+    if (method === "POST" && s[0] === "alerts" && s[1] === "dismiss")                     return (await db.dismissSmartAlert(body?.alert_id ?? "")) as T;
 
     // ── NFT certificates
     if (method === "POST" && s[0] === "certificates" && s[1] === "mint")                 return (await db.mintCertificateHash(body?.doc_id, body?.doc_type)) as T;

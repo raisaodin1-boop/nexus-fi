@@ -2,7 +2,7 @@ import React, { useCallback, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
-import { AlertTriangle, TrendingDown, Target, Flame, Bell } from "lucide-react-native";
+import { AlertTriangle, TrendingDown, Target, Flame, Bell, X } from "lucide-react-native";
 import { api } from "@/src/api";
 import { Card, EmptyState } from "@/src/ui";
 import { Colors, Spacing } from "@/src/theme";
@@ -43,7 +43,7 @@ function alertIconColor(type: string): string {
   }
 }
 
-function AlertCard({ alert }: { alert: SmartAlert }) {
+function AlertCard({ alert, onDismiss }: { alert: SmartAlert; onDismiss: (id: string) => void }) {
   const router = useRouter();
   const cfg = severityConfig[alert.severity] ?? severityConfig.info;
   const Icon = alertIcon(alert.type);
@@ -68,6 +68,14 @@ function AlertCard({ alert }: { alert: SmartAlert }) {
             </TouchableOpacity>
           ) : null}
         </View>
+        <TouchableOpacity
+          onPress={() => onDismiss(alert.id)}
+          style={styles.dismissBtn}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityLabel="Masquer l'alerte"
+        >
+          <X color={Colors.textMuted} size={18} />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -92,6 +100,15 @@ export default function AlertsScreen() {
     setLoading(true);
     load();
   }, [load]));
+
+  const dismiss = useCallback(async (alertId: string) => {
+    setAlerts((prev) => prev.filter((a) => a.id !== alertId));
+    try {
+      await api.post("/alerts/dismiss", { alert_id: alertId });
+    } catch {
+      load();
+    }
+  }, [load]);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -128,7 +145,7 @@ export default function AlertsScreen() {
         <ScrollView contentContainerStyle={{ paddingBottom: 100, paddingTop: 8 }} showsVerticalScrollIndicator={false}>
           <View style={{ paddingHorizontal: Spacing.xl, gap: 10 }}>
             {alerts.map((alert) => (
-              <AlertCard key={alert.id} alert={alert} />
+              <AlertCard key={alert.id} alert={alert} onDismiss={dismiss} />
             ))}
           </View>
         </ScrollView>
@@ -187,4 +204,5 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   actionBtnText: { color: "#fff", fontSize: 12, fontWeight: "700" },
+  dismissBtn: { padding: 4, marginTop: -2 },
 });
