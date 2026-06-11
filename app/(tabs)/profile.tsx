@@ -179,7 +179,7 @@ export default function ProfileScreen() {
               <InfoRow icon={<MapPin size={16} color={Colors.secondary} />} label="Localisation" value={[user?.neighborhood, user?.city, user?.country].filter(Boolean).join(", ") || "—"} txtColor={txt} txtMuted={txtMuted} borderColor={borderColor} />
               <InfoRow icon={<Briefcase size={16} color={Colors.secondary} />} label="Profession" value={user?.occupation || "—"} txtColor={txt} txtMuted={txtMuted} borderColor={borderColor} />
               {user?.date_of_birth ? <InfoRow icon={<Shield size={16} color={Colors.secondary} />} label="Né(e) le" value={new Date(user.date_of_birth).toLocaleDateString("fr-FR")} txtColor={txt} txtMuted={txtMuted} borderColor={borderColor} /> : null}
-              <InfoRow icon={<ShieldCheck size={16} color={user?.kyc_status === "approved" ? Colors.accent : Colors.textMuted} />} label="KYC" value={user?.kyc_status === "approved" ? "✓ Vérifié" : user?.kyc_status === "pending" ? "En attente" : "Non soumis"} last txtColor={txt} txtMuted={txtMuted} borderColor={borderColor} />
+              <InfoRow icon={<ShieldCheck size={16} color={user?.kyc_status === "approved" ? Colors.accent : Colors.textMuted} />} label="KYC" value={user?.kyc_status === "approved" ? "✓ Vérifié" : (user?.kyc_status === "pending" || user?.kyc_status === "pending_review") ? "En attente" : "Non soumis"} last txtColor={txt} txtMuted={txtMuted} borderColor={borderColor} />
             </Card>
           </View>
 

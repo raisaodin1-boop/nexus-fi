@@ -18,10 +18,11 @@ import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowLeft, Users, ShieldCheck, Crown, BarChart3, Bell,
   CheckCircle, XCircle, Send, ChevronRight, ShieldAlert,
-  Search, Zap,
+  Search, Zap, Trash2,
 } from "lucide-react-native";
 
 import { api, ApiError } from "@/src/api";
+import { supabase } from "@/src/supabase";
 import { useAuth } from "@/src/auth-context";
 import { SkeletonCard } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
@@ -34,7 +35,21 @@ interface AdminUser {
   is_active?: boolean | null; created_at: string;
 }
 interface KycEntry {
-  user_id: string; full_name: string; email: string; kyc_status: string; created_at: string;
+  id?: string | null;
+  user_id: string;
+  full_name: string;
+  email: string;
+  phone?: string;
+  country?: string;
+  kyc_status: string;
+  created_at: string;
+  submitted_at?: string | null;
+  verification_mode?: string | null;
+  id_type?: string | null;
+}
+
+function isPendingKyc(status: string) {
+  return status === "pending_review" || status === "pending";
 }
 interface PromoRequest {
   id: string; user_id: string; full_name: string; email: string; status: string; created_at: string;
@@ -52,9 +67,12 @@ const ROLE_CONFIG: Record<string, { label: string; bg: string; color: string }> 
 
 const KYC_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
   verified: { label: "Vérifié", bg: "#D1FAE5", color: "#065F46" },
+  approved: { label: "Vérifié", bg: "#D1FAE5", color: "#065F46" },
   pending_review: { label: "En attente", bg: "#FEF3C7", color: "#92400E" },
+  pending: { label: "En attente", bg: "#FEF3C7", color: "#92400E" },
   rejected: { label: "Rejeté", bg: "#FEE2E2", color: "#991B1B" },
   not_started: { label: "Non démarré", bg: "#F3F4F6", color: "#6B7280" },
+  not_submitted: { label: "Non soumis", bg: "#F3F4F6", color: "#6B7280" },
 };
 
 function Avatar({ name, size = 40, bg }: { name: string; size?: number; bg?: string }) {
@@ -110,23 +128,30 @@ export default function AdminConsole() {
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch { return null; }
     };
-    if (tab === "users") {
-      const data = await safe(() => api.get<AdminUser[]>("/admin/users"));
-      if (data) setUsers(data);
-    } else if (tab === "kyc") {
-      const data = await safe(() => api.get<KycEntry[]>("/admin/kyc"));
-      if (data) setKyc(data);
-    } else if (tab === "promotions") {
-      const data = await safe(() => api.get<PromoRequest[]>("/admin/promotion-requests"));
-      if (data) setPromos(data);
-    } else if (tab === "tontines") {
-      const data = await safe(() => api.get<AdminTontine[]>("/admin/tontines"));
-      if (data) setTontines(data);
-    }
+    const [usersData, kycData, promosData, tontinesData] = await Promise.all([
+      safe(() => api.get<AdminUser[]>("/admin/users")),
+      safe(() => api.get<KycEntry[]>("/admin/kyc")),
+      safe(() => api.get<PromoRequest[]>("/admin/promotion-requests")),
+      safe(() => api.get<AdminTontine[]>("/admin/tontines")),
+    ]);
+    if (usersData) setUsers(usersData);
+    if (kycData) setKyc(kycData);
+    if (promosData) setPromos(promosData);
+    if (tontinesData) setTontines(tontinesData);
     setLoading(false);
-  }, [tab]);
+  }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => {
+    load();
+    const ch = supabase
+      .channel("rt-admin-console")
+      .on("postgres_changes", { event: "*", schema: "public", table: "kyc_submissions" }, () => { load(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => { load(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () => { load(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "tontines" }, () => { load(); })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [load]));
 
   const handleKyc = async (userId: string, approve: boolean) => {
     try {
@@ -134,6 +159,24 @@ export default function AdminConsole() {
       show(approve ? "KYC approuvé ✓" : "KYC rejeté", approve ? "success" : "error");
       load();
     } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
+  };
+
+  const handleDeleteKyc = (userId: string, name: string) => {
+    const doIt = async () => {
+      try {
+        await api.del(`/admin/kyc/${userId}`);
+        show("Dossier KYC supprimé", "success");
+        load();
+      } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
+    };
+    if (Platform.OS === "web") {
+      if (window.confirm(`Supprimer le dossier KYC de ${name} ?`)) doIt();
+    } else {
+      Alert.alert("Supprimer KYC", `Supprimer le dossier de ${name} ?`, [
+        { text: "Annuler", style: "cancel" },
+        { text: "Supprimer", style: "destructive", onPress: doIt },
+      ]);
+    }
   };
 
   const handlePromotion = async (userId: string, approve: boolean) => {
@@ -183,7 +226,7 @@ export default function AdminConsole() {
 
   const TABS: { key: Tab; label: string; icon: any; count?: number }[] = [
     { key: "users", label: "Membres", icon: Users, count: users.length || undefined },
-    { key: "kyc", label: "KYC", icon: ShieldCheck, count: kyc.filter(k => k.kyc_status === "pending_review").length || undefined },
+    { key: "kyc", label: "KYC", icon: ShieldCheck, count: kyc.filter(k => isPendingKyc(k.kyc_status)).length || undefined },
     { key: "promotions", label: "Promos", icon: Crown, count: promos.filter(p => p.status === "pending").length || undefined },
     { key: "tontines", label: "Tontines", icon: BarChart3 },
     { key: "broadcast", label: "Broadcast", icon: Bell },
@@ -215,7 +258,7 @@ export default function AdminConsole() {
       <LinearGradient colors={["#1E3A5F", "#0F172A"]} style={styles.statsStrip}>
         {[
           { label: "Membres", value: users.length, color: "#60A5FA" },
-          { label: "KYC pending", value: kyc.filter(k => k.kyc_status === "pending_review").length, color: "#FBBF24" },
+          { label: "KYC pending", value: kyc.filter(k => isPendingKyc(k.kyc_status)).length, color: "#FBBF24" },
           { label: "Tontines", value: tontines.length, color: "#34D399" },
         ].map((s) => (
           <View key={s.label} style={styles.statItem}>
@@ -322,34 +365,46 @@ export default function AdminConsole() {
           contentContainerStyle={{ paddingHorizontal: Spacing.xl, paddingBottom: 100, gap: 10 }}
           renderItem={({ item: k }) => {
             const kycConf = KYC_CONFIG[k.kyc_status] ?? KYC_CONFIG.not_started;
+            const pending = isPendingKyc(k.kyc_status);
             return (
               <View style={styles.userCard}>
                 <View style={styles.userCardLeft}>
                   <Avatar name={k.full_name} size={44} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.userName} numberOfLines={1}>{k.full_name}</Text>
-                    <Text style={styles.userEmail} numberOfLines={1}>{k.email}</Text>
-                    <View style={{ marginTop: 4 }}>
+                    <Text style={styles.userEmail} numberOfLines={1}>{k.email || k.phone || "—"}</Text>
+                    {!!k.country && <Text style={styles.userEmail} numberOfLines={1}>{k.country}{k.id_type ? ` · ${k.id_type}` : ""}</Text>}
+                    <View style={{ marginTop: 4, flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
                       <StatusBadge config={kycConf} />
+                      {!!k.verification_mode && (
+                        <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: "#EEF2FF" }}>
+                          <Text style={{ fontSize: 10, fontWeight: "700", color: "#4338CA" }}>{k.verification_mode}</Text>
+                        </View>
+                      )}
                     </View>
                   </View>
                 </View>
-                {k.kyc_status === "pending_review" && (
-                  <View style={{ gap: 6 }}>
-                    <TouchableOpacity style={styles.approveBtn} onPress={() => handleKyc(k.user_id, true)}>
-                      <CheckCircle color="#fff" size={13} />
-                      <Text style={styles.approveBtnText}>OK</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.rejectBtn} onPress={() => handleKyc(k.user_id, false)}>
-                      <XCircle color="#fff" size={13} />
-                      <Text style={styles.rejectBtnText}>Non</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
+                <View style={{ gap: 6 }}>
+                  {pending && (
+                    <>
+                      <TouchableOpacity style={styles.approveBtn} onPress={() => handleKyc(k.user_id, true)}>
+                        <CheckCircle color="#fff" size={13} />
+                        <Text style={styles.approveBtnText}>OK</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.rejectBtn} onPress={() => handleKyc(k.user_id, false)}>
+                        <XCircle color="#fff" size={13} />
+                        <Text style={styles.rejectBtnText}>Non</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                  <TouchableOpacity style={styles.deactivateBtn} onPress={() => handleDeleteKyc(k.user_id, k.full_name)}>
+                    <Trash2 color="#EF4444" size={14} />
+                  </TouchableOpacity>
+                </View>
               </View>
             );
           }}
-          ListEmptyComponent={<Text style={styles.empty}>Aucune soumission KYC en attente</Text>}
+          ListEmptyComponent={<Text style={styles.empty}>Aucun dossier KYC dans Supabase</Text>}
         />
       ) : tab === "promotions" ? (
         <FlatList
