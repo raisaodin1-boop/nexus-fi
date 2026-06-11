@@ -64,7 +64,7 @@ export default function Root({ children }: PropsWithChildren) {
                 overflow-x: hidden;
                 display: flex;
                 flex-direction: column;
-                background-color: #CBD5E1;
+                background-color: #F7F8FC;
                 font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                 -webkit-font-smoothing: antialiased;
                 -moz-osx-font-smoothing: grayscale;
@@ -95,6 +95,9 @@ export default function Root({ children }: PropsWithChildren) {
                 transition: opacity 0.4s ease;
               }
               #splash-screen.hidden { opacity: 0; pointer-events: none; }
+              @media (min-width: 768px) {
+                body { background-color: #CBD5E1; }
+              }
             `,
           }}
         />

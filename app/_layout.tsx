@@ -12,7 +12,7 @@ if (Platform.OS !== "web") {
 import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useRef, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import Constants from "expo-constants";
@@ -29,7 +29,7 @@ import { useFirstLaunch } from "@/src/use-first-launch";
 import { useDeviceFingerprint } from "@/src/device-fingerprint";
 import { isBiometricEnabled, authenticateBiometric } from "@/src/biometrics";
 import { Colors } from "@/src/theme";
-import { APP_MAX_WIDTH } from "@/src/hooks/use-responsive";
+import { APP_MAX_WIDTH, shouldShowWebPhoneFrame } from "@/src/hooks/use-responsive";
 
 if (Platform.OS !== "web") {
   SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -148,8 +148,10 @@ const gateStyles = StyleSheet.create({
 });
 
 function RootLayoutInner() {
+  const { width } = useWindowDimensions();
   const [loaded, error] = useIconFonts();
   useDeviceFingerprint();
+  const showWebPhoneFrame = shouldShowWebPhoneFrame(width);
 
   useEffect(() => {
     if (Platform.OS !== "web" && (loaded || error)) {
@@ -171,11 +173,14 @@ function RootLayoutInner() {
   );
 
   if (Platform.OS === "web") {
-    return (
-      <View style={webFrameStyles.root}>
-        <View style={webFrameStyles.frame}>{stack}</View>
-      </View>
-    );
+    if (showWebPhoneFrame) {
+      return (
+        <View style={webFrameStyles.root}>
+          <View style={webFrameStyles.frame}>{stack}</View>
+        </View>
+      );
+    }
+    return <View style={webFullStyles.root}>{stack}</View>;
   }
 
   return stack;
@@ -193,6 +198,14 @@ const webFrameStyles = StyleSheet.create({
     maxWidth: APP_MAX_WIDTH,
     backgroundColor: Colors.bg,
     overflow: "hidden",
+  },
+});
+
+const webFullStyles = StyleSheet.create({
+  root: {
+    flex: 1,
+    width: "100%",
+    backgroundColor: Colors.bg,
   },
 });
 
