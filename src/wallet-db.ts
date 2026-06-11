@@ -177,7 +177,6 @@ export async function transferToMember(payload: TransferPayload): Promise<Wallet
 export async function payContributionFromWallet(tontineId: string, amount: number, cycle: number): Promise<WalletTx> {
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("Montant invalide.");
 
-  const me = await currentUserId();
   const sb = getSupabase();
 
   // Atomic server-side: debit + contribution record + wallet transaction
@@ -188,11 +187,6 @@ export async function payContributionFromWallet(tontineId: string, amount: numbe
     p_cycle: cycle,
   });
   if (error) throw new Error(error.message);
-
-  await sb.from("tontine_members")
-    .update({ status: "a_jour", last_paid_cycle: cycle })
-    .eq("tontine_id", tontineId)
-    .eq("user_id", me);
 
   return { ...tx, amount: Number(tx.amount), amount_xaf: Number(tx.amount_xaf) };
 }

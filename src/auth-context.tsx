@@ -44,6 +44,11 @@ interface AuthCtx {
 
 const Ctx = createContext<AuthCtx | undefined>(undefined);
 
+function logAuthBestEffort(label: string, err: unknown) {
+  const msg = err instanceof Error ? err.message : String(err);
+  console.warn(`[auth] ${label} failed:`, msg);
+}
+
 async function fetchProfile(userId: string): Promise<Partial<User>> {
   try {
     const timeout = new Promise<null>((res) => setTimeout(() => res(null), 8000));
@@ -115,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 const name = profile?.full_name ?? session.user!.email?.split("@")[0] ?? "Membre";
                 await sendWelcomeMessage(session.user!.id, name);
               }
-            } catch { /* best-effort */ }
+            } catch (err) { logAuthBestEffort("welcome message", err); }
           }, 2000);
         }
       } else {
@@ -154,7 +159,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const newUserId = data.user?.id;
     if (newUserId && referralCode?.trim()) {
       setTimeout(async () => {
-        try { await applyReferralBonus(newUserId, referralCode.trim().toUpperCase()); } catch {}
+        try {
+          await applyReferralBonus(newUserId, referralCode.trim().toUpperCase());
+        } catch (err) {
+          logAuthBestEffort("referral bonus", err);
+        }
       }, 2000);
     }
   }, []);

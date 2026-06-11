@@ -1,5 +1,6 @@
 import { getSupabase } from "@/src/supabase";
-import { uid, throwSb } from "./helpers";
+import { uid, throwSb, invalidateCache } from "./helpers";
+import { getCreditScore } from "./identity";
 import { notifyUser } from "./notifications";
 
 const MIN_LOAN_SCORE = 700;
@@ -9,6 +10,7 @@ export async function submitLoanApplication(payload: {
   amount_xaf: number;
   duration_months?: number;
   purpose?: string;
+  /** @deprecated Ignored — score recalculated server-side. */
   credit_score?: number;
 }) {
   const me = await uid();
@@ -16,9 +18,12 @@ export async function submitLoanApplication(payload: {
   if (!Number.isFinite(amount) || amount < 50_000) {
     throw { status: 400, detail: "Montant minimum : 50 000 XAF." };
   }
-  const score = Number(payload.credit_score ?? 0);
+
+  // Never trust client-supplied score — recompute from live profile data.
+  invalidateCache(`credit-score-${me}`);
+  const { score } = await getCreditScore();
   if (score < MIN_LOAN_SCORE) {
-    throw { status: 403, detail: `Score minimum requis : ${MIN_LOAN_SCORE}/1000.` };
+    throw { status: 403, detail: `Score minimum requis : ${MIN_LOAN_SCORE}/1000 (votre score : ${score}).` };
   }
 
   const { data: existing } = await getSupabase().from("loan_applications")

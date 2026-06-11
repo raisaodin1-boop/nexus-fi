@@ -214,6 +214,11 @@ export function PinConfirmModal({ visible, userId, amount, onSuccess, onCancel }
   };
 
   const tryBiometric = async () => {
+    const stored = await getStoredPinHash();
+    if (!stored) {
+      setError("Aucun PIN configuré. Définissez-en un dans Paramètres → Sécurité.");
+      return;
+    }
     const ok = await authenticateBiometric(
       amount !== undefined ? `Confirmer ${formatXAF(amount)}` : "Confirmer la transaction",
     );
@@ -262,6 +267,13 @@ export function PinConfirmModal({ visible, userId, amount, onSuccess, onCancel }
         }
 
         const stored = await getStoredPinHash();
+        if (!stored) {
+          setError("Aucun PIN configuré. Définissez-en un dans Paramètres → Sécurité.");
+          setPin("");
+          setLoading(false);
+          return;
+        }
+
         const h = await hashPin(next, userId);
 
         // PINs created before the SHA-256 upgrade were stored with the
