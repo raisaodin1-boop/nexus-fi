@@ -1,8 +1,9 @@
-// OAuth callback — exchanges PKCE code on web, then redirects home
+// OAuth callback — PKCE must complete on the same origin that started the flow (www.hodix.app).
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Platform, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "@/src/supabase";
+import { redirectToCanonicalOriginIfNeeded } from "@/src/oauth-redirect";
 import { Colors } from "@/src/theme";
 
 export default function AuthCallback() {
@@ -10,26 +11,22 @@ export default function AuthCallback() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (Platform.OS === "web" && redirectToCanonicalOriginIfNeeded()) return;
+
     let cancelled = false;
 
     (async () => {
       try {
         if (Platform.OS === "web" && typeof window !== "undefined") {
-          const params = new URLSearchParams(window.location.search);
-          const code = params.get("code");
-          if (code) {
-            const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-            if (exchangeError) throw exchangeError;
-          } else {
-            // Implicit flow / hash tokens — detectSessionInUrl handles on init
-            await supabase.auth.getSession();
-          }
+          // detectSessionInUrl exchanges the ?code= on init — getSession refreshes state.
+          const { error: sessionError } = await supabase.auth.getSession();
+          if (sessionError) throw sessionError;
         }
         if (!cancelled) router.replace("/");
       } catch (e: any) {
         if (!cancelled) {
           setError(e?.message ?? "Connexion impossible");
-          setTimeout(() => router.replace("/(auth)/login" as any), 2500);
+          setTimeout(() => router.replace("/(auth)/login" as any), 3000);
         }
       }
     })();

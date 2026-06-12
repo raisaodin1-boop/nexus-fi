@@ -51,6 +51,11 @@ export default function Root({ children }: PropsWithChildren) {
         />
 
         <ScrollViewStyleReset />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){if(location.hostname==="hodix.app"){location.replace("https://www.hodix.app"+location.pathname+location.search+location.hash);}})();`,
+          }}
+        />
         <style
           dangerouslySetInnerHTML={{
             __html: `
