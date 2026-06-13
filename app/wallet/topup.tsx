@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -10,7 +10,7 @@ import { useDisplayCurrency } from "@/src/hooks/use-display-currency";
 import { Button, Field } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import type { MobileMoneyProvider } from "@/src/wallet-db";
-import type { Currency } from "@/src/exchange-rates";
+import { getRates, convert, formatAmount, type Currency, type Rates } from "@/src/exchange-rates";
 
 const PROVIDERS: MobileMoneyProvider[] = ["MTN MoMo", "Orange Money", "Moov Money", "Wave"];
 const CURRENCIES: Currency[] = ["XAF", "EUR", "USD"];
@@ -22,15 +22,25 @@ export default function TopupScreen() {
   const [provider, setProvider]   = useState<MobileMoneyProvider>("MTN MoMo");
   const [phone, setPhone]         = useState("");
   const [error, setError]         = useState<string | null>(null);
+  const [rates, setRates]         = useState<Rates | null>(null);
+
+  useEffect(() => { getRates().then(setRates).catch(() => {}); }, []);
+
+  const parsedAmt = parseFloat(amount.replace(/\s/g, "").replace(",", "."));
+  const amountXAF = rates && currency !== "XAF" && parsedAmt > 0
+    ? Math.round(convert(parsedAmt, currency, "XAF", rates))
+    : null;
 
   const submit = () => {
     setError(null);
-    const amt = parseFloat(amount.replace(/\s/g, "").replace(",", "."));
+    const amt = parsedAmt;
     if (!amt || amt <= 0) { setError("Entrez un montant valide."); return; }
+    // Always send XAF to CinetPay — convert if needed
+    const amtXaf = rates && currency !== "XAF" ? Math.round(convert(amt, currency, "XAF", rates)) : amt;
     openPaymentScreen(router, {
       kind: "wallet_topup",
-      amount: amt,
-      label: `Recharge wallet ${provider} (${currency})`,
+      amount: amtXaf,
+      label: `Recharge wallet ${provider}${currency !== "XAF" ? ` (${formatAmount(amt, currency)} → ${formatAmount(amtXaf, "XAF")})` : ""}`,
     });
   };
 
@@ -59,6 +69,11 @@ export default function TopupScreen() {
 
         <Field label="Montant" value={amount} onChangeText={setAmount}
           keyboardType="decimal-pad" placeholder={currency === "XAF" ? "ex: 25000" : "ex: 50"} />
+        {amountXAF !== null && (
+          <Text style={styles.conversion}>
+            ≈ {new Intl.NumberFormat("fr-FR").format(amountXAF)} FCFA débités via CinetPay
+          </Text>
+        )}
 
         {/* Provider */}
         <Text style={styles.label}>Opérateur Mobile Money</Text>
@@ -110,6 +125,7 @@ const styles = StyleSheet.create({
   chipTextActive: { color: Colors.secondary },
   error: { fontSize: 13, color: Colors.danger, marginTop: 4 },
   note: { fontSize: 12, color: Colors.textMuted, textAlign: "center", lineHeight: 18, marginTop: 12 },
+  conversion: { fontSize: 12, color: Colors.secondary, fontWeight: "600", marginTop: -8, marginBottom: 8 },
   successBox: { flex: 1, alignItems: "center", justifyContent: "center", padding: Spacing.xxxl, gap: 16 },
   successTitle: { fontSize: 24, fontWeight: "800", color: Colors.text },
   successSub: { fontSize: 14, color: Colors.textMuted, textAlign: "center" },

@@ -123,7 +123,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 .maybeSingle();
               if (!profile?.welcome_email_sent_at) {
                 const name = profile?.full_name ?? session.user!.email?.split("@")[0] ?? "Membre";
-                await sendWelcomeMessage(session.user!.id, name);
+                try {
+                  await sendWelcomeMessage(session.user!.id, name);
+                } catch (welcomeErr) {
+                  logAuthBestEffort("welcome message", welcomeErr);
+                  // Fallback: in-app notification so user gets a greeting even if email fails
+                  api.post("/notifications", {
+                    user_id: session.user!.id,
+                    title: "Bienvenue sur HODIX 🎉",
+                    body: `Bonjour ${name} ! Votre compte est prêt. Commencez par compléter votre profil.`,
+                    type: "system",
+                  }).catch(() => {});
+                }
               }
             } catch (err) { logAuthBestEffort("welcome message", err); }
           }, 2000);
