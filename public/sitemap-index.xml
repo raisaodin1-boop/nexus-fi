@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
+  <!-- Sitemap principal — toutes les pages -->
+  <sitemap>
+    <loc>https://hodix.app/sitemap.xml</loc>
+    <lastmod>2026-06-13</lastmod>
+  </sitemap>
+
+  <!-- Sitemap images -->
+  <sitemap>
+    <loc>https://hodix.app/sitemap-images.xml</loc>
+    <lastmod>2026-06-13</lastmod>
+  </sitemap>
+
+  <!-- Sitemap mobile (Google Mobile Friendly) -->
+  <sitemap>
+    <loc>https://hodix.app/sitemap-mobile.xml</loc>
+    <lastmod>2026-06-13</lastmod>
+  </sitemap>
+
+</sitemapindex>

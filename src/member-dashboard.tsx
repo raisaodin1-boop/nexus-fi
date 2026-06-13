@@ -70,13 +70,27 @@ export function MemberDashboard() {
     load();
     const userId = user?.id;
     if (!userId) return;
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
+
     const ch = supabase
       .channel(`rt-dashboard-member-${userId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "savings_transactions", filter: `user_id=eq.${userId}` }, () => { load(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "savings_goals", filter: `user_id=eq.${userId}` }, () => { load(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "tontine_contributions", filter: `user_id=eq.${userId}` }, () => { load(); })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          // Real-time down — fall back to 30s polling
+          console.warn("[dashboard] real-time subscription failed, switching to polling:", status);
+          if (!pollTimer) pollTimer = setInterval(() => { load(); }, 30_000);
+        } else if (status === "SUBSCRIBED" && pollTimer) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
+      });
+    return () => {
+      supabase.removeChannel(ch);
+      if (pollTimer) clearInterval(pollTimer);
+    };
   }, [load, user?.id]));
 
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };

@@ -282,7 +282,9 @@ export function PinConfirmModal({ visible, userId, amount, onSuccess, onCancel }
         if (!valid && stored && stored === hashPinLegacy(next, userId)) {
           valid = true;
           await storePinHash(h);
-          api.post("/wallet/pin/set", { pin_hash: h }).catch(() => {});
+          api.post("/wallet/pin/set", { pin_hash: h }).catch((e) => {
+            console.warn("[pin-modal] PIN v2 sync failed — will retry next login", e);
+          });
         }
 
         if (valid) {
