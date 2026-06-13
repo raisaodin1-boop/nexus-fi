@@ -88,38 +88,27 @@ export default function Identity() {
   };
 
   const downloadCertified = async (kind: "identity" | "trust-score" | "savings") => {
-    setPdfLoading(true);
-    try {
-      const resp = await api.get<{ filename: string; html: string }>(`/reports/certified/${kind}`);
-      await downloadOrSharePdf(resp.html, resp.filename, "Partager le certificat authentifié Hodix");
-    } catch (e: any) {
-      if (e?.status === 402) {
-        Alert.alert(
-          "Certificat Authentifié",
-          "Ce certificat nécessite un paiement de 10 000 FCFA. Voulez-vous continuer ?",
-          [
-            { text: "Annuler", style: "cancel" },
-            {
-              text: "Payer 10 000 FCFA",
-              onPress: () =>
-                router.push({
-                  pathname: "/pay",
-                  params: {
-                    amount: "10000",
-                    label: `Certificat authentifié - ${kind}`,
-                    kind: "certified_report",
-                    cert_kind: kind,
-                  },
-                } as any),
-            },
-          ],
-        );
-      } else {
-        Alert.alert("Erreur", e?.message ?? "Une erreur est survenue.");
-      }
-    } finally {
-      setPdfLoading(false);
-    }
+    // Payment gate — always confirm before attempting download
+    Alert.alert(
+      "Certificat Authentifié VIP",
+      "Ce certificat officiel nécessite un paiement de 10 000 FCFA. Voulez-vous continuer vers le paiement ?",
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Payer 10 000 FCFA →",
+          onPress: () =>
+            router.push({
+              pathname: "/pay",
+              params: {
+                amount: "10000",
+                label: `Certificat authentifié - ${kind}`,
+                kind: "certified_report",
+                cert_kind: kind,
+              },
+            } as any),
+        },
+      ],
+    );
   };
 
   if (loading || !identity) {

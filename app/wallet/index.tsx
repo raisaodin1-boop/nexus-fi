@@ -105,6 +105,7 @@ export default function WalletScreen() {
       setRates(r);
       Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
     } catch {}
+    Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
     setLoading(false);
     setRefreshing(false);
   }, [fadeAnim]);
@@ -118,6 +119,21 @@ export default function WalletScreen() {
           <SkeletonBox height={200} borderRadius={Radius.xxl} />
           <SkeletonBox height={80} borderRadius={Radius.xl} />
           <SkeletonBox height={300} borderRadius={Radius.xl} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!wallet) {
+    return (
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: Spacing.xl, gap: 16 }}>
+          <WalletIcon color={Colors.textMuted} size={48} />
+          <Text style={{ color: Colors.text, fontWeight: "800", fontSize: 16, textAlign: "center" }}>Wallet indisponible</Text>
+          <Text style={{ color: Colors.textMuted, fontSize: 13, textAlign: "center" }}>Impossible de charger votre wallet. Vérifiez votre connexion.</Text>
+          <TouchableOpacity onPress={() => load()} style={{ paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, backgroundColor: Colors.secondary }}>
+            <Text style={{ color: "#fff", fontWeight: "700" }}>Réessayer</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
