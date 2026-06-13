@@ -16,7 +16,11 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.hodix.mobile",
-      "buildNumber": "1"
+      "buildNumber": "1",
+      "associatedDomains": [
+        "applinks:www.hodix.app",
+        "applinks:hodix.app"
+      ]
     },
     "android": {
       "adaptiveIcon": {
@@ -31,6 +35,25 @@
         "WRITE_EXTERNAL_STORAGE",
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "www.hodix.app",
+              "pathPrefix": "/"
+            },
+            {
+              "scheme": "https",
+              "host": "hodix.app",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
       ]
     },
     "web": {
