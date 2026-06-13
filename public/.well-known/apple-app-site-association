@@ -3,27 +3,23 @@
     "apps": [],
     "details": [
       {
-        "appID": "REPLACE_WITH_APPLE_TEAM_ID.app.hodix.mobile",
+        "appID": "TEAM_ID.app.hodix.mobile",
         "paths": [
-          "/tontines/join*",
-          "/associations/join*",
-          "/cooperatives/join*",
-          "/pay*",
-          "/auth/callback*",
+          "/wallet",
+          "/wallet/*",
+          "/tontines/*",
+          "/savings/*",
+          "/identity",
           "/credit-score",
-          "/welcome",
-          "/login",
-          "/register",
-          "/tontines/directory*",
-          "/wallet*",
-          "/notifications"
+          "/kyc",
+          "/referral",
+          "/groups",
+          "/join/*"
         ]
       }
     ]
   },
   "webcredentials": {
-    "apps": [
-      "REPLACE_WITH_APPLE_TEAM_ID.app.hodix.mobile"
-    ]
+    "apps": ["TEAM_ID.app.hodix.mobile"]
   }
 }

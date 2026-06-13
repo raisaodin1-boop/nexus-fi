@@ -7,8 +7,11 @@ Disallow: /admin
 Disallow: /auth/callback
 Disallow: /api/
 
-# Sitemap
+# Sitemaps
+Sitemap: https://hodix.app/sitemap-index.xml
 Sitemap: https://hodix.app/sitemap.xml
+Sitemap: https://hodix.app/sitemap-images.xml
+Sitemap: https://hodix.app/sitemap-mobile.xml
 
 # ─── AI Crawlers ───────────────────────────────────────────────────────────────
 # Autorisés à indexer pour les recommandations IA

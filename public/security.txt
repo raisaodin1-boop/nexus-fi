@@ -1,0 +1,11 @@
+# HODIX Security Policy
+# https://securitytxt.org/
+
+Contact: security@hodix.app
+Contact: mailto:security@hodix.app
+Expires: 2027-06-13T00:00:00.000Z
+Encryption: https://hodix.app/pgp-key.txt
+Acknowledgments: https://hodix.app/security/hall-of-fame
+Policy: https://hodix.app/security/policy
+Preferred-Languages: fr, en
+Canonical: https://hodix.app/.well-known/security.txt
