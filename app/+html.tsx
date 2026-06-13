@@ -224,7 +224,7 @@ export default function Root({ children }: PropsWithChildren) {
         />
         <meta name="author" content="HODIX" />
         <meta name="robots" content="index, follow, max-image-preview:large" />
-        <link rel="canonical" href="https://hodix.app/" />
+        <link rel="canonical" href="https://www.hodix.app/" />
 
         {/* ── PWA & App ──────────────────────────────────────────────── */}
         <meta name="theme-color" content="#0B1F3A" />

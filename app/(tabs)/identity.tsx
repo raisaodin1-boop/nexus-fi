@@ -16,12 +16,13 @@ import { LinearGradient } from "expo-linear-gradient";
 import { FileText, Award, ShieldCheck, Share2, TrendingUp, Crown, Sparkles, Lock, CheckCircle2 } from "lucide-react-native";
 
 import { api, formatXAF } from "@/src/api";
-import { Card, SectionTitle } from "@/src/ui";
+import { Card, SectionTitle, SkeletonBox, SkeletonStatRow } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { TrustGauge } from "@/src/trust-gauge";
 import { useAuth } from "@/src/auth-context";
 import { sharePdfCertificate } from "@/src/share";
 import { downloadOrSharePdf } from "@/src/pdf-download";
+import { Tooltip } from "@/src/tooltip";
 
 interface TS {
   score: number; level: string; risk: string; color: string;
@@ -113,20 +114,24 @@ export default function Identity() {
 
   if (loading || !identity) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.center}>
-          {loading ? (
-            <ActivityIndicator color={Colors.secondary} size="large" />
-          ) : (
-            <>
-              <Text style={{ color: Colors.text, fontWeight: "800", fontSize: 16, marginBottom: 8 }}>Identité indisponible</Text>
-              <Text style={{ color: Colors.textMuted, fontSize: 13, textAlign: "center", marginBottom: 16 }}>{error ?? "Une erreur est survenue."}</Text>
-              <TouchableOpacity onPress={() => { setLoading(true); load(); }} style={{ paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12, backgroundColor: Colors.secondary }}>
-                <Text style={{ color: "#fff", fontWeight: "700" }}>Réessayer</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        {loading ? (
+          <ScrollView contentContainerStyle={{ padding: Spacing.xl, gap: 16, paddingBottom: 100 }}>
+            <SkeletonBox width={200} height={28} borderRadius={8} />
+            <SkeletonBox height={220} borderRadius={Radius.xxl} />
+            <SkeletonStatRow />
+            <SkeletonBox height={160} borderRadius={Radius.xl} />
+            <SkeletonBox height={120} borderRadius={Radius.xl} />
+          </ScrollView>
+        ) : (
+          <View style={styles.center}>
+            <Text style={{ color: Colors.text, fontWeight: "800", fontSize: 16, marginBottom: 8 }}>Identité indisponible</Text>
+            <Text style={{ color: Colors.textMuted, fontSize: 13, textAlign: "center", marginBottom: 16 }}>{error ?? "Une erreur est survenue."}</Text>
+            <TouchableOpacity onPress={() => { setLoading(true); load(); }} style={{ paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12, backgroundColor: Colors.secondary }}>
+              <Text style={{ color: "#fff", fontWeight: "700" }}>Réessayer</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </SafeAreaView>
     );
   }
@@ -136,6 +141,14 @@ export default function Identity() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
+      <Tooltip
+        tip={{
+          id: "trust-score-intro",
+          title: "Votre Trust Score Hodix",
+          body: "Score sur 1000 basé sur votre régularité, ancienneté, participation aux groupes et engagement. Plus il est élevé, plus votre identité financière est crédible auprès des partenaires Hodix.",
+          cta: "Explorer mon score",
+        }}
+      />
       <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.h1}>Identité Financière</Text>

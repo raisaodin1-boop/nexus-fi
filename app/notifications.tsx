@@ -1,13 +1,8 @@
 // Notification center — premium redesign
 import { useCallback, useState } from "react";
 import {
-  ActivityIndicator,
-  FlatList,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+  FlatList, Platform, RefreshControl,
+  StyleSheet, Switch, Text, TouchableOpacity, View,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -16,6 +11,7 @@ import { Bell, CheckCheck, Sparkles, AlertCircle, Info, ChevronRight, ArrowLeft 
 
 import { api } from "@/src/api";
 import { Colors, Radius, Spacing, Shadow } from "@/src/theme";
+import { SkeletonList } from "@/src/ui";
 
 interface Notif {
   id: string; title: string; body: string; kind: string;
@@ -67,17 +63,33 @@ export default function Notifications() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterKey>("all");
+  const [pushEnabled, setPushEnabled] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const d = await api.get<{ items?: Notif[] } | Notif[]>("/notifications");
+      const [d, me] = await Promise.all([
+        api.get<{ items?: Notif[] } | Notif[]>("/notifications"),
+        Platform.OS !== "web" ? api.get<{ push_consent?: boolean }>("/users/me") : Promise.resolve(null),
+      ]);
       const list = Array.isArray(d) ? d : (d?.items ?? []);
       setItems(list);
+      if (me) setPushEnabled(!!me.push_consent);
     } catch {
       setItems([]);
     }
     setLoading(false);
   }, []);
+
+  const togglePush = async (enabled: boolean) => {
+    try {
+      await api.post("/notifications/consent", { push_consent: enabled, marketing_consent: enabled });
+      setPushEnabled(enabled);
+      if (enabled && Platform.OS !== "web") {
+        const { requestPushPermissionAndRegister } = await import("@/src/push-notifications");
+        await requestPushPermissionAndRegister();
+      }
+    } catch {}
+  };
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -151,8 +163,26 @@ export default function Notifications() {
         </View>
       </LinearGradient>
 
+      {Platform.OS !== "web" ? (
+        <View style={styles.pushRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.pushTitle}>Notifications push</Text>
+            <Text style={styles.pushSub}>Rappels de cotisation, paiements et alertes sécurité</Text>
+          </View>
+          <Switch
+            value={pushEnabled}
+            onValueChange={togglePush}
+            trackColor={{ false: Colors.border, true: Colors.secondary }}
+            thumbColor="#fff"
+            testID="notif-push-toggle"
+          />
+        </View>
+      ) : null}
+
       {loading ? (
-        <ActivityIndicator color={Colors.secondary} style={{ marginTop: 40 }} />
+        <View style={{ padding: Spacing.xl }}>
+          <SkeletonList count={5} />
+        </View>
       ) : filtered.length === 0 ? (
         <View style={styles.empty}>
           <View style={styles.emptyBell}>
@@ -226,6 +256,21 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xl,
     paddingHorizontal: Spacing.xl,
   },
+  pushRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginHorizontal: Spacing.xl,
+    marginTop: 12,
+    marginBottom: 4,
+    padding: 14,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  pushTitle: { fontSize: 14, fontWeight: "800", color: Colors.text },
+  pushSub: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",

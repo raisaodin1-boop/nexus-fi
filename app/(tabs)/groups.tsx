@@ -13,7 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Plus, Users, Building2, Network, Wallet, ChevronRight, Globe } from "lucide-react-native";
 
 import { api, formatXAF } from "@/src/api";
-import { Card, EmptyState, Button } from "@/src/ui";
+import { Card, EmptyState, Button, SkeletonList } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { supabase } from "@/src/supabase";
 
@@ -161,7 +161,9 @@ export default function Groups() {
         ) : null}
 
         {loading ? (
-          <ActivityIndicator color={Colors.secondary} style={{ marginTop: 40 }} />
+          <View style={{ paddingHorizontal: Spacing.xl, marginTop: 12 }}>
+            <SkeletonList count={4} />
+          </View>
         ) : items.length === 0 ? (
           <View style={{ paddingHorizontal: Spacing.xl, marginTop: 20 }}>
             <Card>

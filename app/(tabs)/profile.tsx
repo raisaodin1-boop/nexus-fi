@@ -42,6 +42,7 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bioEnabled, setBioEnabled] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(!!user?.push_consent);
   const [dobDate, setDobDate] = useState<Date | null>(
     user?.date_of_birth ? new Date(user.date_of_birth) : null,
   );
@@ -81,6 +82,23 @@ export default function ProfileScreen() {
   const countryIsOther = form.country === "OTHER";
   const cityIsOther = form.city === "OTHER";
   const neighborhoodIsOther = form.neighborhood === "OTHER";
+
+  useEffect(() => {
+    setPushEnabled(!!user?.push_consent);
+  }, [user?.push_consent]);
+
+  const togglePush = async (enabled: boolean) => {
+    try {
+      await api.post("/notifications/consent", { push_consent: enabled, marketing_consent: enabled });
+      setPushEnabled(enabled);
+      if (enabled && Platform.OS !== "web") {
+        const { requestPushPermissionAndRegister } = await import("@/src/push-notifications");
+        await requestPushPermissionAndRegister();
+      }
+    } catch {
+      Alert.alert("Erreur", "Impossible de mettre à jour les préférences de notification.");
+    }
+  };
 
   // Sync form when user context updates
   useEffect(() => {
@@ -419,7 +437,20 @@ export default function ProfileScreen() {
           <View style={{ paddingHorizontal: Spacing.xl }}>
             <Card>
               <SettingRow icon={<Globe color={Colors.secondary} size={18} />} label={t("profile.language") + " · " + (language === "fr" ? "Français" : "English")} onPress={() => Alert.alert("Langue / Language", "", [{ text: "Français", onPress: () => setLanguage("fr") }, { text: "English", onPress: () => setLanguage("en") }, { text: t("common.cancel"), style: "cancel" }])} testID="profile-language" borderColor={borderColor} txtColor={txt} />
-              <SettingRow icon={<Bell color={Colors.secondary} size={18} />} label="Notifications" onPress={() => router.push("/notifications")} testID="profile-go-notifs" borderColor={borderColor} txtColor={txt} />
+              <SettingRow icon={<Bell color={Colors.secondary} size={18} />} label="Centre de notifications" onPress={() => router.push("/notifications")} testID="profile-go-notifs" borderColor={borderColor} txtColor={txt} />
+              {Platform.OS !== "web" ? (
+                <View style={[styles.toggleRow, { borderTopWidth: 1, borderTopColor: borderColor }]}>
+                  <Bell color={pushEnabled ? Colors.secondary : Colors.textMuted} size={18} />
+                  <Text style={[styles.toggleLabel, { color: txt }]}>Notifications push</Text>
+                  <Switch
+                    value={pushEnabled}
+                    onValueChange={togglePush}
+                    trackColor={{ false: Colors.border, true: Colors.secondary }}
+                    thumbColor="#fff"
+                    testID="profile-push-toggle"
+                  />
+                </View>
+              ) : null}
               <SettingRow icon={<ShieldCheck color={Colors.accent} size={18} />} label="Vérification KYC" onPress={() => router.push("/kyc")} testID="profile-go-kyc" borderColor={borderColor} txtColor={txt} />
               <SettingRow icon={<CreditCard color={Colors.primary} size={18} />} label="Mes Paiements" onPress={() => router.push("/payments")} testID="profile-go-payments" borderColor={borderColor} txtColor={txt} />
               <SettingRow icon={<Shield color="#7C3AED" size={18} />} label="Mes données & droits" onPress={() => router.push("/data-rights" as any)} testID="profile-go-data-rights" borderColor={borderColor} txtColor={txt} />

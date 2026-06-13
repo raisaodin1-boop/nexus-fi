@@ -17,6 +17,7 @@ import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { SkeletonBox } from "@/src/ui";
 import { getTier, getTierGradient, TIERS, type CreditScoreResult, type MonthlySnapshot, type ScoreTier } from "@/src/credit-score";
 import { generateCreditReportHtml } from "@/src/credit-report-html";
+import { Tooltip } from "@/src/tooltip";
 
 // ─── Mini sparkline chart ──────────────────────────────────────────────────────
 
@@ -258,6 +259,14 @@ export default function CreditScoreScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
+      <Tooltip
+        tip={{
+          id: "credit-score-intro",
+          title: "Score de Crédit Hodix",
+          body: "Évaluation sur 1000 points : régularité (35 %), épargne (25 %), ancienneté (20 %), réseau (10 %) et KYC (10 %). Un score élevé améliore votre éligibilité aux financements participatifs.",
+          cta: "Voir mon détail",
+        }}
+      />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
 
         {/* ── Hero gradient ── */}

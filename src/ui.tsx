@@ -285,6 +285,25 @@ export function SkeletonCard() {
   );
 }
 
+export function SkeletonStatRow() {
+  return (
+    <View style={skeletonStyles.statRow}>
+      <SkeletonBox height={80} borderRadius={16} style={{ flex: 1 }} />
+      <SkeletonBox height={80} borderRadius={16} style={{ flex: 1 }} />
+    </View>
+  );
+}
+
+export function SkeletonList({ count = 4 }: { count?: number }) {
+  return (
+    <View style={{ gap: 12 }}>
+      {Array.from({ length: count }).map((_, i) => (
+        <SkeletonCard key={i} />
+      ))}
+    </View>
+  );
+}
+
 const skeletonStyles = StyleSheet.create({
   card: {
     backgroundColor: Colors.surface,
@@ -299,6 +318,7 @@ const skeletonStyles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
+  statRow: { flexDirection: "row", gap: 10, minWidth: 0 },
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

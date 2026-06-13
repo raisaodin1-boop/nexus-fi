@@ -15,7 +15,6 @@ import { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import Constants from "expo-constants";
 
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { ErrorBoundary } from "@/src/error-boundary";
@@ -30,6 +29,10 @@ import { useDeviceFingerprint } from "@/src/device-fingerprint";
 import { isBiometricEnabled, authenticateBiometric } from "@/src/biometrics";
 import { Colors } from "@/src/theme";
 import { APP_MAX_WIDTH, shouldShowWebPhoneFrame } from "@/src/hooks/use-responsive";
+import { DynamicSeo } from "@/src/dynamic-seo";
+import { DeepLinkHandler } from "@/src/deep-link-handler";
+import { PushConsentModal } from "@/src/consent-modal";
+import { attachPushNotificationListeners, registerExpoPushToken } from "@/src/push-notifications";
 
 if (Platform.OS !== "web") {
   SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -42,44 +45,52 @@ function PushSetup() {
   useEffect(() => {
     if (!user || Platform.OS === "web") return;
 
+    const detach = attachPushNotificationListeners(router);
+
     (async () => {
       try {
-        const Device = await import("expo-device");
-        if (!Device.isDevice) return;
-        const Notifications = await import("expo-notifications");
-        Notifications.setNotificationHandler({
-          handleNotification: async () => ({
-            shouldShowAlert: true,
-            shouldPlaySound: true,
-            shouldSetBadge: true,
-            shouldShowBanner: true,
-            shouldShowList: true,
-          }),
-        });
-        const { status: existing } = await Notifications.getPermissionsAsync();
-        let final = existing;
-        if (existing !== "granted") {
-          const { status } = await Notifications.requestPermissionsAsync();
-          final = status;
+        const me = await api.get<{ push_consent?: boolean | null }>("/users/me");
+        if (me.push_consent === true) {
+          await registerExpoPushToken();
         }
-        if (final !== "granted") return;
-        const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? "hodix";
-        const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
-        if (token) await api.post("/notifications/push-token", { token });
-
-        const sub1 = Notifications.addNotificationReceivedListener(() => {});
-        const sub2 = Notifications.addNotificationResponseReceivedListener(() => {
-          try { router.push("/notifications"); } catch {}
-        });
-        return () => {
-          Notifications.removeNotificationSubscription(sub1);
-          Notifications.removeNotificationSubscription(sub2);
-        };
       } catch {}
     })();
+
+    return () => detach();
   }, [user, router]);
 
   return null;
+}
+
+function PushConsentGate() {
+  const { user } = useAuth();
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (!user || Platform.OS === "web") return;
+
+    (async () => {
+      try {
+        const me = await api.get<{ push_consent?: boolean | null }>("/users/me");
+        if (me.push_consent === true || me.push_consent === false) return;
+        setVisible(true);
+      } catch {}
+    })();
+  }, [user]);
+
+  if (!visible) return null;
+
+  return (
+    <PushConsentModal
+      visible={visible}
+      onAccept={async () => {
+        setVisible(false);
+        const { requestPushPermissionAndRegister } = await import("@/src/push-notifications");
+        await requestPushPermissionAndRegister();
+      }}
+      onDecline={() => setVisible(false)}
+    />
+  );
 }
 
 function FirstLaunchGuard() {
@@ -164,7 +175,10 @@ function RootLayoutInner() {
 
   const stack = (
     <BiometricGate>
+      <DynamicSeo />
+      <DeepLinkHandler />
       <PushSetup />
+      <PushConsentGate />
       <FirstLaunchGuard />
       <StatusBar style="light" />
       <OfflineBanner />

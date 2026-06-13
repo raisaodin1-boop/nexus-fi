@@ -1,13 +1,13 @@
 // Manager dashboard component — used inside (tabs)/index.tsx when role is tontine_manager.
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Users, Building2, Network, Wallet, TrendingUp, Activity, Plus, Bell, ChevronRight } from "lucide-react-native";
 
 import { api, formatXAF } from "@/src/api";
-import { Card, SectionTitle, StatCard } from "@/src/ui";
+import { Card, SectionTitle, StatCard, SkeletonBox, SkeletonStatRow, SkeletonCard } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { LineChart } from "@/src/charts";
 import { useAuth } from "@/src/auth-context";
@@ -51,7 +51,16 @@ export function ManagerDashboard() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   if (loading) {
-    return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator color={Colors.secondary} size="large" /></View></SafeAreaView>;
+    return (
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <View style={{ padding: Spacing.xl, gap: 16 }}>
+          <SkeletonBox width={180} height={26} borderRadius={8} />
+          <SkeletonStatRow />
+          <SkeletonStatRow />
+          <SkeletonCard />
+        </View>
+      </SafeAreaView>
+    );
   }
   if (!overview) {
     return (

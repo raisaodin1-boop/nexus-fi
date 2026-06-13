@@ -1,7 +1,7 @@
 // Shared group form helpers
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Button, Field, Card } from "@/src/ui";
@@ -187,9 +187,14 @@ interface JoinProps {
 
 export function GroupJoinForm({ title, endpoint, testIDPrefix, onSuccess }: JoinProps) {
   const router = useRouter();
+  const { code: codeParam } = useLocalSearchParams<{ code?: string }>();
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (codeParam) setCode(String(codeParam).trim().toUpperCase());
+  }, [codeParam]);
 
   const submit = async () => {
     setError(null);

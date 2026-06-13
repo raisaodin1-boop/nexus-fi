@@ -23,6 +23,7 @@ export interface User {
   city?: string | null;
   occupation?: string | null;
   photo_base64?: string | null;
+  push_consent?: boolean | null;
   created_at: string;
 }
 
