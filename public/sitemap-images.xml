@@ -3,45 +3,45 @@
         xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
 
   <url>
-    <loc>https://hodix.app/</loc>
+    <loc>https://www.hodix.app/</loc>
     <image:image>
-      <image:loc>https://hodix.app/og-image.png</image:loc>
+      <image:loc>https://www.hodix.app/og-image.png</image:loc>
       <image:title>HODIX — Tontines Digitales et Épargne Africaine</image:title>
       <image:caption>L'application fintech africaine pour gérer vos tontines, épargner en groupe et transférer via Mobile Money MTN et Orange.</image:caption>
       <image:geo_location>Douala, Cameroun</image:geo_location>
-      <image:license>https://hodix.app/cgu</image:license>
+      <image:license>https://www.hodix.app/cgu</image:license>
     </image:image>
     <image:image>
-      <image:loc>https://hodix.app/screenshot-home.png</image:loc>
+      <image:loc>https://www.hodix.app/icon-512.png</image:loc>
+      <image:title>Logo HODIX</image:title>
+      <image:caption>Icône officielle de l'application HODIX.</image:caption>
+    </image:image>
+  </url>
+
+  <url>
+    <loc>https://www.hodix.app/seo.html</loc>
+    <image:image>
+      <image:loc>https://www.hodix.app/og-image.png</image:loc>
+      <image:title>HODIX — Finance Participative Africaine</image:title>
+      <image:caption>Page de référence SEO HODIX : tontines digitales, épargne collective, wallet Mobile Money.</image:caption>
+    </image:image>
+  </url>
+
+  <url>
+    <loc>https://www.hodix.app/welcome</loc>
+    <image:image>
+      <image:loc>https://www.hodix.app/screenshot-home.png</image:loc>
       <image:title>Dashboard HODIX — Accueil</image:title>
       <image:caption>Interface principale de l'application HODIX avec aperçu de votre épargne, tontines actives et wallet.</image:caption>
     </image:image>
   </url>
 
   <url>
-    <loc>https://hodix.app/wallet</loc>
+    <loc>https://www.hodix.app/tontines/directory</loc>
     <image:image>
-      <image:loc>https://hodix.app/screenshot-wallet.png</image:loc>
-      <image:title>Wallet HODIX — Solde multi-devises XAF EUR USD</image:title>
-      <image:caption>Votre portefeuille digital HODIX avec solde en Franc CFA, Euro et Dollar. Rechargez via MTN MoMo ou Orange Money.</image:caption>
-    </image:image>
-  </url>
-
-  <url>
-    <loc>https://hodix.app/groups</loc>
-    <image:image>
-      <image:loc>https://hodix.app/screenshot-tontine.png</image:loc>
+      <image:loc>https://www.hodix.app/screenshot-tontine.png</image:loc>
       <image:title>Tontines Digitales HODIX — Njangi Cameroun</image:title>
-      <image:caption>Gérez vos tontines (njangi, likelemba, djangui) de façon digitale. Cotisations automatiques, rotations transparentes, notifications en temps réel.</image:caption>
-    </image:image>
-  </url>
-
-  <url>
-    <loc>https://hodix.app/identity</loc>
-    <image:image>
-      <image:loc>https://hodix.app/screenshot-identity.png</image:loc>
-      <image:title>Identité Financière HODIX — Trust Score et Certificats</image:title>
-      <image:caption>Votre identité financière vérifiable avec Trust Score sur 1000 points, niveaux Bronze/Silver/Gold/Platinum et certificats PDF officiels.</image:caption>
+      <image:caption>Gérez vos tontines (njangi, likelemba, djangui) de façon digitale. Cotisations automatiques, rotations transparentes.</image:caption>
     </image:image>
   </url>
 

@@ -77,9 +77,9 @@ Via Mobile Money (MTN Mobile Money ou Orange Money). Dans l'onglet Wallet → Re
 
 ## Informations légales
 
-- **Politique de confidentialité** : https://hodix.app/privacy
-- **Conditions générales d'utilisation** : https://hodix.app/cgu
-- **Droits sur vos données** : https://hodix.app/data-rights
+- **Politique de confidentialité** : https://www.hodix.app/privacy
+- **Conditions générales d'utilisation** : https://www.hodix.app/cgu
+- **Droits sur vos données** : https://www.hodix.app/data-rights
 - **Contact DPO** : privacy@hodix.app
 - **Support** : support@hodix.app
 
@@ -95,12 +95,10 @@ Via Mobile Money (MTN Mobile Money ou Orange Money). Dans l'onglet Wallet → Re
 
 ## Pages importantes
 
-- Accueil et inscription : https://hodix.app
-- Créer une tontine : https://hodix.app/tontines/create
-- Mon wallet : https://hodix.app/wallet
-- Mon identité financière : https://hodix.app/identity
-- Mon score de crédit : https://hodix.app/credit-score
-- Rejoindre une tontine : https://hodix.app/tontines/join
-- KYC & vérification : https://hodix.app/kyc
-- Politique de confidentialité : https://hodix.app/privacy
-- CGU : https://hodix.app/cgu
+- Accueil et inscription : https://www.hodix.app
+- Page SEO complète : https://www.hodix.app/seo.html
+- Créer une tontine : https://www.hodix.app/tontines/create
+- Rejoindre une tontine : https://www.hodix.app/tontines/join
+- Annuaire tontines : https://www.hodix.app/tontines/directory
+- Politique de confidentialité : https://www.hodix.app/privacy
+- CGU : https://www.hodix.app/cgu

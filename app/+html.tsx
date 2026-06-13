@@ -8,12 +8,12 @@ const STRUCTURED_DATA = {
   "@graph": [
     {
       "@type": "Organization",
-      "@id": "https://hodix.app/#organization",
+      "@id": "https://www.hodix.app/#organization",
       name: "HODIX",
-      url: "https://hodix.app",
+      url: "https://www.hodix.app",
       logo: {
         "@type": "ImageObject",
-        url: "https://hodix.app/icon.png",
+        url: "https://www.hodix.app/icon.png",
         width: 512,
         height: 512,
       },
@@ -56,12 +56,12 @@ const STRUCTURED_DATA = {
     },
     {
       "@type": "SoftwareApplication",
-      "@id": "https://hodix.app/#app",
+      "@id": "https://www.hodix.app/#app",
       name: "HODIX — Tontines & Épargne",
       operatingSystem: ["Android", "iOS", "Web"],
       applicationCategory: "FinanceApplication",
       applicationSubCategory: "Personal Finance, Savings, Group Finance",
-      url: "https://hodix.app",
+      url: "https://www.hodix.app",
       description:
         "HODIX digitalise les tontines africaines (njangi, likelemba, djangui) et offre un wallet multi-devises, un Trust Score, des certificats financiers officiels et des outils d'épargne participative.",
       offers: {
@@ -84,29 +84,29 @@ const STRUCTURED_DATA = {
         "Gestion de coopératives et associations",
         "Streaks et récompenses de cotisation",
       ],
-      screenshot: "https://hodix.app/og-image.png",
+      screenshot: "https://www.hodix.app/og-image.png",
       inLanguage: "fr-FR",
-      author: { "@id": "https://hodix.app/#organization" },
-      publisher: { "@id": "https://hodix.app/#organization" },
-      downloadUrl: "https://hodix.app",
+      author: { "@id": "https://www.hodix.app/#organization" },
+      publisher: { "@id": "https://www.hodix.app/#organization" },
+      downloadUrl: "https://www.hodix.app",
     },
     {
       "@type": "WebSite",
-      "@id": "https://hodix.app/#website",
-      url: "https://hodix.app",
+      "@id": "https://www.hodix.app/#website",
+      url: "https://www.hodix.app",
       name: "HODIX",
       description: "Plateforme africaine d'épargne et tontines digitales",
-      publisher: { "@id": "https://hodix.app/#organization" },
+      publisher: { "@id": "https://www.hodix.app/#organization" },
       inLanguage: "fr-FR",
       potentialAction: {
         "@type": "SearchAction",
-        target: "https://hodix.app/tontines/directory?q={search_term_string}",
+        target: "https://www.hodix.app/tontines/directory?q={search_term_string}",
         "query-input": "required name=search_term_string",
       },
     },
     {
       "@type": "FAQPage",
-      "@id": "https://hodix.app/#faq",
+      "@id": "https://www.hodix.app/#faq",
       mainEntity: [
         {
           "@type": "Question",
@@ -168,9 +168,9 @@ const STRUCTURED_DATA = {
     },
     {
       "@type": "FinancialService",
-      "@id": "https://hodix.app/#service",
+      "@id": "https://www.hodix.app/#service",
       name: "HODIX Financial Services",
-      provider: { "@id": "https://hodix.app/#organization" },
+      provider: { "@id": "https://www.hodix.app/#organization" },
       serviceType: "Digital Savings and Group Finance",
       description: "Épargne participative, tontines digitales, wallet mobile, transferts et certificats financiers pour l'Afrique",
       areaServed: "Afrique subsaharienne, zone CEMAC, diaspora africaine",
@@ -240,22 +240,22 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="geo.placename" content="Douala, Cameroun" />
         <meta name="language" content="French" />
         <meta httpEquiv="content-language" content="fr" />
-        <link rel="alternate" hreflang="fr" href="https://hodix.app/" />
-        <link rel="alternate" hreflang="fr-CM" href="https://hodix.app/" />
-        <link rel="alternate" hreflang="fr-CI" href="https://hodix.app/" />
-        <link rel="alternate" hreflang="fr-SN" href="https://hodix.app/" />
-        <link rel="alternate" hreflang="x-default" href="https://hodix.app/" />
+        <link rel="alternate" hreflang="fr" href="https://www.hodix.app/" />
+        <link rel="alternate" hreflang="fr-CM" href="https://www.hodix.app/" />
+        <link rel="alternate" hreflang="fr-CI" href="https://www.hodix.app/" />
+        <link rel="alternate" hreflang="fr-SN" href="https://www.hodix.app/" />
+        <link rel="alternate" hreflang="x-default" href="https://www.hodix.app/" />
 
         {/* ── Open Graph ─────────────────────────────────────────────── */}
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="HODIX" />
-        <meta property="og:url" content="https://hodix.app/" />
+        <meta property="og:url" content="https://www.hodix.app/" />
         <meta property="og:title" content="HODIX – Tontines Digitales & Épargne Africaine" />
         <meta
           property="og:description"
           content="La première super-app fintech africaine. Gérez vos tontines (njangi, likelemba), épargnez en groupe, transférez via Mobile Money MTN/Orange, et obtenez votre Trust Score. Cameroun, Côte d'Ivoire, Sénégal, diaspora."
         />
-        <meta property="og:image" content="https://hodix.app/og-image.png" />
+        <meta property="og:image" content="https://www.hodix.app/og-image.png" />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
         <meta property="og:image:alt" content="HODIX – Tontines digitales africaines" />
@@ -271,7 +271,7 @@ export default function Root({ children }: PropsWithChildren) {
           name="twitter:description"
           content="Digitalisez vos tontines, gérez votre épargne collective et transférez via Mobile Money. Trust Score financier inclus. 🌍"
         />
-        <meta name="twitter:image" content="https://hodix.app/og-image.png" />
+        <meta name="twitter:image" content="https://www.hodix.app/og-image.png" />
 
         {/* ── App Store Links ─────────────────────────────────────────── */}
         <meta name="apple-itunes-app" content="app-id=0000000000" />
@@ -279,11 +279,12 @@ export default function Root({ children }: PropsWithChildren) {
 
         {/* ── LLMs & AI crawlers ─────────────────────────────────────── */}
         {/* Décrit HODIX aux IA generatives (ChatGPT, Claude, Perplexity) */}
-        <link rel="ai-description" href="https://hodix.app/llms.txt" />
-        <link rel="alternate" type="text/markdown" href="https://hodix.app/hodix.md" title="HODIX Markdown Mirror" />
+        <link rel="ai-description" href="https://www.hodix.app/llms.txt" />
+        <link rel="alternate" type="text/markdown" href="https://www.hodix.app/hodix.md" title="HODIX Markdown Mirror" />
 
         {/* ── Sitemap & SEO technique ─────────────────────────────────── */}
-        <link rel="sitemap" type="application/xml" href="https://hodix.app/sitemap.xml" />
+        <link rel="sitemap" type="application/xml" href="https://www.hodix.app/sitemap-index.xml" />
+        <link rel="alternate" type="text/html" href="https://www.hodix.app/seo.html" title="HODIX — Page SEO" />
 
         {/* ── Fonts ──────────────────────────────────────────────────── */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -351,6 +352,24 @@ export default function Root({ children }: PropsWithChildren) {
         />
       </head>
       <body style={{ margin: 0, height: "100%", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        <noscript>
+          <div style={{ padding: 24, maxWidth: 720, margin: "0 auto", fontFamily: "system-ui, sans-serif" }}>
+            <h1>HODIX — Tontines Digitales &amp; Épargne Africaine</h1>
+            <p>
+              HODIX digitalise les tontines africaines (njangi, likelemba, djangui). Gérez vos groupes
+              d&apos;épargne, transférez via Mobile Money et construisez votre Trust Score financier.
+            </p>
+            <p>
+              <a href="https://www.hodix.app/seo.html">Découvrir HODIX</a>
+              {" · "}
+              <a href="https://www.hodix.app/register">Créer un compte</a>
+              {" · "}
+              <a href="https://www.hodix.app/tontines/directory">Annuaire tontines</a>
+              {" · "}
+              <a href="https://www.hodix.app/privacy">Confidentialité</a>
+            </p>
+          </div>
+        </noscript>
         {children}
       </body>
     </html>

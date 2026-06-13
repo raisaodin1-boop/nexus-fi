@@ -1,73 +1,67 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Mobile Sitemap — référence les pages optimisées mobile et les liens deep linking.
-  Permet à Google de comprendre la structure de l'app mobile HODIX.
+  Mobile Sitemap — pages publiques optimisées mobile.
 -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
         xmlns:mobile="http://www.google.com/schemas/sitemap-mobile/1.0">
 
   <url>
-    <loc>https://hodix.app/</loc>
+    <loc>https://www.hodix.app/</loc>
     <mobile:mobile/>
   </url>
 
   <url>
-    <loc>https://hodix.app/wallet</loc>
+    <loc>https://www.hodix.app/seo.html</loc>
     <mobile:mobile/>
   </url>
 
   <url>
-    <loc>https://hodix.app/groups</loc>
+    <loc>https://www.hodix.app/welcome</loc>
     <mobile:mobile/>
   </url>
 
   <url>
-    <loc>https://hodix.app/savings</loc>
+    <loc>https://www.hodix.app/login</loc>
     <mobile:mobile/>
   </url>
 
   <url>
-    <loc>https://hodix.app/identity</loc>
+    <loc>https://www.hodix.app/register</loc>
     <mobile:mobile/>
   </url>
 
   <url>
-    <loc>https://hodix.app/tontines/create</loc>
+    <loc>https://www.hodix.app/tontines/create</loc>
     <mobile:mobile/>
   </url>
 
   <url>
-    <loc>https://hodix.app/tontines/join</loc>
+    <loc>https://www.hodix.app/tontines/join</loc>
     <mobile:mobile/>
   </url>
 
   <url>
-    <loc>https://hodix.app/tontines/directory</loc>
+    <loc>https://www.hodix.app/tontines/directory</loc>
     <mobile:mobile/>
   </url>
 
   <url>
-    <loc>https://hodix.app/credit-score</loc>
+    <loc>https://www.hodix.app/tontines/leaderboard</loc>
     <mobile:mobile/>
   </url>
 
   <url>
-    <loc>https://hodix.app/kyc</loc>
+    <loc>https://www.hodix.app/privacy</loc>
     <mobile:mobile/>
   </url>
 
   <url>
-    <loc>https://hodix.app/referral</loc>
+    <loc>https://www.hodix.app/cgu</loc>
     <mobile:mobile/>
   </url>
 
   <url>
-    <loc>https://hodix.app/privacy</loc>
-    <mobile:mobile/>
-  </url>
-
-  <url>
-    <loc>https://hodix.app/cgu</loc>
+    <loc>https://www.hodix.app/data-rights</loc>
     <mobile:mobile/>
   </url>
 

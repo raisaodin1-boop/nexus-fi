@@ -1,6 +1,6 @@
 # HODIX — Application Fintech Africaine
 
-**URL officielle** : https://hodix.app  
+**URL officielle** : https://www.hodix.app  
 **Catégorie** : Finance participative, Épargne digitale, Tontines africaines  
 **Disponible sur** : iOS · Android · Web  
 **Langue** : Français  
@@ -94,9 +94,9 @@ Le Trust Score HODIX est un score sur 1000 points qui mesure la fiabilité finan
 
 ## Légal & Conformité
 
-- Politique de confidentialité : https://hodix.app/privacy
-- CGU : https://hodix.app/cgu
-- Droits sur les données : https://hodix.app/data-rights
+- Politique de confidentialité : https://www.hodix.app/privacy
+- CGU : https://www.hodix.app/cgu
+- Droits sur les données : https://www.hodix.app/data-rights
 - Conforme au Règlement CEMAC sur la protection des données
 - Principes RGPD appliqués pour la diaspora européenne
 - DPO : privacy@hodix.app

@@ -11,6 +11,8 @@
     { "source": "/llms.txt", "destination": "/llms.txt" },
     { "source": "/hodix.md", "destination": "/hodix.md" },
     { "source": "/seo.html", "destination": "/seo.html" },
+    { "source": "/security/policy", "destination": "/security/policy.html" },
+    { "source": "/security.txt", "destination": "/security.txt" },
     { "source": "/manifest.json", "destination": "/manifest.json" },
     { "source": "/.well-known/(.*)", "destination": "/.well-known/$1" },
     { "source": "/(.*)", "destination": "/index.html" }

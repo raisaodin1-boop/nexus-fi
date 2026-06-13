@@ -103,7 +103,7 @@ function buildCertificateHtml(kind: DocKind, data: any): string {
       ${field("Score de confiance", `${score} <span style="font-size:14px;color:#64748b">/ 1000</span>`, `font-size:32px;font-weight:900;color:${color};`)}
       <div class="badge" style="background:${color}20;color:${color};">${level}</div>
       ${field("Date de certification", now)}
-      <p style="font-size:11px;color:#64748b;margin-top:12px;">Vérification : https://hodix.app/verify/${verifyCode}</p>
+      <p style="font-size:11px;color:#64748b;margin-top:12px;">Vérification : https://www.hodix.app/verify/${verifyCode}</p>
     `);
   }
 

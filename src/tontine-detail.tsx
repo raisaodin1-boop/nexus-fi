@@ -472,7 +472,7 @@ export function TontineDetailView({ id }: { id: string }) {
   const shareWhatsApp = async () => {
     if (!data) return;
     const t = data.tontine;
-    const msg = `🏦 Rejoignez la tontine *"${t.name}"* sur Hodix !\n\n📌 Code : *${t.invite_code}*\n\nhttps://hodix.app`;
+    const msg = `🏦 Rejoignez la tontine *"${t.name}"* sur Hodix !\n\n📌 Code : *${t.invite_code}*\n\nhttps://www.hodix.app`;
     const url = `whatsapp://send?text=${encodeURIComponent(msg)}`;
     try {
       await Linking.openURL(url);

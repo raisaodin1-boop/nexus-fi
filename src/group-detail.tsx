@@ -61,7 +61,7 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
   const contribs: Contrib[] = data.contributions ?? [];
 
   const shareWhatsApp = async () => {
-    const appLink = "https://hodix.app";
+    const appLink = "https://www.hodix.app";
     const message = `🏦 Rejoignez la tontine *"${item.name}"* sur Hodix !\n\n📌 Code d'invitation : *${item.invite_code}*\n\n📱 Téléchargez l'app : ${appLink}\n\nOu rejoignez directement : hodix://join?code=${item.invite_code}`;
     const url = `whatsapp://send?text=${encodeURIComponent(message)}`;
     try {
@@ -79,7 +79,7 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
   const shareGeneric = async () => {
     try {
       await Share.share({
-        message: `Rejoignez "${item.name}" sur Hodix avec le code : ${item.invite_code} — https://hodix.app`,
+        message: `Rejoignez "${item.name}" sur Hodix avec le code : ${item.invite_code} — https://www.hodix.app`,
       });
     } catch {}
   };

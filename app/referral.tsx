@@ -68,7 +68,7 @@ export default function ReferralScreen() {
 
   const shareWhatsApp = () => {
     if (!info) return;
-    const text = `Rejoignez HODIX avec mon code ${info.invite_code} et gagnez des bonus ! https://hodix.app`;
+    const text = `Rejoignez HODIX avec mon code ${info.invite_code} et gagnez des bonus ! https://www.hodix.app`;
     const url = `whatsapp://send?text=${encodeURIComponent(text)}`;
     Linking.openURL(url).catch(() => {
       Share.share({ message: text });
@@ -77,7 +77,7 @@ export default function ReferralScreen() {
 
   const shareNative = async () => {
     if (!info) return;
-    const text = `Rejoignez HODIX avec mon code ${info.invite_code} et gagnez des bonus ! https://hodix.app`;
+    const text = `Rejoignez HODIX avec mon code ${info.invite_code} et gagnez des bonus ! https://www.hodix.app`;
     try {
       await Share.share({ message: text, title: "Rejoignez HODIX" });
     } catch {}

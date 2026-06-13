@@ -1,11 +1,13 @@
 [
   {
-    "relation": ["delegate_permission/common.handle_all_urls"],
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
     "target": {
       "namespace": "android_app",
       "package_name": "app.hodix.mobile",
       "sha256_cert_fingerprints": [
-        "REMPLACER_PAR_SHA256_DE_VOTRE_KEYSTORE"
+        "REPLACE_WITH_ANDROID_SHA256_FINGERPRINT"
       ]
     }
   }

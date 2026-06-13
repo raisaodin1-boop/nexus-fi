@@ -8,8 +8,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "build:web": "node scripts/generate-well-known.mjs && expo export --platform web",
-    "build": "node scripts/generate-well-known.mjs && expo export --platform web",
+    "build:web": "node scripts/generate-well-known.mjs && node scripts/generate-seo-assets.mjs && expo export --platform web",
+    "build": "node scripts/generate-well-known.mjs && node scripts/generate-seo-assets.mjs && expo export --platform web",
     "lint": "eslint . --ext .ts,.tsx --max-warnings=0",
     "type-check": "tsc --noEmit"
   },
@@ -57,6 +57,7 @@
     "@types/react-native": "^0.73.0",
     "babel-plugin-module-resolver": "^5.0.2",
     "babel-preset-expo": "~11.0.14",
+    "sharp": "^0.34.5",
     "typescript": "^5.3.3"
   }
 }
