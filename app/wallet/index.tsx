@@ -156,8 +156,8 @@ export default function WalletScreen() {
               <View style={styles.balanceHeader}>
                 <WalletIcon color="rgba(255,255,255,0.7)" size={18} />
                 <Text style={styles.balanceHeaderText}>Solde disponible</Text>
-                <TouchableOpacity onPress={() => load(true)}>
-                  <RefreshCw color="rgba(255,255,255,0.5)" size={16} />
+                <TouchableOpacity onPress={() => load(true)} style={styles.refreshHit} accessibilityLabel="Actualiser le solde">
+                  <RefreshCw color="rgba(255,255,255,0.5)" size={18} />
                 </TouchableOpacity>
               </View>
 
@@ -258,6 +258,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md, gap: 8,
   },
   balanceHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  refreshHit: { width: 44, height: 44, alignItems: "center", justifyContent: "center", marginLeft: "auto" },
   balanceHeaderText: { flex: 1, fontSize: 13, color: "rgba(255,255,255,0.7)", fontWeight: "600" },
   balanceAmount: { fontSize: 42, fontWeight: "900", color: "#fff", letterSpacing: -1.5, marginVertical: 4 },
   currencyRow: { flexDirection: "row", gap: 8, marginTop: 4 },

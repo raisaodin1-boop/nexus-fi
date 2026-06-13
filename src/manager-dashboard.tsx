@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   heroStats: { flexDirection: "row", gap: 24, marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.1)" },
   heroStLbl: { color: "rgba(255,255,255,0.6)", fontSize: 10, fontWeight: "600", letterSpacing: 0.3 },
   heroStVal: { color: "#fff", fontSize: 14, fontWeight: "800", marginTop: 2 },
-  statsRow: { flexDirection: "row", paddingHorizontal: Spacing.xl, gap: 10, marginTop: 12 },
+  statsRow: { flexDirection: "row", paddingHorizontal: Spacing.xl, gap: 10, marginTop: 12, minWidth: 0 },
   qaGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: Spacing.xl, gap: 10 },
   qa: { width: "48%", backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.lg, borderWidth: 1, borderColor: Colors.border, gap: 10 },
   qaIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: Colors.surfaceAlt, alignItems: "center", justifyContent: "center" },

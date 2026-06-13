@@ -770,10 +770,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: Colors.border,
     backgroundColor: Colors.surface,
   },
-  backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: Colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
+  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
   headerTitle: { color: Colors.primary, fontSize: 17, fontWeight: "900", letterSpacing: -0.3 },
   headerSub: { color: Colors.textMuted, fontSize: 12, fontWeight: "600", marginTop: 1 },
-  waBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: "#25D366", alignItems: "center", justifyContent: "center" },
+  waBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#25D366", alignItems: "center", justifyContent: "center" },
 
   // Tabs
   tabsRow: { paddingHorizontal: Spacing.xl, paddingVertical: 10, gap: 8, backgroundColor: Colors.surface, borderBottomWidth: 1, borderBottomColor: Colors.border },

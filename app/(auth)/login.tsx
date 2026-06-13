@@ -121,7 +121,7 @@ export default function LoginScreen() {
                 secureTextEntry={!showPassword}
                 autoComplete="password"
               />
-              <TouchableOpacity onPress={() => setShowPassword(v => !v)}>
+              <TouchableOpacity onPress={() => setShowPassword(v => !v)} style={styles.iconHit} accessibilityLabel={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}>
                 {showPassword
                   ? <EyeOff size={18} color={Colors.textMuted} />
                   : <Eye size={18} color={Colors.textMuted} />}
@@ -227,7 +227,8 @@ const styles = StyleSheet.create({
     paddingVertical: Platform.OS === "web" ? 0 : 14,
     outlineStyle: "none",
   } as any,
-  forgotRow: { alignItems: "flex-end", marginTop: -4 },
+  iconHit: { minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center", marginRight: -10 },
+  forgotRow: { alignItems: "flex-end", marginTop: -4, minHeight: 44, justifyContent: "center" },
   forgotText: { fontSize: 13, color: Colors.secondary, fontWeight: "600" },
   btn: { borderRadius: Radius.lg, overflow: "hidden", marginTop: 8 },
   btnDisabled: { opacity: 0.7 },

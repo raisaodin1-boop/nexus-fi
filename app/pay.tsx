@@ -292,7 +292,7 @@ export default function PayContribution() {
     return (
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 100 }}>
-          <TouchableOpacity onPress={() => router.back()}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.touchBack}>
             <Text style={styles.back}>← Retour</Text>
           </TouchableOpacity>
 
@@ -346,7 +346,7 @@ export default function PayContribution() {
     return (
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 100 }}>
-          <TouchableOpacity onPress={() => { setStage("select"); setError(null); }}>
+          <TouchableOpacity onPress={() => { setStage("select"); setError(null); }} style={styles.touchBack}>
             <Text style={styles.back}>← Changer de méthode</Text>
           </TouchableOpacity>
 
@@ -491,7 +491,8 @@ export default function PayContribution() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bg },
-  back: { color: Colors.textMuted, fontWeight: "600", marginBottom: 16 },
+  back: { color: Colors.textMuted, fontWeight: "600" },
+  touchBack: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start", paddingRight: 12, marginBottom: 8 },
   hero: { borderRadius: Radius.xxl, padding: 24, gap: 6, marginBottom: 28, alignItems: "center" },
   heroLabel: { color: "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: "800", letterSpacing: 2 },
   heroAmt: { color: "#fff", fontSize: 40, fontWeight: "900", letterSpacing: -1 },

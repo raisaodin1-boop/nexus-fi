@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
   glow: { width: 18, height: 18, borderRadius: 9 },
   scoreFooter: { marginTop: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   scoreFooterText: { color: "rgba(255,255,255,0.8)", fontSize: 13, fontWeight: "600" },
-  statsRow: { flexDirection: "row", paddingHorizontal: Spacing.xl, gap: 10, marginTop: 12 },
+  statsRow: { flexDirection: "row", paddingHorizontal: Spacing.xl, gap: 10, marginTop: 12, minWidth: 0 },
   qaRow: { flexDirection: "row", paddingHorizontal: Spacing.xl, gap: 10, marginBottom: 10 },
   qa: { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.lg, borderWidth: 1, borderColor: Colors.border, flexDirection: "row", alignItems: "center", gap: 12 },
   qaIconBox: { width: 44, height: 44, borderRadius: 12, backgroundColor: Colors.surfaceAlt, alignItems: "center", justifyContent: "center" },

@@ -350,12 +350,12 @@ const styles = StyleSheet.create({
   pillText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
   stat: {
     flex: 1,
+    minWidth: 0,
     backgroundColor: Colors.surface,
     borderRadius: Radius.xl,
     padding: Spacing.lg,
     borderWidth: 1,
     borderColor: Colors.border,
-    minWidth: 140,
     position: "relative",
     overflow: "hidden",
   },
