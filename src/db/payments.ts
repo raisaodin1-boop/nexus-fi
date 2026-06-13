@@ -3,7 +3,7 @@ import { uid, throwSb } from "./helpers";
 import { contributeTontineSecure } from "./tontines";
 import { depositSaving } from "./savings";
 import { contributeAssociation, contributeCooperative, contributeFund } from "./groups";
-import { topupFromMobileMoney } from "@/src/wallet-db";
+import { markCertificatePaid } from "./extras";
 import type { PaymentKind } from "@/src/payment-nav";
 import { paymentToReceipt } from "@/src/payment-receipt";
 import { notifyUser } from "./notifications";
@@ -25,6 +25,7 @@ export interface PaymentMeta {
   provider?: string;
   phone?: string;
   cinetpay_transaction_id?: string | null;
+  cert_kind?: "identity" | "trust-score" | "savings";
 }
 
 type InitiatePayload = {
@@ -38,6 +39,7 @@ type InitiatePayload = {
   association_id?: string;
   cooperative_id?: string;
   fund_id?: string;
+  cert_kind?: "identity" | "trust-score" | "savings";
 };
 
 type ConfirmPayload = {
@@ -132,13 +134,16 @@ async function validatePaymentTarget(me: string, payload: InitiatePayload): Prom
     }
     case "wallet_topup":
       break;
+    case "certified_report":
+      amount = 10000;
+      break;
     default:
       throw { status: 400, detail: "Type de paiement inconnu." };
   }
   return amount;
 }
 
-async function fulfillPayment(meta: PaymentMeta) {
+async function fulfillPayment(meta: PaymentMeta, paymentId?: string) {
   const amount = Number(meta.amount_xaf);
   switch (meta.kind) {
     case "tontine_contribution":
@@ -161,13 +166,19 @@ async function fulfillPayment(meta: PaymentMeta) {
       if (!meta.fund_id) break;
       await contributeFund(meta.fund_id, amount);
       break;
-    case "wallet_topup":
-      await topupFromMobileMoney({
-        amount,
-        currency: "XAF",
-        provider: (meta.provider as any) ?? "MTN MoMo",
-        phone: meta.phone ?? "",
+    case "wallet_topup": {
+      const { error: rpcErr } = await getSupabase().rpc("wallet_topup", {
+        p_amount: amount,
+        p_currency: "XAF",
+        p_provider: meta.provider ?? "CinetPay",
+        p_phone: meta.phone ?? "",
+        p_amount_xaf: amount,
       });
+      throwSb(rpcErr);
+      break;
+    }
+    case "certified_report":
+      await markCertificatePaid(meta.cert_kind ?? "identity", paymentId ?? "");
       break;
   }
 }
@@ -249,6 +260,7 @@ export async function initiateCinetpayPayment(payload: InitiatePayload) {
     provider,
     phone: payload.phone?.trim(),
     cinetpay_transaction_id: null,
+    cert_kind: payload.cert_kind,
   };
 
   const checkout = await createCinetpayCheckout(paymentId, amount, meta, provider);
@@ -321,7 +333,7 @@ export async function confirmCinetpayPayment(payload: ConfirmPayload) {
     .eq("id", payment.id);
   throwSb(updErr);
 
-  await fulfillPayment(meta);
+  await fulfillPayment(meta, payment.id);
 
   await notifyUser({
     user_id: me,

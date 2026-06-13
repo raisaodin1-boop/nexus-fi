@@ -4,7 +4,6 @@ import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,8 +13,6 @@ import {
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import * as FileSystem from "expo-file-system";
-import * as Sharing from "expo-sharing";
 import { FileText, Award, ShieldCheck, Share2, TrendingUp, Crown, Sparkles, Lock, CheckCircle2 } from "lucide-react-native";
 
 import { api, formatXAF } from "@/src/api";
@@ -24,6 +21,7 @@ import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { TrustGauge } from "@/src/trust-gauge";
 import { useAuth } from "@/src/auth-context";
 import { sharePdfCertificate } from "@/src/share";
+import { downloadOrSharePdf } from "@/src/pdf-download";
 
 interface TS {
   score: number; level: string; risk: string; color: string;
@@ -90,26 +88,10 @@ export default function Identity() {
   };
 
   const downloadCertified = async (kind: "identity" | "trust-score" | "savings") => {
+    setPdfLoading(true);
     try {
-      const resp = await api.get<{ filename: string; base64: string }>(`/reports/certified/${kind}`);
-      if (Platform.OS === "web") {
-        const link = document.createElement("a");
-        link.href = `data:application/pdf;base64,${resp.base64}`;
-        link.download = resp.filename;
-        link.click();
-        return;
-      }
-      const dir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? "";
-      const uri = `${dir}${resp.filename}`;
-      await FileSystem.writeAsStringAsync(uri, resp.base64, { encoding: FileSystem.EncodingType.Base64 });
-      if (!(await Sharing.isAvailableAsync())) {
-        throw new Error("Le partage n'est pas disponible sur cet appareil.");
-      }
-      await Sharing.shareAsync(uri, {
-        dialogTitle: "Partager le certificat authentifié Hodix",
-        mimeType: "application/pdf",
-        UTI: "com.adobe.pdf",
-      });
+      const resp = await api.get<{ filename: string; html: string }>(`/reports/certified/${kind}`);
+      await downloadOrSharePdf(resp.html, resp.filename, "Partager le certificat authentifié Hodix");
     } catch (e: any) {
       if (e?.status === 402) {
         Alert.alert(
@@ -121,8 +103,13 @@ export default function Identity() {
               text: "Payer 10 000 FCFA",
               onPress: () =>
                 router.push({
-                  pathname: "/payments/pay",
-                  params: { amount: "10000", reason: `Certificat authentifié - ${kind}`, kind },
+                  pathname: "/pay",
+                  params: {
+                    amount: "10000",
+                    label: `Certificat authentifié - ${kind}`,
+                    kind: "certified_report",
+                    cert_kind: kind,
+                  },
                 } as any),
             },
           ],
@@ -130,6 +117,8 @@ export default function Identity() {
       } else {
         Alert.alert("Erreur", e?.message ?? "Une erreur est survenue.");
       }
+    } finally {
+      setPdfLoading(false);
     }
   };
 

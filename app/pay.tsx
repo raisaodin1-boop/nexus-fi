@@ -79,6 +79,7 @@ function paymentTitle(kind: PaymentKind) {
     case "cooperative_contribution": return "COTISATION COOPÉRATIVE";
     case "fund_contribution": return "CONTRIBUTION FONDS";
     case "wallet_topup": return "RECHARGE WALLET";
+    case "certified_report": return "CERTIFICAT AUTHENTIFIÉ";
     default: return "DÉPÔT ÉPARGNE";
   }
 }
@@ -88,12 +89,13 @@ export default function PayContribution() {
   const params = useLocalSearchParams<{
     tontine_id?: string; goal_id?: string; association_id?: string;
     cooperative_id?: string; fund_id?: string; amount: string; label?: string; kind?: PaymentKind;
+    cert_kind?: "identity" | "trust-score" | "savings";
   }>();
-  const { tontine_id, goal_id, association_id, cooperative_id, fund_id, amount, label } = params;
+  const { tontine_id, goal_id, association_id, cooperative_id, fund_id, amount, label, cert_kind } = params;
   const paymentKind = inferKind(params);
   const amt = parseFloat(amount || "0");
   const returnRoute = paymentReturnRoute({
-    amount: amt, kind: paymentKind, tontine_id, goal_id, association_id, cooperative_id, fund_id, label,
+    amount: amt, kind: paymentKind, cert_kind, tontine_id, goal_id, association_id, cooperative_id, fund_id, label,
   });
 
   const [method, setMethod] = useState<Method | null>(null);
@@ -144,6 +146,7 @@ export default function PayContribution() {
     ...(association_id ? { association_id } : {}),
     ...(cooperative_id ? { cooperative_id } : {}),
     ...(fund_id ? { fund_id } : {}),
+    ...(cert_kind ? { cert_kind } : {}),
   });
 
   const initiatePayment = async () => {

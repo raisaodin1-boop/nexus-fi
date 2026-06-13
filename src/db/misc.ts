@@ -208,7 +208,7 @@ export async function getSmartAlerts(): Promise<SmartAlert[]> {
   const contribs = contribRes.data ?? [];
   const contribThisWeek = contribs.some((c: any) => new Date(c.created_at) >= thisWeekStart);
   if (!contribThisWeek && contribs.length > 0 && now.getDay() >= 4) {
-    alerts.push({ id: "streak_risk", type: "streak_risk", severity: "critical", title: "🔥 Votre streak est en danger !", body: "Vous n'avez pas encore cotisé cette semaine. Cotisez avant dimanche pour maintenir votre série !", action_label: "Cotiser maintenant", action_route: "/(tabs)/community" });
+    alerts.push({ id: "streak_risk", type: "streak_risk", severity: "critical", title: "🔥 Votre streak est en danger !", body: "Vous n'avez pas encore cotisé cette semaine. Cotisez avant dimanche pour maintenir votre série !", action_label: "Cotiser maintenant", action_route: "/(tabs)/groups" });
   }
 
   return alerts.filter((a) => !dismissed.has(a.id));

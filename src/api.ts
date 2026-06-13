@@ -76,6 +76,9 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "reserve")               return (await db.getTontineReserveFund(s[1])) as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "overdue")               return (await db.getOverdueMembers(s[1])) as T;
     if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "advance")             return (await db.advanceTontineCycle(s[1])) as T;
+    if (method === "PATCH" && s[0] === "tontines" && s[1] && s[2] === "rotation")           return (await db.updateTontineRotation(s[1], body)) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "disbursements")        return (await db.listTontineDisbursements(s[1])) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "disbursements")       return (await db.recordTontineDisbursement(s[1], body)) as T;
     if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "vote-exclusion")        return (await db.voteExclusion(s[1], body?.user_id, body?.reason ?? "")) as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "exclusion-votes")       return (await db.getExclusionVotes(s[1])) as T;
     if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "rate-creator")          return (await db.rateCreator(s[1], Number(body?.rating), body?.comment)) as T;
@@ -126,8 +129,15 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "POST" && s[0] === "savings" && (!s[1] || s[1] === "goals"))         return (await db.createSaving(body)) as T;
     if (method === "GET"  && s[0] === "savings" && s[1] && !s[2])                      return (await db.getSaving(s[1])) as T;
     if (method === "POST" && s[0] === "savings" && s[1] && s[2] === "deposit")         return db.rejectDirectPayment() as T;
+    if (method === "POST" && s[0] === "savings" && s[1] === "goals" && s[2] && s[3] === "transactions")
+      return (await db.savingsGoalTransaction(s[2], body)) as T;
 
-    // ── Trust score / Insights / Analytics
+    // ── Manager
+    if (method === "GET" && s[0] === "manager" && s[1] === "overview")                   return (await db.getManagerOverview()) as T;
+
+    // ── SMS
+    if (method === "POST" && s[0] === "sms" && s[1] === "tontines" && s[2] && s[3] === "reminders")
+      return (await db.sendTontineReminders(s[2])) as T;
     if (method === "GET" && s[0] === "trust-score")                                    return (await db.getTrustScore()) as T;
     if (method === "GET" && s[0] === "insights")                                       return (await db.getInsights()) as T;
     if (method === "GET" && s[0] === "analytics" && !s[1])
@@ -197,6 +207,9 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
       return (await db.initiateCinetpayPayment(body)) as T;
     if (method === "POST" && s[0] === "payments" && s[1] === "mobile-money" && s[2] === "confirm")
       return (await db.confirmCinetpayPayment(body)) as T;
+    if (method === "GET"  && s[0] === "payments" && s[1] === "qr-data")                   return (await db.getPaymentQrData()) as T;
+    if (method === "POST" && s[0] === "payments" && s[1] === "withdrawal" && s[2] === "request")
+      return (await db.requestWithdrawal(body)) as T;
 
     // ── Analytics (simplified chart series from existing data)
     if (method === "GET" && s[0] === "analytics" && s[1] === "savings-series")  return (await db.getSavingsSeries(14)) as T;
@@ -226,6 +239,8 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
 
     // ── Admin
     if (method === "GET" && s[0] === "admin" && s[1] === "stats")                      return (await db.getAdminStats()) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "payment-config")                   return (await db.getPaymentConfig()) as T;
+    if (method === "PATCH" && s[0] === "admin" && s[1] === "payment-config")                   return (await db.updatePaymentConfig(body)) as T;
     if (method === "GET"   && s[0] === "admin" && s[1] === "analytics")                         return (await db.getAdminAnalytics()) as T;
     if (method === "GET"   && s[0] === "admin" && s[1] === "users")
       return (await db.adminListUsers(
@@ -276,6 +291,8 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
 
     // ── Reports & loans
     if (method === "GET"  && s[0] === "reports-b64" && s[1])                              return (await db.getReportHtml(s[1] as "identity" | "trust-score" | "savings")) as T;
+    if (method === "GET"  && s[0] === "reports" && s[1] === "certified" && s[2])
+      return (await db.getCertifiedReport(s[2] as "identity" | "trust-score" | "savings")) as T;
     if (method === "POST" && s[0] === "loans" && s[1] === "apply")                       return (await db.submitLoanApplication(body)) as T;
     if (method === "GET"  && s[0] === "loans" && s[1] === "applications")                  return (await db.getLoanApplications()) as T;
 

@@ -117,9 +117,15 @@ export async function topupFromMobileMoney(payload: TopupPayload): Promise<Walle
   if (!Number.isFinite(payload.amount) || payload.amount <= 0) throw new Error("Montant invalide.");
   if (!/^\+?[\d\s\-]{8,15}$/.test(payload.phone)) throw new Error("Numéro de téléphone invalide.");
 
-  throw new Error(
-    "Recharge électronique requise. Utilisez Wallet → Recharger (paiement CinetPay) — aucun crédit sans débit confirmé.",
-  );
+  const { data, error } = await getSupabase().rpc("wallet_topup", {
+    p_amount: payload.amount,
+    p_currency: payload.currency ?? "XAF",
+    p_provider: payload.provider,
+    p_phone: payload.phone,
+    p_amount_xaf: payload.amount,
+  });
+  if (error) throw new Error(error.message);
+  return mapTx(data as Record<string, unknown>);
 }
 
 // ─── Withdrawal to Mobile Money ───────────────────────────────────────────────

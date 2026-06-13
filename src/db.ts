@@ -13,6 +13,11 @@ export * from "./db/admin";
 export * from "./db/notifications";
 export * from "./db/messages";
 export * from "./db/misc";
+export * from "./db/payments";
+export * from "./db/kyc";
+export * from "./db/reports";
+export * from "./db/loans";
+export * from "./db/extras";
 export * from "./db/wallet-security";
 export { invalidateCache } from "./db/helpers";
 

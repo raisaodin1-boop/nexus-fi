@@ -12,4 +12,5 @@ export * from "./misc";
 export * from "./payments";
 export * from "./reports";
 export * from "./loans";
+export * from "./extras";
 export * from "./wallet-security";
