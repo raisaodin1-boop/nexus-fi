@@ -4,7 +4,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { TrendingUp } from "lucide-react-native";
-import { api, ApiError, formatXAF } from "@/src/api";
+import { api, formatXAF } from "@/src/api";
+import { openPaymentScreen } from "@/src/payment-nav";
 import { Button, Card, Field } from "@/src/ui";
 import { Colors, Spacing } from "@/src/theme";
 
@@ -21,7 +22,6 @@ export default function SavingsDetail() {
   const [loading, setLoading] = useState(true);
   const [amount, setAmount] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -47,17 +47,16 @@ export default function SavingsDetail() {
     ? Math.min(100, Math.round((goal.current_amount / goal.target_amount) * 100))
     : 0;
 
-  const deposit = async () => {
+  const goToPayment = () => {
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) { setError("Montant invalide"); return; }
-    setError(null); setBusy(true);
-    try {
-      await api.post(`/savings/${id}/deposit`, { amount: amt });
-      setAmount("");
-      await load();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.detail : "Erreur");
-    } finally { setBusy(false); }
+    setError(null);
+    openPaymentScreen(router, {
+      kind: "savings_deposit",
+      goal_id: id,
+      amount: amt,
+      label: goal.name,
+    });
   };
 
   return (
@@ -116,11 +115,13 @@ export default function SavingsDetail() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Button
             testID="savings-deposit-submit"
-            label="Déposer"
-            onPress={deposit}
-            loading={busy}
+            label="Déposer — paiement électronique"
+            onPress={goToPayment}
             disabled={!amount}
           />
+          <Text style={{ color: Colors.textSubtle, fontSize: 11, textAlign: "center", marginTop: 8 }}>
+            Orange Money, MTN, Moov ou carte — crédit uniquement après validation CinetPay
+          </Text>
         </Card>
       </ScrollView>
     </SafeAreaView>

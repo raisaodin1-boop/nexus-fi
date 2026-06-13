@@ -50,8 +50,43 @@ export async function depositSaving(id: string, amount: number, note?: string) {
   await getSupabase().from("savings_goals").update({ current_amount: total }).eq("id", id);
   await addIdentityEvent(me, "savings_deposit", amount >= 50000 ? 1 : 0.5);
   invalidateCache(`savings-${me}`);
+  invalidateCache(`savings-summary-${me}`);
+  invalidateCache(`credit-score-${me}`);
   invalidateCache(`identity-${me}`);
   return { detail: "Dépôt enregistré" };
+}
+
+export async function savingsGoalTransaction(
+  goalId: string,
+  body: { amount?: number; kind?: "withdraw" | "deposit" },
+) {
+  const me = await uid();
+  const sb = getSupabase();
+  const amount = Math.abs(Number(body.amount ?? 0));
+  const kind = body.kind ?? "deposit";
+  if (amount <= 0) throw { status: 400, detail: "Montant invalide." };
+
+  const { data: goal } = await sb.from("savings_goals").select("current_amount").eq("id", goalId).eq("user_id", me).single();
+  if (!goal) throw { status: 404, detail: "Objectif introuvable." };
+  if (kind === "withdraw" && Number(goal.current_amount) < amount) {
+    throw { status: 400, detail: "Solde insuffisant sur cet objectif." };
+  }
+
+  const signed = kind === "withdraw" ? -amount : amount;
+  await sb.from("savings_transactions").insert({
+    goal_id: goalId,
+    user_id: me,
+    amount: signed,
+    note: kind === "withdraw" ? "Retrait" : "Dépôt",
+  });
+
+  const { data: txs } = await sb.from("savings_transactions").select("amount").eq("goal_id", goalId);
+  const total = (txs ?? []).reduce((s, t) => s + Number(t.amount), 0);
+  await sb.from("savings_goals").update({ current_amount: Math.max(0, total) }).eq("id", goalId);
+
+  invalidateCache(`savings-${me}`);
+  invalidateCache(`savings-summary-${me}`);
+  return { detail: kind === "withdraw" ? "Retrait enregistré" : "Dépôt enregistré" };
 }
 
 export async function getSavingsAnalytics(goalId: string) {

@@ -50,8 +50,21 @@ export function ManagerDashboard() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  if (loading || !overview) {
+  if (loading) {
     return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator color={Colors.secondary} size="large" /></View></SafeAreaView>;
+  }
+  if (!overview) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.center}>
+          <Text style={{ color: Colors.text, fontWeight: "800", fontSize: 16, marginBottom: 8 }}>Tableau de bord indisponible</Text>
+          <Text style={{ color: Colors.textMuted, fontSize: 13, textAlign: "center", marginBottom: 16 }}>Impossible de charger les statistiques manager.</Text>
+          <TouchableOpacity onPress={() => { setLoading(true); load(); }} style={{ paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12, backgroundColor: Colors.secondary }}>
+            <Text style={{ color: "#fff", fontWeight: "700" }}>Réessayer</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (

@@ -2,7 +2,8 @@ import { useCallback, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
-import { api, ApiError, formatXAF } from "@/src/api";
+import { api, formatXAF } from "@/src/api";
+import { openPaymentScreen } from "@/src/payment-nav";
 import { Button, Card, Field } from "@/src/ui";
 import { Colors, Spacing } from "@/src/theme";
 
@@ -13,7 +14,6 @@ export default function FundDetail() {
   const [loading, setLoading] = useState(true);
   const [amount, setAmount] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -35,17 +35,16 @@ export default function FundDetail() {
 
   const fund = data.fund ?? data;
 
-  const contribute = async () => {
+  const goToPayment = () => {
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) { setError("Montant invalide"); return; }
-    setError(null); setBusy(true);
-    try {
-      await api.post(`/funds/${id}/contribute`, { amount: amt });
-      setAmount("");
-      await load();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.detail : "Erreur");
-    } finally { setBusy(false); }
+    setError(null);
+    openPaymentScreen(router, {
+      kind: "fund_contribution",
+      fund_id: id,
+      amount: amt,
+      label: fund.name,
+    });
   };
 
   const progress = fund.target_amount > 0
@@ -95,9 +94,8 @@ export default function FundDetail() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Button
             testID="fund-contribute-submit"
-            label="Contribuer"
-            onPress={contribute}
-            loading={busy}
+            label="Contribuer — paiement électronique"
+            onPress={goToPayment}
             disabled={!amount}
           />
         </Card>

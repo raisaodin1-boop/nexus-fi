@@ -74,7 +74,7 @@ export default function WithdrawScreen() {
   if (result) {
     // Navigate to receipt screen
     router.replace({
-      pathname: "/payments/receipt",
+      pathname: "/receipt",
       params: { paymentId: result.withdrawal_id, type: "withdrawal" },
     } as any);
     return null;

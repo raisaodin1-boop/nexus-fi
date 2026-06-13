@@ -16,7 +16,7 @@ import { api, ApiError, formatXAF } from "@/src/api";
 import { Button, Field } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { useToast } from "@/src/toast";
-import { DatePicker } from "@/src/date-picker";
+import { DatePicker, futureDateBounds } from "@/src/date-picker";
 
 type SavingsType = "flexible" | "locked" | "recurring";
 
@@ -92,7 +92,7 @@ export default function SavingsCreate() {
             label="Date limite (optionnel)"
             value={deadline}
             onChange={setDeadline}
-            minimumDate={new Date()}
+            {...futureDateBounds(30)}
             testID="savings-deadline"
           />
 

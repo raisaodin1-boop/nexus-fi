@@ -195,7 +195,7 @@ export async function getFinancialAnalytics() {
     sb.from("savings_transactions").select("amount, type, created_at").eq("user_id", me).gte("created_at", twelveMonthsAgo),
     sb.from("tontine_contributions").select("amount, created_at").eq("user_id", me).gte("created_at", twelveMonthsAgo),
     sb.from("savings_goals").select("current_amount, target_amount, created_at, name").eq("user_id", me),
-    sb.from("identity_events").select("score_delta, event_type, created_at").eq("user_id", me).eq("event_type", "credit_score_snapshot").order("created_at", { ascending: true }).limit(24),
+    sb.from("identity_events").select("points_delta, event_type, created_at").eq("user_id", me).eq("event_type", "credit_score_snapshot").order("created_at", { ascending: true }).limit(24),
   ]);
 
   const savingsTx = savingsTxRes.data ?? [];
@@ -217,7 +217,7 @@ export async function getFinancialAnalytics() {
   const totalContributed = tontineContribs.reduce((s: number, t: any) => s + Number(t.amount), 0);
   const trustHistory = (identityEventsRes.data ?? []).map((e: any) => ({
     label: new Date(e.created_at).toLocaleDateString("fr-FR", { month: "short", year: "2-digit" }),
-    score: Number(e.score_delta ?? 0),
+    score: Number(e.points_delta ?? 0),
   }));
   const projections = goals.filter((g: any) => g.target_amount > 0).map((g: any) => {
     const pct = Math.min(100, (Number(g.current_amount) / Number(g.target_amount)) * 100);
@@ -246,11 +246,11 @@ export async function getRegionalRanking(country: string) {
   const me = await uid();
   const userIds = profiles.map((p: any) => p.id);
   const { data: events } = await sb.from("identity_events")
-    .select("user_id, score_delta, created_at").in("user_id", userIds)
+    .select("user_id, points_delta, created_at").in("user_id", userIds)
     .eq("event_type", "credit_score_snapshot").order("created_at", { ascending: false });
 
   const scoreMap: Record<string, number> = {};
-  for (const e of (events ?? []) as any[]) { if (!(e.user_id in scoreMap)) scoreMap[e.user_id] = e.score_delta ?? 0; }
+  for (const e of (events ?? []) as any[]) { if (!(e.user_id in scoreMap)) scoreMap[e.user_id] = e.points_delta ?? 0; }
 
   const ranked = profiles
     .map((p: any) => ({ id: p.id, name: p.full_name, score: scoreMap[p.id] ?? 0, country: p.country }))
@@ -268,7 +268,7 @@ export async function getRegionalRanking(country: string) {
   if (isPillar) {
     const { count } = await sb.from("identity_events").select("*", { count: "exact", head: true }).eq("user_id", me).eq("event_type", "pillar_earned");
     if ((count ?? 0) === 0) {
-      await sb.from("identity_events").insert({ user_id: me, event_type: "pillar_earned", score_delta: 0 });
+      await sb.from("identity_events").insert({ user_id: me, event_type: "pillar_earned", points_delta: 0 });
       await sb.from("notifications").insert({ user_id: me, title: "🏆 Pilier de la communauté !", body: `Vous faites partie du top 5% des épargnants de votre région.`, type: "pillar_earned" });
     }
   }
@@ -278,14 +278,27 @@ export async function getRegionalRanking(country: string) {
 
 export async function mintCertificateHash(docId: string, docType: string): Promise<{ hash: string; verify_url: string; polygon_stub: string }> {
   const me = await uid();
-  const { data: profile } = await getSupabase().from("profiles").select("full_name").eq("id", me).single();
-  const payload = `${me}:${docId}:${docType}:${profile?.full_name ?? ""}`;
-  let hash = 0;
-  for (let i = 0; i < payload.length; i++) { hash = ((hash << 5) - hash) + payload.charCodeAt(i); hash |= 0; }
-  const hexHash = Math.abs(hash).toString(16).padStart(8, "0") + docId.replace(/-/g, "").slice(0, 24);
-  await getSupabase().from("identity_events").insert({
-    user_id: me, event_type: "nft_certificate", score_delta: 0,
-    metadata: { doc_id: docId, doc_type: docType, hash: hexHash },
+  const sb = getSupabase();
+  const { data: profile } = await sb.from("profiles").select("full_name").eq("id", me).single();
+  const payload = `${me}:${docId}:${docType}:${profile?.full_name ?? ""}:${new Date().toISOString()}`;
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload));
+  const hexHash = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  const verifyUrl = `https://hodix.app/verify/${hexHash}`;
+  const chainRef = `0x${hexHash.slice(0, 40)}`;
+
+  await sb.from("identity_certificates").upsert({
+    user_id: me,
+    doc_id: docId,
+    doc_type: docType,
+    content_hash: hexHash,
+    verify_url: verifyUrl,
+    chain_ref: chainRef,
+  }, { onConflict: "content_hash" });
+
+  await sb.from("identity_events").insert({
+    user_id: me, event_type: "nft_certificate", points_delta: 0,
+    metadata: { doc_id: docId, doc_type: docType, hash: hexHash, chain_ref: chainRef },
   } as any);
-  return { hash: hexHash, verify_url: `https://hodix.app/verify/${hexHash}`, polygon_stub: `0x${hexHash}` };
+
+  return { hash: hexHash, verify_url: verifyUrl, polygon_stub: chainRef };
 }

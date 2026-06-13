@@ -25,7 +25,17 @@ export function inviteCode(len = 6): string {
   return Math.random().toString(36).toUpperCase().slice(2, 2 + len);
 }
 
+/** Lowercase + trim — use for auth emails and profile lookup. */
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 export function throwSb(error: any) {
   if (!error) return;
   throw { status: 400, detail: error.message ?? "Erreur Supabase" };
+}
+
+export function isUniqueViolation(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false;
+  return error.code === "23505" || /duplicate key|unique constraint/i.test(error.message ?? "");
 }

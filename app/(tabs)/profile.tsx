@@ -31,6 +31,7 @@ import {
 import {
   SelectPicker, ChipSelector, DatePicker, NameField, ManualField,
 } from "@/src/profile-selectors";
+import { getBiometricInfo, authenticateBiometric, setBiometricEnabled } from "@/src/biometrics";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -41,6 +42,9 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bioEnabled, setBioEnabled] = useState(false);
+  const [dobDate, setDobDate] = useState<Date | null>(
+    user?.date_of_birth ? new Date(user.date_of_birth) : null,
+  );
 
   // Split full_name into title + first + last
   const parseName = (full: string) => {
@@ -97,6 +101,7 @@ export default function ProfileScreen() {
         birth_place: (user as any)?.birth_place ?? "",
         address: user.address ?? "",
       }));
+      setDobDate(user.date_of_birth ? new Date(user.date_of_birth) : null);
     }
   }, [user]);
 
@@ -126,7 +131,7 @@ export default function ProfileScreen() {
         city,
         neighborhood,
         occupation: form.occupation,
-        date_of_birth: form.date_of_birth || null,
+        date_of_birth: dobDate ? dobDate.toISOString().split("T")[0] : (form.date_of_birth || null),
         birth_place: form.birth_place,
         address: form.address,
       });
@@ -165,17 +170,31 @@ export default function ProfileScreen() {
             text: "Désactiver",
             style: "destructive",
             onPress: async () => {
-              try {
-                await SecureStore.deleteItemAsync("bio_enabled");
-                await SecureStore.deleteItemAsync("bio_email");
-                await SecureStore.deleteItemAsync("bio_password");
-                setBioEnabled(false);
-              } catch {}
+              await setBiometricEnabled(false);
+              setBioEnabled(false);
             },
           },
         ],
       );
+      return;
     }
+
+    const info = await getBiometricInfo();
+    if (!info.available) {
+      Alert.alert(
+        "Biométrie indisponible",
+        Platform.OS === "web"
+          ? "La biométrie n'est pas disponible sur le web. Utilisez l'application mobile."
+          : "Aucune biométrie configurée sur cet appareil. Activez Face ID ou l'empreinte dans les réglages de votre téléphone.",
+      );
+      return;
+    }
+    // Verify the user's biometrics before turning the lock on.
+    const ok = await authenticateBiometric(`Activer ${info.label} pour Hodix`);
+    if (!ok) return;
+    await setBiometricEnabled(true);
+    setBioEnabled(true);
+    Alert.alert("Biométrie activée", `${info.label} sera demandé à l'ouverture de l'app et pour confirmer vos transactions.`);
   };
 
   const bg = isDark ? colors.bg : Colors.bg;
@@ -213,7 +232,7 @@ export default function ProfileScreen() {
               <InfoRow icon={<MapPin size={16} color={Colors.secondary} />} label="Localisation" value={[user?.neighborhood, user?.city, user?.country].filter(Boolean).join(", ") || "—"} txtColor={txt} txtMuted={txtMuted} borderColor={borderColor} />
               <InfoRow icon={<Briefcase size={16} color={Colors.secondary} />} label="Profession" value={user?.occupation || "—"} txtColor={txt} txtMuted={txtMuted} borderColor={borderColor} />
               {user?.date_of_birth ? <InfoRow icon={<Shield size={16} color={Colors.secondary} />} label="Né(e) le" value={new Date(user.date_of_birth).toLocaleDateString("fr-FR")} txtColor={txt} txtMuted={txtMuted} borderColor={borderColor} /> : null}
-              <InfoRow icon={<ShieldCheck size={16} color={user?.kyc_status === "approved" ? Colors.accent : Colors.textMuted} />} label="KYC" value={user?.kyc_status === "approved" ? "✓ Vérifié" : user?.kyc_status === "pending" ? "En attente" : "Non soumis"} last txtColor={txt} txtMuted={txtMuted} borderColor={borderColor} />
+              <InfoRow icon={<ShieldCheck size={16} color={user?.kyc_status === "approved" ? Colors.accent : Colors.textMuted} />} label="KYC" value={user?.kyc_status === "approved" ? "✓ Vérifié" : (user?.kyc_status === "pending" || user?.kyc_status === "pending_review") ? "En attente" : "Non soumis"} last txtColor={txt} txtMuted={txtMuted} borderColor={borderColor} />
             </Card>
           </View>
 

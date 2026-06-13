@@ -1,9 +1,23 @@
 import { getSupabase } from "@/src/supabase";
-import { uid, cached, throwSb } from "./helpers";
+import { notifyUser } from "./notifications";
+import { uid, cached, throwSb, invalidateCache } from "./helpers";
+
+const PENDING_KYC = ["pending", "pending_review"] as const;
+
+export function normalizeKycStatus(submissionStatus?: string | null, profileStatus?: string | null): string {
+  const raw = profileStatus || submissionStatus || "not_submitted";
+  if (raw === "pending") return "pending_review";
+  if (raw === "verified") return "approved";
+  return raw;
+}
+
+export function isKycPending(status?: string | null): boolean {
+  return PENDING_KYC.includes((status ?? "") as (typeof PENDING_KYC)[number]);
+}
 
 export async function getAdminAnalytics() {
   return cached("admin-analytics", 90_000, async () => {
-    const safe = async <T>(fn: () => Promise<T>, fallback: T): Promise<T> => {
+    const safe = async <T>(fn: () => PromiseLike<T>, fallback: T): Promise<T> => {
       try { return await fn(); } catch { return fallback; }
     };
     const [users, allTontines, assocCount, coopCount, savingsData, contribData, kycData] = await Promise.all([
@@ -55,12 +69,24 @@ export async function getAdminStats() {
   return { total_users: users.count ?? 0, total_tontines: tontines.count ?? 0, pending_kyc: kyc.count ?? 0 };
 }
 
-export async function adminListUsers(search = "") {
-  let q = getSupabase().from("profiles").select("id, full_name, phone, role, created_at, country, city").order("created_at", { ascending: false }).limit(100);
-  if (search) q = q.ilike("full_name", `%${search}%`);
-  const { data, error } = await q;
-  if (error) return [];
-  return data ?? [];
+export async function adminListUsers(search = "", offset = 0, limit = 50) {
+  const pageSize = Math.min(Math.max(limit, 1), 100);
+  const from = Math.max(offset, 0);
+  let q = getSupabase().from("profiles")
+    .select("id, full_name, phone, email, role, created_at, country, city, kyc_status", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, from + pageSize - 1);
+  const term = search.trim();
+  if (term) q = q.or(`full_name.ilike.%${term}%,email.ilike.%${term}%,phone.ilike.%${term}%`);
+  const { data, error, count } = await q;
+  if (error) return { items: [], total: 0, offset: from, limit: pageSize, has_more: false };
+  const items = (data ?? []).map((u: any) => ({
+    ...u,
+    email: u.email ?? "",
+    is_active: u.role !== "suspended",
+  }));
+  const total = count ?? items.length;
+  return { items, total, offset: from, limit: pageSize, has_more: from + items.length < total };
 }
 
 export async function adminUpdateUserRole(userId: string, role: string) {
@@ -125,28 +151,126 @@ export async function adminDeleteTontine(id: string) {
 }
 
 export async function adminListKyc() {
-  const { data, error } = await getSupabase()
-    .from("kyc_submissions").select("id, user_id, status, submitted_at").order("submitted_at", { ascending: false }).limit(100);
-  if (error) return [];
-  const userIds = [...new Set((data ?? []).map((k: any) => k.user_id))];
+  const sb = getSupabase();
+  const { data: submissions, error } = await sb
+    .from("kyc_submissions")
+    .select("id, user_id, status, submitted_at, verification_mode, provider, id_type, country_code, id_front_path, id_back_path, selfie_path")
+    .order("submitted_at", { ascending: false })
+    .limit(200);
+  if (error) {
+    console.error("adminListKyc:", error.message);
+    return [];
+  }
+
+  const { data: pendingProfiles } = await sb
+    .from("profiles")
+    .select("id, full_name, phone, email, country, kyc_status, created_at")
+    .in("kyc_status", [...PENDING_KYC]);
+
+  const submissionUserIds = new Set((submissions ?? []).map((k: any) => k.user_id));
+  const userIds = [...new Set([
+    ...(submissions ?? []).map((k: any) => k.user_id),
+    ...(pendingProfiles ?? []).filter((p: any) => !submissionUserIds.has(p.id)).map((p: any) => p.id),
+  ])];
+
   const profileMap: Record<string, any> = {};
-  try {
-    const { data: profiles } = await getSupabase().from("profiles").select("id, full_name, phone, country").in("id", userIds);
+  if (userIds.length) {
+    const { data: profiles } = await sb
+      .from("profiles")
+      .select("id, full_name, phone, email, country, kyc_status, created_at")
+      .in("id", userIds);
     for (const p of profiles ?? []) profileMap[p.id] = p;
-  } catch {}
-  return (data ?? []).map((k: any) => ({
-    ...k, full_name: profileMap[k.user_id]?.full_name ?? "—", phone: profileMap[k.user_id]?.phone ?? "—", country: profileMap[k.user_id]?.country ?? "—",
-  }));
+  }
+
+  const fromSubmissions = (submissions ?? []).map((k: any) => {
+    const p = profileMap[k.user_id] ?? {};
+    return {
+      id: k.id,
+      user_id: k.user_id,
+      full_name: p.full_name ?? "—",
+      email: p.email ?? "—",
+      phone: p.phone ?? "—",
+      country: p.country ?? k.country_code ?? "—",
+      kyc_status: normalizeKycStatus(k.status, p.kyc_status),
+      submission_status: k.status,
+      submitted_at: k.submitted_at,
+      created_at: k.submitted_at ?? p.created_at,
+      verification_mode: k.verification_mode,
+      provider: k.provider,
+      id_type: k.id_type,
+      id_front_path: k.id_front_path,
+      id_back_path: k.id_back_path,
+      selfie_path: k.selfie_path,
+    };
+  });
+
+  const orphanProfiles = (pendingProfiles ?? [])
+    .filter((p: any) => !submissionUserIds.has(p.id))
+    .map((p: any) => ({
+      id: null,
+      user_id: p.id,
+      full_name: p.full_name ?? "—",
+      email: p.email ?? "—",
+      phone: p.phone ?? "—",
+      country: p.country ?? "—",
+      kyc_status: normalizeKycStatus(null, p.kyc_status),
+      submission_status: null,
+      submitted_at: null,
+      created_at: p.created_at,
+      verification_mode: "manual",
+      provider: null,
+      id_type: null,
+      id_front_path: null,
+      id_back_path: null,
+      selfie_path: null,
+    }));
+
+  return [...fromSubmissions, ...orphanProfiles].sort(
+    (a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime(),
+  );
 }
 
 export async function adminHandleKyc(userId: string, approve: boolean) {
-  const status = approve ? "approved" : "rejected";
-  await getSupabase().from("kyc_submissions").update({ status, reviewed_at: new Date().toISOString() }).eq("user_id", userId);
-  await getSupabase().from("profiles").update({ kyc_status: status }).eq("id", userId);
+  const submissionStatus = approve ? "approved" : "rejected";
+  const profileStatus = approve ? "approved" : "rejected";
+  const reviewedAt = new Date().toISOString();
+  const sb = getSupabase();
+
+  const { data: existing } = await sb.from("kyc_submissions").select("id").eq("user_id", userId).maybeSingle();
+  if (existing) {
+    const { error } = await sb.from("kyc_submissions")
+      .update({ status: submissionStatus, reviewed_at: reviewedAt })
+      .eq("user_id", userId);
+    throwSb(error);
+  } else {
+    const { error } = await sb.from("kyc_submissions").insert({
+      user_id: userId,
+      status: submissionStatus,
+      reviewed_at: reviewedAt,
+      verification_mode: "manual",
+      provider: "manual",
+    });
+    throwSb(error);
+  }
+
+  const { error: profErr } = await sb.from("profiles").update({ kyc_status: profileStatus }).eq("id", userId);
+  throwSb(profErr);
+
   const title = approve ? "KYC approuvé ✅" : "KYC refusé";
   const body = approve ? "Votre identité a été vérifiée avec succès." : "Votre dossier KYC a été refusé. Contactez le support.";
-  await getSupabase().from("notifications").insert({ user_id: userId, title, body, type: "kyc" });
+  await notifyUser({ user_id: userId, title, body, type: "kyc" });
+  invalidateCache("admin");
   return { detail: `KYC ${approve ? "approuvé" : "refusé"}` };
+}
+
+export async function adminDeleteKyc(userId: string) {
+  const sb = getSupabase();
+  const { error } = await sb.from("kyc_submissions").delete().eq("user_id", userId);
+  throwSb(error);
+  const { error: profErr } = await sb.from("profiles").update({ kyc_status: "not_submitted" }).eq("id", userId);
+  throwSb(profErr);
+  invalidateCache("admin");
+  return { detail: "Dossier KYC supprimé" };
 }
 
 export async function createPromotionRequest(reason: string) {

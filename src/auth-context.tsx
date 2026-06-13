@@ -3,6 +3,8 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { Platform } from "react-native";
 import { supabase } from "@/src/supabase";
 import { sendWelcomeMessage, applyReferralBonus } from "@/src/db";
+import { normalizeEmail } from "@/src/db/helpers";
+import { getOAuthRedirectUrl } from "@/src/oauth-redirect";
 
 // Complete auth session on mobile (no-op on web)
 if (Platform.OS !== "web") {
@@ -44,12 +46,17 @@ interface AuthCtx {
 
 const Ctx = createContext<AuthCtx | undefined>(undefined);
 
+function logAuthBestEffort(label: string, err: unknown) {
+  const msg = err instanceof Error ? err.message : String(err);
+  console.warn(`[auth] ${label} failed:`, msg);
+}
+
 async function fetchProfile(userId: string): Promise<Partial<User>> {
   try {
     const timeout = new Promise<null>((res) => setTimeout(() => res(null), 8000));
     const query = supabase
       .from("profiles")
-      .select("full_name,role,phone,gender,country,city,occupation,date_of_birth,birth_place,neighborhood,address,kyc_status,trust_score")
+      .select("full_name,role,phone,gender,country,city,occupation,date_of_birth,birth_place,neighborhood,address,kyc_status,trust_score,email")
       .eq("id", userId)
       .single();
     const result = await Promise.race([query, timeout]);
@@ -62,6 +69,13 @@ async function fetchProfile(userId: string): Promise<Partial<User>> {
 
 async function buildUser(sbUser: any): Promise<User> {
   const profile = await fetchProfile(sbUser.id);
+  // Keep profiles.email in sync so P2P transfer lookup by email works.
+  if (sbUser.email) {
+    const normalized = normalizeEmail(sbUser.email);
+    if ((profile as any).email !== normalized) {
+      supabase.from("profiles").update({ email: normalized }).eq("id", sbUser.id).then(() => {}, () => {});
+    }
+  }
   const rawRole = profile.role || sbUser.user_metadata?.role || "member";
   const role = (rawRole === "admin" || rawRole === "super_admin") ? "super_admin" : rawRole as string;
   return {
@@ -96,10 +110,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initialized.current = true;
 
     // Listen to auth changes — this also fires immediately with current session
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         const u = await buildUser(session.user);
         setUser(u);
+        if (event === "SIGNED_IN") {
+          setTimeout(async () => {
+            try {
+              const { data: profile } = await supabase.from("profiles")
+                .select("welcome_email_sent_at, full_name")
+                .eq("id", session.user!.id)
+                .maybeSingle();
+              if (!profile?.welcome_email_sent_at) {
+                const name = profile?.full_name ?? session.user!.email?.split("@")[0] ?? "Membre";
+                await sendWelcomeMessage(session.user!.id, name);
+              }
+            } catch (err) { logAuthBestEffort("welcome message", err); }
+          }, 2000);
+        }
       } else {
         setUser(null);
       }
@@ -110,7 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({ email: normalizeEmail(email), password });
     if (error) {
       const msg = error.message.includes("Invalid login")
         ? "Email ou mot de passe incorrect."
@@ -125,57 +153,74 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const register = useCallback(async (email: string, password: string, full_name: string, referralCode?: string) => {
+    const normalizedEmail = normalizeEmail(email);
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: normalizedEmail,
       password,
       options: { data: { full_name, role: "member" } },
     });
     if (error) throw { detail: error.message };
 
-    // Post-signup side effects (non-blocking)
+    // Keep profiles.email lowercase for P2P transfer lookup.
     const newUserId = data.user?.id;
     if (newUserId) {
+      supabase.from("profiles").update({ email: normalizedEmail }).eq("id", newUserId).then(() => {}, () => {});
+    }
+
+    // Welcome email via onAuthStateChange (SIGNED_IN). Referral bonus only here.
+    if (newUserId && referralCode?.trim()) {
       setTimeout(async () => {
-        try { await sendWelcomeMessage(newUserId, full_name); } catch {}
-        if (referralCode?.trim()) {
-          try { await applyReferralBonus(newUserId, referralCode.trim().toUpperCase()); } catch {}
+        try {
+          await applyReferralBonus(newUserId, referralCode.trim().toUpperCase());
+        } catch (err) {
+          logAuthBestEffort("referral bonus", err);
         }
-      }, 2000); // wait 2s for profile row to be created via trigger
+      }, 2000);
     }
   }, []);
 
   const loginWithGoogle = useCallback(async () => {
+    const redirectTo = getOAuthRedirectUrl();
+
     if (Platform.OS === "web") {
-      // On web: Supabase handles the full redirect — no expo-auth-session needed
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: window.location.origin + "/auth/callback" },
+        options: { redirectTo },
       });
-      if (error) throw { detail: error.message };
-      return; // Browser will redirect
+      if (error) {
+        const msg = error.message.includes("redirect_uri")
+          ? "Connexion Google indisponible : vérifiez la configuration OAuth (Google Cloud + Supabase). Ajoutez cette URL dans Supabase → Auth → Redirect URLs : " + redirectTo
+          : error.message;
+        throw { detail: msg };
+      }
+      return;
     }
 
     // On native: use expo-auth-session + expo-web-browser
     const { makeRedirectUri } = await import("expo-auth-session");
     const WebBrowser = await import("expo-web-browser");
-    const redirectTo = makeRedirectUri({ scheme: "hodix", path: "auth/callback" });
+    const nativeRedirect = makeRedirectUri({ scheme: "hodix", path: "auth/callback" });
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo, skipBrowserRedirect: true },
+      options: { redirectTo: nativeRedirect, skipBrowserRedirect: true },
     });
     if (error) throw { detail: error.message };
     if (!data.url) throw { detail: "Impossible d'ouvrir Google Sign-In." };
 
-    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+    const result = await WebBrowser.openAuthSessionAsync(data.url, nativeRedirect);
     if (result.type !== "success") return;
 
     const url = result.url;
     const params = new URLSearchParams(url.includes("#") ? url.split("#")[1] : url.split("?")[1] ?? "");
     const accessToken = params.get("access_token");
     const refreshToken = params.get("refresh_token");
+    const code = params.get("code");
 
-    if (accessToken) {
+    if (code) {
+      const { error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+      if (sessionError) throw { detail: sessionError.message };
+    } else if (accessToken) {
       const { error: sessionError } = await supabase.auth.setSession({
         access_token: accessToken,
         refresh_token: refreshToken ?? "",

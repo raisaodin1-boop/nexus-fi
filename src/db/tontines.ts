@@ -1,6 +1,11 @@
 import { getSupabase } from "@/src/supabase";
-import { uid, throwSb, inviteCode, invalidateCache } from "./helpers";
+import { uid, throwSb, inviteCode, invalidateCache, isUniqueViolation } from "./helpers";
 import { addIdentityEvent } from "./identity";
+import { notifyUser } from "./notifications";
+
+const FREQ_DAYS: Record<string, number> = {
+  weekly: 7, biweekly: 14, monthly: 30, quarterly: 90,
+};
 
 /* ── Basic CRUD ─────────────────────────────────────────────── */
 
@@ -18,38 +23,101 @@ export async function listTontines() {
 }
 
 export async function getTontine(id: string) {
-  const { data: tontine, error } = await getSupabase()
-    .from("tontines").select("*").eq("id", id).single();
+  const me = await uid();
+  const sb = getSupabase();
+
+  const { data: tontine, error } = await sb.from("tontines").select("*").eq("id", id).single();
   throwSb(error);
 
-  const { data: members } = await getSupabase()
+  const { data: members } = await sb
     .from("tontine_members")
     .select("*, profiles(full_name)")
     .eq("tontine_id", id);
 
-  const { data: contributions } = await getSupabase()
+  const { data: contributions } = await sb
     .from("tontine_contributions")
     .select("*, profiles(full_name)")
     .eq("tontine_id", id)
     .order("created_at", { ascending: false })
-    .limit(50);
+    .limit(100);
+
+  const membersList = (members ?? []).map((m: any) => ({
+    ...m,
+    full_name: m.profiles?.full_name ?? "—",
+    cycles_paid: m.cycles_paid ?? 0,
+    status: m.status ?? "a_jour",
+  }));
+
+  const contributionsList = (contributions ?? []).map((c: any) => ({
+    id: c.id,
+    user_id: c.user_id,
+    full_name: c.profiles?.full_name ?? "—",
+    amount: Number(c.amount ?? 0),
+    created_at: c.created_at,
+    cycle: c.cycle ?? null,
+    payment_method: c.payment_method ?? null,
+  }));
+
+  const contributionAmount = Number(tontine.amount_per_cycle ?? tontine.contribution_amount ?? 0);
+  const totalCollected = contributionsList.reduce((sum, c) => sum + c.amount, 0);
+  const membersCount = membersList.length;
+  const currentCycle = tontine.current_cycle ?? 1;
+  const totalCycles = Math.max(membersCount, tontine.max_members ?? 1);
+  const paidThisCycle = contributionsList.filter((c) => c.cycle === currentCycle).length;
+  const compliancePct = membersCount > 0 ? Math.round((paidThisCycle / membersCount) * 100) : 0;
+
+  const myMember = membersList.find((m) => m.user_id === me);
+  const isAdmin = tontine.owner_id === me || myMember?.role === "admin";
+
+  const rotationOrder = [...membersList].sort((a, b) => (a.rotation_position ?? 0) - (b.rotation_position ?? 0));
+  const currentBeneficiary = rotationOrder.find((m) => !m.has_received) ?? null;
+  const beneficiaryIdx = currentBeneficiary ? rotationOrder.indexOf(currentBeneficiary) : -1;
+  const nextBeneficiary = beneficiaryIdx >= 0 && beneficiaryIdx < rotationOrder.length - 1
+    ? rotationOrder[beneficiaryIdx + 1]
+    : null;
 
   return {
-    tontine,
-    members: (members ?? []).map((m: any) => ({ ...m, full_name: m.profiles?.full_name ?? "—" })),
-    contributions: (contributions ?? []).map((c: any) => ({ ...c, full_name: c.profiles?.full_name ?? "—" })),
+    tontine: {
+      ...tontine,
+      contribution_amount: contributionAmount,
+      members_count: membersCount,
+      total_collected: totalCollected,
+      total_cycles: totalCycles,
+      current_cycle: currentCycle,
+      status: tontine.status ?? (tontine.is_active ? "active" : "inactive"),
+      rotation_mode: tontine.rotation_mode ?? "rotation",
+      currency: tontine.currency ?? "XAF",
+    },
+    is_admin: isAdmin,
+    members: membersList,
+    contributions: contributionsList,
+    compliance_pct: compliancePct,
+    cycle: {
+      current_cycle: currentCycle,
+      total_cycles: totalCycles,
+      current_beneficiary_id: currentBeneficiary?.user_id ?? null,
+      current_beneficiary_name: currentBeneficiary?.full_name ?? null,
+      next_beneficiary_name: nextBeneficiary?.full_name ?? null,
+      rotation_mode: (tontine.rotation_mode ?? "rotation") as "rotation" | "random" | "custom",
+      cycle_start_date: null,
+      compliance_pct: compliancePct,
+    },
   };
 }
 
 export async function createTontine(body: Record<string, any>) {
   const me = await uid();
-  const code = inviteCode();
-  const { data, error } = await getSupabase()
-    .from("tontines")
-    .insert({ ...body, owner_id: me, invite_code: code })
-    .select().single();
-  throwSb(error);
-  await getSupabase().from("tontine_members").insert({
+  const sb = getSupabase();
+  let data: any;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data: row, error } = await sb
+      .from("tontines")
+      .insert({ ...body, owner_id: me, invite_code: inviteCode() })
+      .select().single();
+    if (!error) { data = row; break; }
+    if (!isUniqueViolation(error) || attempt === 4) throwSb(error);
+  }
+  await sb.from("tontine_members").insert({
     tontine_id: data.id, user_id: me, role: "admin", rotation_position: 1,
   });
   return data;
@@ -209,18 +277,25 @@ export async function createTontineSecure(body: Record<string, any>) {
     }
   }
 
-  const code = inviteCode();
   const insertRow: Record<string, any> = {
     name: body.name, description: body.description ?? null,
-    amount_per_cycle: amountPerCycle, frequency: body.frequency ?? "monthly",
+    amount_per_cycle: amountPerCycle,
+    contribution_amount: amountPerCycle,
+    frequency: body.frequency ?? "monthly",
     max_members: Number(body.max_members ?? 12), is_public: body.is_public ?? false,
-    owner_id: me, invite_code: code,
+    owner_id: me,
   };
   if (body.language) insertRow.language = body.language;
   if (body.country) insertRow.country = body.country;
 
-  const { data, error } = await sb.from("tontines").insert(insertRow).select().single();
-  throwSb(error);
+  let data: any;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data: row, error } = await sb.from("tontines")
+      .insert({ ...insertRow, invite_code: inviteCode() })
+      .select().single();
+    if (!error) { data = row; break; }
+    if (!isUniqueViolation(error) || attempt === 4) throwSb(error);
+  }
 
   const maxMembers = Number(body.max_members ?? 12);
   const memberRow: Record<string, any> = { tontine_id: data.id, user_id: me, role: "admin", rotation_position: maxMembers };
@@ -314,6 +389,75 @@ export async function contributeTontineSecure(id: string, amount: number) {
   return { detail: "Contribution enregistrée", reserve_deducted: reserveAmount, net_amount: netAmount };
 }
 
+function nextCycleDeadline(frequency?: string | null): string {
+  const days = FREQ_DAYS[(frequency ?? "monthly").toLowerCase()] ?? 30;
+  return new Date(Date.now() + days * 86400000).toISOString();
+}
+
+export async function advanceTontineCycle(tontineId: string) {
+  const me = await uid();
+  const sb = getSupabase();
+  const { data: tontine } = await sb.from("tontines")
+    .select("id, owner_id, name, current_cycle, max_members, frequency, auto_advance")
+    .eq("id", tontineId).single();
+  if (!tontine) throw { status: 404, detail: "Tontine introuvable." };
+  if (tontine.owner_id !== me) throw { status: 403, detail: "Réservé au gestionnaire de la tontine." };
+
+  const cycle = tontine.current_cycle ?? 1;
+  const { count: memberCount } = await sb.from("tontine_members")
+    .select("*", { count: "exact", head: true }).eq("tontine_id", tontineId).neq("status", "exclu");
+  const { count: paidCount } = await sb.from("tontine_contributions")
+    .select("*", { count: "exact", head: true }).eq("tontine_id", tontineId).eq("cycle", cycle);
+
+  if ((paidCount ?? 0) < (memberCount ?? 1)) {
+    throw { status: 400, detail: "Tous les membres n'ont pas encore cotisé pour ce cycle." };
+  }
+
+  const nextCycle = cycle + 1;
+  await sb.from("tontines").update({
+    current_cycle: nextCycle,
+    cycle_deadline: nextCycleDeadline(tontine.frequency),
+  }).eq("id", tontineId);
+
+  const { data: members } = await sb.from("tontine_members").select("user_id").eq("tontine_id", tontineId);
+  for (const m of members ?? []) {
+    await notifyUser({
+      user_id: m.user_id,
+      title: `Nouveau cycle — ${tontine.name}`,
+      body: `Le cycle ${nextCycle} a commencé. Pensez à votre cotisation !`,
+      type: "tontine_cycle",
+    });
+  }
+
+  invalidateCache("tontines");
+  return { current_cycle: nextCycle, detail: `Cycle ${nextCycle} démarré.` };
+}
+
+export async function releaseDueEscrows() {
+  const sb = getSupabase();
+  const now = new Date().toISOString();
+  const { data: due } = await sb.from("tontine_escrow")
+    .select("*, tontines(name, owner_id)")
+    .eq("status", "held")
+    .lte("release_at", now)
+    .lt("dispute_count", 2);
+  let released = 0;
+  for (const row of due ?? []) {
+    await sb.from("tontine_escrow").update({ status: "released" }).eq("id", row.id);
+    const ownerId = (row as any).tontines?.owner_id;
+    if (ownerId) {
+      await notifyUser({
+        user_id: ownerId,
+        title: "Escrow libéré",
+        body: `Les fonds du cycle ${row.cycle} de ${(row as any).tontines?.name ?? "la tontine"} sont disponibles.`,
+        type: "escrow_release",
+      });
+    }
+    released++;
+  }
+  return { released };
+}
+
 /* ── Escrow ─────────────────────────────────────────────────── */
 
 export async function getEscrowStatus(tontineId: string) {
@@ -338,8 +482,9 @@ export async function reportEscrowDispute(tontineId: string, reason: string) {
   const newCount = (escrow.dispute_count ?? 0) + 1;
   const newStatus = newCount >= 2 ? "disputed" : "held";
   await sb.from("tontine_escrow").update({ dispute_count: newCount, status: newStatus }).eq("tontine_id", tontineId).eq("cycle", 1);
+  const { data: tontine } = await sb.from("tontines").select("owner_id, name").eq("id", tontineId).single();
   await sb.from("notifications").insert({
-    user_id: escrow.tontine_id,
+    user_id: tontine?.owner_id ?? me,
     title: `⚠️ Litige signalé — ${reason}`,
     body: `Un membre a signalé un litige pour le cycle 1 de la tontine. Fonds gelés en attente de résolution.`,
     type: "escrow_dispute",
@@ -437,12 +582,13 @@ export async function getTontineReserveFund(tontineId: string) {
   const { data: tontine } = await getSupabase().from("tontines")
     .select("reserve_fund, amount_per_cycle, max_members, owner_id, name").eq("id", tontineId).single();
   if (!tontine) throw { status: 404, detail: "Tontine introuvable" };
-  const memberCount = Number(tontine.max_members ?? 1);
-  const fullCycleFund = Number(tontine.amount_per_cycle) * memberCount;
-  const coveragePercent = fullCycleFund > 0 ? Math.min(100, Math.round((Number(tontine.reserve_fund) / fullCycleFund) * 100)) : 0;
+  const memberCount = Number(tontine.max_members ?? 1) || 1;
+  const fullCycleFund = (Number(tontine.amount_per_cycle) || 0) * memberCount;
+  const reserve = Number(tontine.reserve_fund ?? 0) || 0;
+  const coveragePercent = fullCycleFund > 0 ? Math.min(100, Math.round((reserve / fullCycleFund) * 100)) : 0;
   return {
-    reserve: Number(tontine.reserve_fund ?? 0), full_cycle_cost: fullCycleFund,
-    coverage_percent: coveragePercent, covers_full_cycle: Number(tontine.reserve_fund) >= fullCycleFund,
+    reserve, full_cycle_cost: fullCycleFund,
+    coverage_percent: coveragePercent, covers_full_cycle: fullCycleFund > 0 && reserve >= fullCycleFund,
     is_owner: tontine.owner_id === me,
   };
 }
@@ -470,9 +616,9 @@ export async function getOverdueMembers(tontineId: string) {
 
 export async function recordTontineConsent(version: string, tontineId?: string) {
   const me = await uid();
-  const { error } = await getSupabase().from("tontine_consents").insert({
+  const { error } = await getSupabase().from("tontine_consent").insert({
     user_id: me, version, tontine_id: tontineId ?? null,
-    signed_at: new Date().toISOString(), platform: "hodix-mobile",
+    signed_at: new Date().toISOString(),
   });
   throwSb(error);
   return { signed: true, signed_at: new Date().toISOString(), version };
@@ -480,9 +626,38 @@ export async function recordTontineConsent(version: string, tontineId?: string) 
 
 export async function hasSignedConsent(version: string): Promise<boolean> {
   const me = await uid();
-  const { count } = await getSupabase().from("tontine_consents")
+  const { count } = await getSupabase().from("tontine_consent")
     .select("*", { count: "exact", head: true }).eq("user_id", me).eq("version", version);
   return (count ?? 0) > 0;
+}
+
+/* ── Analytics series ───────────────────────────────────────── */
+
+export async function getContributionsSeries(days = 14) {
+  const me = await uid();
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+  const { data } = await getSupabase()
+    .from("tontine_contributions").select("amount, created_at")
+    .eq("user_id", me).gte("created_at", since).order("created_at", { ascending: true });
+  const byDate: Record<string, number> = {};
+  for (const tx of data ?? []) {
+    const d = (tx.created_at as string).slice(0, 10);
+    byDate[d] = (byDate[d] ?? 0) + Number(tx.amount);
+  }
+  return { days, series: Object.entries(byDate).map(([date, value]) => ({ date, value })) };
+}
+
+export async function getPlatformSavingsSeries(days = 14) {
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+  const { data } = await getSupabase()
+    .from("savings_transactions").select("amount, created_at")
+    .gte("created_at", since).order("created_at", { ascending: true });
+  const byDate: Record<string, number> = {};
+  for (const tx of data ?? []) {
+    const d = (tx.created_at as string).slice(0, 10);
+    byDate[d] = (byDate[d] ?? 0) + Number(tx.amount);
+  }
+  return { days, series: Object.entries(byDate).map(([date, value]) => ({ date, value })) };
 }
 
 /* ── Leaderboard ────────────────────────────────────────────── */

@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
   ViewStyle,
+  StyleProp,
   TextStyle,
 } from "react-native";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
@@ -35,7 +36,7 @@ interface BtnProps {
   disabled?: boolean;
   icon?: React.ReactNode;
   testID?: string;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   fullWidth?: boolean;
 }
 
@@ -134,7 +135,7 @@ export function Field({ label, error, testID, style, ...rest }: FieldProps) {
 
 interface CardProps {
   children: React.ReactNode;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   dark?: boolean;
   testID?: string;
 }
@@ -241,7 +242,7 @@ interface SkeletonBoxProps {
   width?: number | string;
   height?: number;
   borderRadius?: number;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }
 
 export function SkeletonBox({ width = "100%", height = 16, borderRadius = Radius.md, style }: SkeletonBoxProps) {
@@ -304,11 +305,12 @@ const skeletonStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   btn: {
-    paddingVertical: 16,
+    paddingVertical: 14,
     paddingHorizontal: 20,
     borderRadius: Radius.xl,
     alignItems: "center",
     justifyContent: "center",
+    minHeight: 48,
   },
   btnRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   btnText: { fontSize: 16, fontWeight: "700", letterSpacing: 0.2 },

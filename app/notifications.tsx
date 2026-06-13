@@ -70,9 +70,12 @@ export default function Notifications() {
 
   const load = useCallback(async () => {
     try {
-      const d = await api.get<{ items: Notif[] }>("/notifications");
-      setItems(d.items);
-    } catch {}
+      const d = await api.get<{ items?: Notif[] } | Notif[]>("/notifications");
+      const list = Array.isArray(d) ? d : (d?.items ?? []);
+      setItems(list);
+    } catch {
+      setItems([]);
+    }
     setLoading(false);
   }, []);
 

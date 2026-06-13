@@ -1,5 +1,5 @@
 // Admin Console — premium redesign
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -18,14 +18,16 @@ import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowLeft, Users, ShieldCheck, Crown, BarChart3, Bell,
   CheckCircle, XCircle, Send, ChevronRight, ShieldAlert,
-  Search, Zap,
+  Search, Zap, Trash2,
 } from "lucide-react-native";
 
 import { api, ApiError } from "@/src/api";
+import { supabase } from "@/src/supabase";
 import { useAuth } from "@/src/auth-context";
 import { SkeletonCard } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { useToast } from "@/src/toast";
+import { MIN_TOUCH, useResponsive } from "@/src/hooks/use-responsive";
 
 type Tab = "users" | "kyc" | "promotions" | "tontines" | "broadcast";
 
@@ -34,13 +36,39 @@ interface AdminUser {
   is_active?: boolean | null; created_at: string;
 }
 interface KycEntry {
-  user_id: string; full_name: string; email: string; kyc_status: string; created_at: string;
+  id?: string | null;
+  user_id: string;
+  full_name: string;
+  email: string;
+  phone?: string;
+  country?: string;
+  kyc_status: string;
+  created_at: string;
+  submitted_at?: string | null;
+  verification_mode?: string | null;
+  id_type?: string | null;
+}
+
+function isPendingKyc(status: string) {
+  return status === "pending_review" || status === "pending";
 }
 interface PromoRequest {
   id: string; user_id: string; full_name: string; email: string; status: string; created_at: string;
 }
 interface AdminTontine {
   id: string; name: string; invite_code: string; status: string; members_count: number; created_at: string;
+}
+interface AdminUsersPage {
+  items: AdminUser[];
+  total: number;
+  offset: number;
+  limit: number;
+  has_more: boolean;
+}
+interface AdminStats {
+  total_users: number;
+  total_tontines: number;
+  pending_kyc: number;
 }
 
 const ROLE_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
@@ -52,9 +80,12 @@ const ROLE_CONFIG: Record<string, { label: string; bg: string; color: string }> 
 
 const KYC_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
   verified: { label: "Vérifié", bg: "#D1FAE5", color: "#065F46" },
+  approved: { label: "Vérifié", bg: "#D1FAE5", color: "#065F46" },
   pending_review: { label: "En attente", bg: "#FEF3C7", color: "#92400E" },
+  pending: { label: "En attente", bg: "#FEF3C7", color: "#92400E" },
   rejected: { label: "Rejeté", bg: "#FEE2E2", color: "#991B1B" },
   not_started: { label: "Non démarré", bg: "#F3F4F6", color: "#6B7280" },
+  not_submitted: { label: "Non soumis", bg: "#F3F4F6", color: "#6B7280" },
 };
 
 function Avatar({ name, size = 40, bg }: { name: string; size?: number; bg?: string }) {
@@ -81,11 +112,18 @@ export default function AdminConsole() {
   const router = useRouter();
   const { user } = useAuth();
   const { show } = useToast();
+  const { isCompact, horizontalPad } = useResponsive();
   const [tab, setTab] = useState<Tab>("users");
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
 
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [userTotal, setUserTotal] = useState(0);
+  const [usersHasMore, setUsersHasMore] = useState(false);
+  const [usersLoadingMore, setUsersLoadingMore] = useState(false);
+  const [adminStats, setAdminStats] = useState<AdminStats>({ total_users: 0, total_tontines: 0, pending_kyc: 0 });
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipSearchDebounce = useRef(true);
   const [kyc, setKyc] = useState<KycEntry[]>([]);
   const [promos, setPromos] = useState<PromoRequest[]>([]);
   const [tontines, setTontines] = useState<AdminTontine[]>([]);
@@ -105,35 +143,89 @@ export default function AdminConsole() {
     );
   }
 
+  const loadUsers = useCallback(async (searchTerm: string, offset = 0, append = false) => {
+    if (append) setUsersLoadingMore(true);
+    else if (offset === 0) setLoading(true);
+    try {
+      const qs = new URLSearchParams({ offset: String(offset), limit: "50" });
+      if (searchTerm.trim()) qs.set("search", searchTerm.trim());
+      const res = await api.get<AdminUsersPage>(`/admin/users?${qs.toString()}`);
+      setUserTotal(res.total);
+      setUsersHasMore(res.has_more);
+      setUsers((prev) => (append ? [...prev, ...res.items] : res.items));
+    } catch {}
+    setLoading(false);
+    setUsersLoadingMore(false);
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch { return null; }
     };
-    if (tab === "users") {
-      const data = await safe(() => api.get<AdminUser[]>("/admin/users"));
-      if (data) setUsers(data);
-    } else if (tab === "kyc") {
-      const data = await safe(() => api.get<KycEntry[]>("/admin/kyc"));
-      if (data) setKyc(data);
-    } else if (tab === "promotions") {
-      const data = await safe(() => api.get<PromoRequest[]>("/admin/promotion-requests"));
-      if (data) setPromos(data);
-    } else if (tab === "tontines") {
-      const data = await safe(() => api.get<AdminTontine[]>("/admin/tontines"));
-      if (data) setTontines(data);
-    }
+    const [statsData, kycData, promosData, tontinesData] = await Promise.all([
+      safe(() => api.get<AdminStats>("/admin/stats")),
+      safe(() => api.get<KycEntry[]>("/admin/kyc")),
+      safe(() => api.get<PromoRequest[]>("/admin/promotion-requests")),
+      safe(() => api.get<AdminTontine[]>("/admin/tontines")),
+    ]);
+    if (statsData) setAdminStats(statsData);
+    if (kycData) setKyc(kycData);
+    if (promosData) setPromos(promosData);
+    if (tontinesData) setTontines(tontinesData);
     setLoading(false);
-  }, [tab]);
+  }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => {
+    load();
+    loadUsers(search, 0, false);
+    const ch = supabase
+      .channel("rt-admin-console")
+      .on("postgres_changes", { event: "*", schema: "public", table: "kyc_submissions" }, () => { load(); loadUsers(search, 0, false); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => { load(); loadUsers(search, 0, false); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () => { load(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "tontines" }, () => { load(); })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [load, loadUsers, search]));
+
+  useEffect(() => {
+    if (tab !== "users") return;
+    if (skipSearchDebounce.current) {
+      skipSearchDebounce.current = false;
+      return;
+    }
+    if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    searchDebounce.current = setTimeout(() => loadUsers(search, 0, false), 350);
+    return () => { if (searchDebounce.current) clearTimeout(searchDebounce.current); };
+  }, [search, tab, loadUsers]);
 
   const handleKyc = async (userId: string, approve: boolean) => {
     try {
       await api.post(approve ? "/admin/kyc/approve" : "/admin/kyc/reject", { user_id: userId });
       show(approve ? "KYC approuvé ✓" : "KYC rejeté", approve ? "success" : "error");
       load();
+      loadUsers(search, 0, false);
     } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
+  };
+
+  const handleDeleteKyc = (userId: string, name: string) => {
+    const doIt = async () => {
+      try {
+        await api.del(`/admin/kyc/${userId}`);
+        show("Dossier KYC supprimé", "success");
+        load();
+        loadUsers(search, 0, false);
+      } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
+    };
+    if (Platform.OS === "web") {
+      if (window.confirm(`Supprimer le dossier KYC de ${name} ?`)) doIt();
+    } else {
+      Alert.alert("Supprimer KYC", `Supprimer le dossier de ${name} ?`, [
+        { text: "Annuler", style: "cancel" },
+        { text: "Supprimer", style: "destructive", onPress: doIt },
+      ]);
+    }
   };
 
   const handlePromotion = async (userId: string, approve: boolean) => {
@@ -149,6 +241,7 @@ export default function AdminConsole() {
       await api.patch("/admin/users/role", { user_id: userId, role: newRole });
       show("Rôle mis à jour", "success");
       load();
+      loadUsers(search, 0, false);
     } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
   };
 
@@ -158,6 +251,7 @@ export default function AdminConsole() {
         await api.post("/admin/users/deactivate", { user_id: userId });
         show("Compte désactivé", "success");
         load();
+        loadUsers(search, 0, false);
       } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
     };
     if (Platform.OS === "web") {
@@ -182,17 +276,12 @@ export default function AdminConsole() {
   };
 
   const TABS: { key: Tab; label: string; icon: any; count?: number }[] = [
-    { key: "users", label: "Membres", icon: Users, count: users.length || undefined },
-    { key: "kyc", label: "KYC", icon: ShieldCheck, count: kyc.filter(k => k.kyc_status === "pending_review").length || undefined },
+    { key: "users", label: "Membres", icon: Users, count: userTotal || undefined },
+    { key: "kyc", label: "KYC", icon: ShieldCheck, count: kyc.filter(k => isPendingKyc(k.kyc_status)).length || undefined },
     { key: "promotions", label: "Promos", icon: Crown, count: promos.filter(p => p.status === "pending").length || undefined },
     { key: "tontines", label: "Tontines", icon: BarChart3 },
     { key: "broadcast", label: "Broadcast", icon: Bell },
   ];
-
-  const filteredUsers = users.filter(u =>
-    u.full_name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
-  );
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -214,9 +303,9 @@ export default function AdminConsole() {
       {/* Stats strip */}
       <LinearGradient colors={["#1E3A5F", "#0F172A"]} style={styles.statsStrip}>
         {[
-          { label: "Membres", value: users.length, color: "#60A5FA" },
-          { label: "KYC pending", value: kyc.filter(k => k.kyc_status === "pending_review").length, color: "#FBBF24" },
-          { label: "Tontines", value: tontines.length, color: "#34D399" },
+          { label: "Membres", value: adminStats.total_users, color: "#60A5FA" },
+          { label: "KYC pending", value: adminStats.pending_kyc, color: "#FBBF24" },
+          { label: "Tontines", value: adminStats.total_tontines, color: "#34D399" },
         ].map((s) => (
           <View key={s.label} style={styles.statItem}>
             <Text style={[styles.statValue, { color: s.color }]}>{s.value}</Text>
@@ -256,7 +345,7 @@ export default function AdminConsole() {
         </ScrollView>
       ) : tab === "users" ? (
         <View style={{ flex: 1 }}>
-          <View style={styles.searchRow}>
+          <View style={[styles.searchRow, { marginHorizontal: horizontalPad }]}>
             <Search color={Colors.textMuted} size={15} />
             <TextInput
               style={styles.searchInput}
@@ -267,18 +356,36 @@ export default function AdminConsole() {
             />
           </View>
           <FlatList
-            data={filteredUsers}
+            data={users}
             keyExtractor={(u) => u.id}
-            contentContainerStyle={{ paddingHorizontal: Spacing.xl, paddingBottom: 100, gap: 10 }}
+            contentContainerStyle={{ paddingHorizontal: horizontalPad, paddingBottom: 100, gap: 10 }}
+            onEndReached={() => {
+              if (usersHasMore && !usersLoadingMore && !loading) {
+                loadUsers(search, users.length, true);
+              }
+            }}
+            onEndReachedThreshold={0.35}
+            ListHeaderComponent={
+              users.length < userTotal ? (
+                <Text style={styles.pageHint}>
+                  Affichage de {users.length} sur {userTotal} membres
+                </Text>
+              ) : null
+            }
+            ListFooterComponent={
+              usersLoadingMore ? (
+                <ActivityIndicator color={Colors.secondary} style={{ marginVertical: 16 }} />
+              ) : null
+            }
             renderItem={({ item: u }) => {
               const roleConf = ROLE_CONFIG[u.role] ?? ROLE_CONFIG.member;
               const isDeactivated = u.is_active === false;
               return (
-                <View style={styles.userCard}>
+                <View style={[styles.userCard, isCompact && styles.userCardStack]}>
                   <View style={styles.userCardLeft}>
                     <Avatar name={u.full_name} size={44} />
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                         <Text style={styles.userName} numberOfLines={1}>{u.full_name}</Text>
                         {isDeactivated && (
                           <View style={{ backgroundColor: "#FEE2E2", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999 }}>
@@ -292,7 +399,7 @@ export default function AdminConsole() {
                       </View>
                     </View>
                   </View>
-                  <View style={styles.userActions}>
+                  <View style={[styles.userActions, isCompact && styles.userActionsStack]}>
                     {u.role === "member" && (
                       <TouchableOpacity style={styles.promoteBtn} onPress={() => handleRoleChange(u.id, "tontine_manager")}>
                         <Text style={styles.promoteBtnText}>↑ Manager</Text>
@@ -322,34 +429,46 @@ export default function AdminConsole() {
           contentContainerStyle={{ paddingHorizontal: Spacing.xl, paddingBottom: 100, gap: 10 }}
           renderItem={({ item: k }) => {
             const kycConf = KYC_CONFIG[k.kyc_status] ?? KYC_CONFIG.not_started;
+            const pending = isPendingKyc(k.kyc_status);
             return (
               <View style={styles.userCard}>
                 <View style={styles.userCardLeft}>
                   <Avatar name={k.full_name} size={44} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.userName} numberOfLines={1}>{k.full_name}</Text>
-                    <Text style={styles.userEmail} numberOfLines={1}>{k.email}</Text>
-                    <View style={{ marginTop: 4 }}>
+                    <Text style={styles.userEmail} numberOfLines={1}>{k.email || k.phone || "—"}</Text>
+                    {!!k.country && <Text style={styles.userEmail} numberOfLines={1}>{k.country}{k.id_type ? ` · ${k.id_type}` : ""}</Text>}
+                    <View style={{ marginTop: 4, flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
                       <StatusBadge config={kycConf} />
+                      {!!k.verification_mode && (
+                        <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: "#EEF2FF" }}>
+                          <Text style={{ fontSize: 10, fontWeight: "700", color: "#4338CA" }}>{k.verification_mode}</Text>
+                        </View>
+                      )}
                     </View>
                   </View>
                 </View>
-                {k.kyc_status === "pending_review" && (
-                  <View style={{ gap: 6 }}>
-                    <TouchableOpacity style={styles.approveBtn} onPress={() => handleKyc(k.user_id, true)}>
-                      <CheckCircle color="#fff" size={13} />
-                      <Text style={styles.approveBtnText}>OK</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.rejectBtn} onPress={() => handleKyc(k.user_id, false)}>
-                      <XCircle color="#fff" size={13} />
-                      <Text style={styles.rejectBtnText}>Non</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
+                <View style={{ gap: 6 }}>
+                  {pending && (
+                    <>
+                      <TouchableOpacity style={styles.approveBtn} onPress={() => handleKyc(k.user_id, true)}>
+                        <CheckCircle color="#fff" size={13} />
+                        <Text style={styles.approveBtnText}>OK</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.rejectBtn} onPress={() => handleKyc(k.user_id, false)}>
+                        <XCircle color="#fff" size={13} />
+                        <Text style={styles.rejectBtnText}>Non</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                  <TouchableOpacity style={styles.deactivateBtn} onPress={() => handleDeleteKyc(k.user_id, k.full_name)}>
+                    <Trash2 color="#EF4444" size={14} />
+                  </TouchableOpacity>
+                </View>
               </View>
             );
           }}
-          ListEmptyComponent={<Text style={styles.empty}>Aucune soumission KYC en attente</Text>}
+          ListEmptyComponent={<Text style={styles.empty}>Aucun dossier KYC dans Supabase</Text>}
         />
       ) : tab === "promotions" ? (
         <FlatList
@@ -508,8 +627,10 @@ const styles = StyleSheet.create({
     shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  userCardLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
-  userActions: { flexDirection: "row", alignItems: "center", gap: 6 },
+  userCardStack: { flexDirection: "column", alignItems: "stretch", gap: 12 },
+  userCardLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1, minWidth: 0 },
+  userActions: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 },
+  userActionsStack: { flexWrap: "wrap", justifyContent: "flex-end" },
   userName: { fontSize: 14, fontWeight: "800", color: "#1E293B" },
   userEmail: { fontSize: 11, color: "#94A3B8", fontWeight: "500", marginTop: 1 },
   promoteBtn: {
@@ -518,7 +639,7 @@ const styles = StyleSheet.create({
   },
   promoteBtnText: { fontSize: 11, fontWeight: "800", color: "#2563EB" },
   deactivateBtn: {
-    width: 30, height: 30, borderRadius: 8,
+    width: MIN_TOUCH, height: MIN_TOUCH, borderRadius: 8,
     backgroundColor: "#FEF2F2", alignItems: "center", justifyContent: "center",
   },
   approveBtn: {
@@ -532,6 +653,7 @@ const styles = StyleSheet.create({
   },
   rejectBtnText: { color: "#fff", fontSize: 11, fontWeight: "800" },
   empty: { textAlign: "center", color: "#94A3B8", fontWeight: "600", marginTop: 48, fontSize: 14 },
+  pageHint: { fontSize: 12, color: Colors.textMuted, marginBottom: 10, textAlign: "center" },
   broadcastCard: {
     backgroundColor: "#fff", borderRadius: 20, padding: 20, gap: 14,
     shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },

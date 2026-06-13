@@ -3,9 +3,10 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, Touchable
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { ChevronLeft, CheckCircle2 } from "lucide-react-native";
+import { ChevronLeft } from "lucide-react-native";
 
-import { api } from "@/src/api";
+import { openPaymentScreen } from "@/src/payment-nav";
+import { useDisplayCurrency } from "@/src/hooks/use-display-currency";
 import { Button, Field } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import type { MobileMoneyProvider } from "@/src/wallet-db";
@@ -16,42 +17,22 @@ const CURRENCIES: Currency[] = ["XAF", "EUR", "USD"];
 
 export default function TopupScreen() {
   const router = useRouter();
+  const { currency, setCurrency } = useDisplayCurrency();
   const [amount, setAmount]       = useState("");
-  const [currency, setCurrency]   = useState<Currency>("XAF");
   const [provider, setProvider]   = useState<MobileMoneyProvider>("MTN MoMo");
   const [phone, setPhone]         = useState("");
-  const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
-  const [success, setSuccess]     = useState(false);
 
-  const submit = async () => {
+  const submit = () => {
     setError(null);
     const amt = parseFloat(amount.replace(/\s/g, "").replace(",", "."));
     if (!amt || amt <= 0) { setError("Entrez un montant valide."); return; }
-    if (!phone.trim()) { setError("Entrez votre numéro Mobile Money."); return; }
-    setLoading(true);
-    try {
-      await api.post("/wallet/topup", { amount: amt, currency, provider, phone: phone.trim() });
-      setSuccess(true);
-    } catch (e: any) {
-      setError(e?.detail ?? e?.message ?? "Erreur lors de la recharge.");
-    } finally { setLoading(false); }
+    openPaymentScreen(router, {
+      kind: "wallet_topup",
+      amount: amt,
+      label: `Recharge wallet ${provider} (${currency})`,
+    });
   };
-
-  if (success) {
-    return (
-      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-        <View style={styles.successBox}>
-          <CheckCircle2 size={64} color="#10B981" />
-          <Text style={styles.successTitle}>Recharge réussie !</Text>
-          <Text style={styles.successSub}>
-            Votre solde a été crédité via {provider}.
-          </Text>
-          <Button label="Retour au wallet" onPress={() => router.replace("/wallet")} />
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -96,11 +77,10 @@ export default function TopupScreen() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <View style={{ height: 8 }} />
-        <Button label="Recharger" onPress={submit} loading={loading} />
+        <Button label="Continuer vers le paiement" onPress={submit} />
 
         <Text style={styles.note}>
-          Une demande de paiement sera envoyée à votre numéro {provider}.
-          Confirmez sur votre téléphone pour finaliser.
+          Paiement électronique CinetPay requis. Après confirmation, votre wallet sera crédité et un reçu s'affichera avec le statut « Confirmé » ou « En attente ».
         </Text>
       </ScrollView>
       </KeyboardAvoidingView>

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rapport d'audit — HODIX / Nexus-Fi</title>
+  <style>
+    :root { --primary: #0B1F3A; --accent: #10B981; --muted: #64748b; --border: #e2e8f0; }
+    * { box-sizing: border-box; }
+    body { font-family: "Segoe UI", Roboto, Arial, sans-serif; margin: 0; padding: 40px; color: #1e293b; line-height: 1.6; max-width: 900px; margin: 0 auto; }
+    h1 { color: var(--primary); font-size: 28px; border-bottom: 3px solid var(--accent); padding-bottom: 12px; }
+    h2 { color: var(--primary); font-size: 20px; margin-top: 32px; }
+    h3 { font-size: 16px; color: var(--muted); }
+    .meta { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+    .summary { background: linear-gradient(135deg, #0B1F3A, #10B981); color: #fff; padding: 20px 24px; border-radius: 12px; margin: 24px 0; }
+    .summary strong { font-size: 18px; }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
+    th, td { border: 1px solid var(--border); padding: 10px 12px; text-align: left; }
+    th { background: #f8fafc; font-weight: 700; color: var(--primary); }
+    tr:nth-child(even) { background: #fafbfc; }
+    .badge-ok { color: #059669; font-weight: 700; }
+    .badge-warn { color: #d97706; font-weight: 700; }
+    .badge-danger { color: #dc2626; font-weight: 700; }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 20px 0; }
+    .stat { background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 16px; text-align: center; }
+    .stat .val { font-size: 24px; font-weight: 900; color: var(--primary); }
+    .stat .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    ul { padding-left: 20px; }
+    li { margin: 6px 0; }
+    pre { background: #f1f5f9; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 12px; }
+    .footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); text-align: center; }
+    @media print {
+      body { padding: 20px; font-size: 11pt; }
+      h1 { font-size: 22pt; }
+      .summary { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      table { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+<h1>Rapport d'audit complet — HODIX / Nexus-Fi</h1>
+<p class="meta">
+  <strong>Analyse globale · Niveau licorne fintech africaine</strong><br>
+  Date : Juin 2026 · Stack : Expo 51 + Supabase + CinetPay + Resend<br>
+  Dépôt : <a href="https://github.com/raisaodin1-boop/nexus-fi">github.com/raisaodin1-boop/nexus-fi</a>
+</p>
+
+<div class="summary">
+  <strong>Score de maturité global : 44/100</strong><br>
+  Bonne base produit et positionnement différenciant (tontine + trust score), mais paiements production, conformité et tests bloquent le passage licorne.
+</div>
+
+<div class="grid">
+  <div class="stat"><div class="val">72</div><div class="lbl">Écrans</div></div>
+  <div class="stat"><div class="val">8</div><div class="lbl">Modules</div></div>
+  <div class="stat"><div class="val">0</div><div class="lbl">Tests auto</div></div>
+  <div class="stat"><div class="val">44%</div><div class="lbl">Maturité</div></div>
+</div>
+
+<h2>1. Vue d'ensemble</h2>
+<p><strong>HODIX</strong> est une fintech africaine de tontines et d'épargne participative (Expo/React Native + Supabase).</p>
+<table>
+  <tr><th>Métrique</th><th>Valeur</th></tr>
+  <tr><td>Backend actif</td><td>Supabase (Postgres + Auth + RLS + RPC + Edge Functions)</td></tr>
+  <tr><td>Backend legacy</td><td>FastAPI/MongoDB — non utilisé</td></tr>
+  <tr><td>Paiements</td><td>CinetPay (Orange/MTN/Moov/Carte)</td></tr>
+  <tr><td>Emails</td><td>Resend (reçus + bienvenue inscription)</td></tr>
+</table>
+
+<h2>2. Maturité par dimension</h2>
+<table>
+  <tr><th>Dimension</th><th>Score</th><th>Niveau</th></tr>
+  <tr><td>Produit UX</td><td>72/100</td><td class="badge-ok">Bon</td></tr>
+  <tr><td>Paiements</td><td>38/100</td><td class="badge-danger">Critique</td></tr>
+  <tr><td>Sécurité / RLS</td><td>55/100</td><td class="badge-warn">Moyen</td></tr>
+  <tr><td>Conformité KYC</td><td>22/100</td><td class="badge-danger">Critique</td></tr>
+  <tr><td>Fiabilité / Tests</td><td>8/100</td><td class="badge-danger">Critique</td></tr>
+  <tr><td>Scalabilité backend</td><td>45/100</td><td class="badge-warn">Moyen</td></tr>
+  <tr><td>Data & Analytics</td><td>50/100</td><td class="badge-warn">Moyen</td></tr>
+  <tr><td>Go-to-market Afrique</td><td>60/100</td><td class="badge-ok">Bon</td></tr>
+</table>
+
+<h2>3. Bugs corrigés</h2>
+<table>
+  <tr><th>Bug</th><th>Sévérité</th><th>Statut</th></tr>
+  <tr><td>topup.tsx — loading non défini</td><td>Critique</td><td class="badge-ok">Corrigé</td></tr>
+  <tr><td>Recharge wallet sans CinetPay</td><td>Critique</td><td class="badge-ok">Corrigé</td></tr>
+  <tr><td>Sandbox paiement trop permissif</td><td>Haute</td><td class="badge-ok">Corrigé</td></tr>
+  <tr><td>reportEscrowDispute — mauvais user_id</td><td>Haute</td><td class="badge-ok">Corrigé</td></tr>
+  <tr><td>score_delta vs points_delta</td><td>Haute</td><td class="badge-ok">Corrigé</td></tr>
+  <tr><td>Routes analytics 404</td><td>Moyenne</td><td class="badge-ok">Corrigé</td></tr>
+  <tr><td>Consent GET / KYC status / tontine_consent</td><td>Moyenne</td><td class="badge-ok">Corrigé</td></tr>
+  <tr><td>Tables tontine_escrow + identity_scores</td><td>Haute</td><td class="badge-ok">Migration</td></tr>
+  <tr><td>DatePicker mois/année</td><td>Moyenne</td><td class="badge-ok">Corrigé</td></tr>
+  <tr><td>Emails reçus + bienvenue (Resend)</td><td>Moyenne</td><td class="badge-ok">Corrigé</td></tr>
+</table>
+
+<h2>4. Analyse par module</h2>
+<table>
+  <tr><th>Module</th><th>Maturité</th><th>Gaps licorne</th></tr>
+  <tr><td>Tontines</td><td>70%</td><td>Cycles auto, SMS rappels, médiation</td></tr>
+  <tr><td>Wallet</td><td>45%</td><td>Payout réel, ledger double-entry</td></tr>
+  <tr><td>Épargne</td><td>65%</td><td>Intérêts, produits structurés</td></tr>
+  <tr><td>Groupes</td><td>55%</td><td>Gouvernance, assemblées</td></tr>
+  <tr><td>Identité</td><td>40%</td><td>KYC documentaire, bureau crédit</td></tr>
+  <tr><td>Paiements</td><td>35%</td><td>Webhook, réconciliation, refunds</td></tr>
+  <tr><td>Admin</td><td>50%</td><td>Dashboard conformité</td></tr>
+</table>
+
+<h2>5. Positionnement concurrentiel</h2>
+<table>
+  <tr><th>Acteur</th><th>Force</th><th>Opportunité HODIX</th></tr>
+  <tr><td>Chipper Cash</td><td>P2P pan-africain</td><td>Pas de tontine native</td></tr>
+  <tr><td>M-Pesa</td><td>Réseau agents</td><td>Produit tontine limité</td></tr>
+  <tr><td>Kuda/OPay</td><td>UX néobanque</td><td>Focus Nigeria</td></tr>
+  <tr><td>Djamo</td><td>UX premium CI</td><td>Pas tontines communautaires</td></tr>
+  <tr><td><strong>HODIX</strong></td><td>Tontine + trust score</td><td>Paiements prod + conformité</td></tr>
+</table>
+
+<h2>6. Roadmap P0 → P3</h2>
+<h3>P0 — 0-30 jours</h3>
+<ul>
+  <li>CinetPay production + webhook notify_url</li>
+  <li>Edge Function webhook confirmation paiements</li>
+  <li>Retrait wallet via payout Mobile Money réel</li>
+  <li>Tests E2E : auth, cotisation, recharge, retrait</li>
+  <li>Domaine hodix.app vérifié sur Resend</li>
+</ul>
+<h3>P1 — 1-3 mois</h3>
+<ul>
+  <li>KYC : CNI + selfie + vérification tierce</li>
+  <li>Conformité COBAC/CEMAC</li>
+  <li>Retirer/unifier backend FastAPI legacy</li>
+  <li>Observabilité Sentry + alertes fraude</li>
+</ul>
+<h3>P2 — 3-6 mois</h3>
+<ul>
+  <li>Scoring crédit alternatif</li>
+  <li>Escrow automatisé</li>
+  <li>Multi-pays (XOF, GHS, NGN)</li>
+  <li>API B2B MFIs / employeurs</li>
+</ul>
+<h3>P3 — Licorne (6-18 mois)</h3>
+<ul>
+  <li>Licence monnaie électronique</li>
+  <li>1M+ tx/mois, 10+ pays</li>
+  <li>IA fraude temps réel</li>
+  <li>Crédit garanti épargne/tontine</li>
+</ul>
+
+<h2>7. Répartition effort (12 mois)</h2>
+<table>
+  <tr><th>Domaine</th><th>% effort</th></tr>
+  <tr><td>Paiements & conformité</td><td>30%</td></tr>
+  <tr><td>KYC & identité</td><td>20%</td></tr>
+  <tr><td>Tests & fiabilité</td><td>15%</td></tr>
+  <tr><td>Produit & UX</td><td>15%</td></tr>
+  <tr><td>Croissance & B2B</td><td>12%</td></tr>
+  <tr><td>Infra & observabilité</td><td>8%</td></tr>
+</table>
+
+<h2>8. Recommandations prioritaires</h2>
+<ol>
+  <li><strong>Webhook CinetPay</strong> — confirmation automatique</li>
+  <li><strong>Payout réel</strong> — retrait Mobile Money effectif</li>
+  <li><strong>KYC documentaire</strong> — obligation réglementaire</li>
+  <li><strong>Tests E2E</strong> — flux financiers critiques</li>
+  <li><strong>Nettoyage legacy</strong> — FastAPI/MongoDB</li>
+</ol>
+
+<div class="footer">
+  Rapport généré — HODIX/Nexus-Fi · Juin 2026<br>
+  Commits : 295161e · b641fd6 · f399c3b
+</div>
+
+</body>
+</html>

@@ -1,22 +1,6 @@
 import { getSupabase } from "@/src/supabase";
 import { uid, throwSb } from "./helpers";
-
-/* ── KYC ──────────────────────────────────────────────────── */
-
-export async function getKycStatus() {
-  const me = await uid();
-  const { data } = await getSupabase().from("kyc_submissions").select("*").eq("user_id", me).single();
-  return data ?? { status: "not_submitted" };
-}
-
-export async function submitKyc() {
-  const me = await uid();
-  const { error } = await getSupabase().from("kyc_submissions")
-    .upsert({ user_id: me, status: "pending", submitted_at: new Date().toISOString() }, { onConflict: "user_id" });
-  throwSb(error);
-  await getSupabase().from("profiles").update({ kyc_status: "pending" }).eq("id", me);
-  return { detail: "Demande KYC soumise" };
-}
+import { notifyUser } from "./notifications";
 
 /* ── PAYMENTS ────────────────────────────────────────────── */
 
@@ -56,20 +40,40 @@ export async function applyReferralBonus(newUserId: string, referralCode: string
   await getSupabase().from("profiles").update({ referred_by: referralCode }).eq("id", newUserId);
   const current = Number(referrer.referral_bonus ?? 0);
   await getSupabase().from("profiles").update({ referral_bonus: current + 500 }).eq("id", referrer.id);
-  await getSupabase().from("notifications").insert({
-    user_id: referrer.id, title: "Bonus de parrainage 🎁",
-    body: "Un nouveau membre a rejoint HODIX avec votre code ! +500 FCFA bonus ajoutés à votre compte.", type: "referral",
+  await notifyUser({
+    user_id: referrer.id,
+    title: "Bonus de parrainage 🎁",
+    body: "Un nouveau membre a rejoint HODIX avec votre code ! +500 FCFA bonus ajoutés à votre compte.",
+    type: "referral",
   });
 }
 
 export async function sendWelcomeMessage(userId: string, fullName: string) {
-  const code = genReferralCode();
-  await getSupabase().from("profiles").update({ referral_code: code }).eq("id", userId);
-  await getSupabase().from("notifications").insert({
-    user_id: userId, title: `Bienvenue sur HODIX, ${fullName} ! 🎉`,
+  const sb = getSupabase();
+  const { data: profile } = await sb.from("profiles")
+    .select("referral_code, welcome_email_sent_at")
+    .eq("id", userId)
+    .maybeSingle();
+  if (profile?.welcome_email_sent_at) return;
+
+  let code = profile?.referral_code;
+  if (!code) {
+    code = genReferralCode();
+    await sb.from("profiles").update({ referral_code: code }).eq("id", userId);
+  }
+
+  await notifyUser({
+    user_id: userId,
+    title: `Bienvenue sur HODIX, ${fullName} ! 🎉`,
     body: `Votre compte est créé. Votre code de parrainage personnel est : ${code}\n\nPartagez-le à vos proches et gagnez 500 FCFA de bonus par inscription !`,
-    type: "welcome", is_read: false,
+    type: "welcome",
   });
+
+  try {
+    await sb.functions.invoke("send-welcome", {
+      body: { full_name: fullName, referral_code: code },
+    });
+  } catch { /* best-effort — notification in-app déjà envoyée */ }
 }
 
 /* ── STREAKS ─────────────────────────────────────────────── */
@@ -121,7 +125,7 @@ export async function getStreakData(): Promise<StreakData> {
     const eventKey = `streak_${current}`;
     const { count } = await sb.from("identity_events").select("*", { count: "exact", head: true }).eq("user_id", me).eq("event_type", eventKey);
     if ((count ?? 0) === 0) {
-      await sb.from("identity_events").insert({ user_id: me, event_type: eventKey, score_delta: 10 });
+      await sb.from("identity_events").insert({ user_id: me, event_type: eventKey, points_delta: 10 });
       await sb.from("notifications").insert({
         user_id: me, title: `🔥 ${current} semaines consécutives !`,
         body: `Incroyable ! Vous avez cotisé ${current} semaines d'affilée. +10 pts Trust Score gagné !`,
@@ -153,16 +157,20 @@ export async function getSmartAlerts(): Promise<SmartAlert[]> {
   const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
   const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString();
 
-  const [savingsTxRes, goalsRes, contribRes] = await Promise.all([
-    sb.from("savings_transactions").select("amount, type, created_at").eq("user_id", me).gte("created_at", twoMonthsAgo),
-    sb.from("savings_goals").select("id, name, current_amount, target_amount, deadline").eq("user_id", me),
+  const [savingsTxRes, goalsRes, contribRes, dismissalsRes] = await Promise.all([
+    sb.from("savings_transactions").select("goal_id, amount, type, created_at").eq("user_id", me).gte("created_at", twoMonthsAgo),
+    sb.from("savings_goals").select("id, name, current_amount, target_amount, deadline, is_active").eq("user_id", me).eq("is_active", true),
     sb.from("tontine_contributions").select("created_at, tontine_id").eq("user_id", me).gte("created_at", twoMonthsAgo),
+    sb.from("smart_alert_dismissals").select("alert_id").eq("user_id", me).gt("dismissed_until", now.toISOString()),
   ]);
 
+  const dismissed = dismissalsRes.error
+    ? new Set<string>()
+    : new Set((dismissalsRes.data ?? []).map((d: { alert_id: string }) => d.alert_id));
   const tx = savingsTxRes.data ?? [];
   const goals = goalsRes.data ?? [];
-  const thisMonthDeposits = tx.filter((t: any) => t.type === "deposit" && t.created_at >= oneMonthAgo).reduce((s: number, t: any) => s + Number(t.amount), 0);
-  const prevMonthDeposits = tx.filter((t: any) => t.type === "deposit" && t.created_at < oneMonthAgo).reduce((s: number, t: any) => s + Number(t.amount), 0);
+  const thisMonthDeposits = tx.filter((t: any) => t.type !== "withdrawal" && t.created_at >= oneMonthAgo).reduce((s: number, t: any) => s + Number(t.amount), 0);
+  const prevMonthDeposits = tx.filter((t: any) => t.type !== "withdrawal" && t.created_at < oneMonthAgo).reduce((s: number, t: any) => s + Number(t.amount), 0);
 
   if (prevMonthDeposits > 0 && thisMonthDeposits < prevMonthDeposits * 0.6) {
     const dropPct = Math.round((1 - thisMonthDeposits / prevMonthDeposits) * 100);
@@ -171,14 +179,28 @@ export async function getSmartAlerts(): Promise<SmartAlert[]> {
 
   for (const g of goals as any[]) {
     if (!g.deadline || !g.target_amount) continue;
+    const remaining = Number(g.target_amount) - Number(g.current_amount);
+    if (remaining <= 0) continue;
+
     const deadline = new Date(g.deadline);
     const monthsLeft = (deadline.getFullYear() - now.getFullYear()) * 12 + (deadline.getMonth() - now.getMonth());
-    const remaining = Number(g.target_amount) - Number(g.current_amount);
-    if (monthsLeft > 0 && remaining > 0) {
-      const neededPerMonth = remaining / monthsLeft;
-      if (thisMonthDeposits > 0 && thisMonthDeposits < neededPerMonth * 0.7) {
-        alerts.push({ id: `goal_behind_${g.id}`, type: "goal_behind", severity: "warning", title: `🎯 "${g.name}" en retard`, body: `Il vous faut ${Math.round(neededPerMonth).toLocaleString()} XAF/mois pour atteindre votre objectif à temps.`, action_label: "Voir l'objectif", action_route: `/savings/${g.id}` });
-      }
+    if (monthsLeft <= 0) continue;
+
+    const goalDepositsThisMonth = tx
+      .filter((t: any) => t.goal_id === g.id && t.type !== "withdrawal" && t.created_at >= oneMonthAgo)
+      .reduce((s: number, t: any) => s + Number(t.amount), 0);
+    const neededPerMonth = remaining / monthsLeft;
+
+    if (goalDepositsThisMonth < neededPerMonth * 0.7) {
+      alerts.push({
+        id: `goal_behind_${g.id}`,
+        type: "goal_behind",
+        severity: "warning",
+        title: `🎯 "${g.name}" en retard`,
+        body: `Il vous faut ${Math.round(neededPerMonth).toLocaleString("fr-FR")} XAF/mois pour atteindre votre objectif à temps.`,
+        action_label: "Voir l'objectif",
+        action_route: `/savings/${g.id}`,
+      });
     }
   }
 
@@ -186,10 +208,24 @@ export async function getSmartAlerts(): Promise<SmartAlert[]> {
   const contribs = contribRes.data ?? [];
   const contribThisWeek = contribs.some((c: any) => new Date(c.created_at) >= thisWeekStart);
   if (!contribThisWeek && contribs.length > 0 && now.getDay() >= 4) {
-    alerts.push({ id: "streak_risk", type: "streak_risk", severity: "critical", title: "🔥 Votre streak est en danger !", body: "Vous n'avez pas encore cotisé cette semaine. Cotisez avant dimanche pour maintenir votre série !", action_label: "Cotiser maintenant", action_route: "/(tabs)/community" });
+    alerts.push({ id: "streak_risk", type: "streak_risk", severity: "critical", title: "🔥 Votre streak est en danger !", body: "Vous n'avez pas encore cotisé cette semaine. Cotisez avant dimanche pour maintenir votre série !", action_label: "Cotiser maintenant", action_route: "/(tabs)/groups" });
   }
 
-  return alerts;
+  return alerts.filter((a) => !dismissed.has(a.id));
+}
+
+export async function dismissSmartAlert(alertId: string, days = 7) {
+  const id = alertId?.trim();
+  if (!id) throw { status: 400, detail: "Identifiant d'alerte requis." };
+  const me = await uid();
+  const until = new Date();
+  until.setDate(until.getDate() + days);
+  const { error } = await getSupabase().from("smart_alert_dismissals").upsert(
+    { user_id: me, alert_id: alertId, dismissed_until: until.toISOString() },
+    { onConflict: "user_id,alert_id" },
+  );
+  throwSb(error);
+  return { dismissed: true, alert_id: alertId, dismissed_until: until.toISOString() };
 }
 
 /* ── FAMILY ACCOUNTS ─────────────────────────────────────── */
@@ -252,7 +288,7 @@ export async function flagUserAsFraud(targetUserId: string, reason: string) {
   if (targetProfile?.device_fingerprint) {
     await sb.from("flagged_devices").upsert({ fingerprint: targetProfile.device_fingerprint, user_id: targetUserId, reason, flagged_at: new Date().toISOString() });
   }
-  await sb.from("identity_events").insert({ user_id: targetUserId, event_type: "fraud_flag", score_delta: -9999, metadata: { reason, flagged_by: me } } as any);
+  await sb.from("identity_events").insert({ user_id: targetUserId, event_type: "fraud_flag", points_delta: -9999, metadata: { reason, flagged_by: me } } as any);
   await sb.from("notifications").insert({ user_id: targetUserId, title: "⛔ Compte suspendu", body: `Votre compte a été suspendu pour activité frauduleuse : ${reason}.`, type: "account_suspended" });
   return { flagged: true, name: target?.full_name };
 }

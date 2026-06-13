@@ -8,6 +8,7 @@
       "@/src/*": ["./src/*"]
     },
     "jsx": "react-native",
+    "module": "esnext",
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "noEmit": true,
@@ -15,7 +16,7 @@
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
-    "types": ["react", "react-native"]
+    "types": ["react", "node"]
   },
   "include": [
     "**/*.ts",
@@ -27,6 +28,7 @@
     "node_modules",
     "dist",
     "web-build",
+    "supabase/functions",
     "*.py"
   ]
 }

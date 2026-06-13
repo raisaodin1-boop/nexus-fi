@@ -13,6 +13,11 @@ export * from "./db/admin";
 export * from "./db/notifications";
 export * from "./db/messages";
 export * from "./db/misc";
+export * from "./db/payments";
+export * from "./db/kyc";
+export * from "./db/reports";
+export * from "./db/loans";
+export * from "./db/extras";
 export * from "./db/wallet-security";
 export { invalidateCache } from "./db/helpers";
 
@@ -22,6 +27,7 @@ import { getRates } from "@/src/exchange-rates";
 
 export async function getWallet() { return walletDb.getWallet(); }
 export async function getWalletTransactions() { return walletDb.getWalletTransactions(); }
+export async function getWalletTransaction(id: string) { return walletDb.getWalletTransaction(id); }
 export async function getExchangeRates() { return getRates(); }
 export async function topupWallet(body: any) { return walletDb.topupFromMobileMoney(body); }
 export async function withdrawWallet(body: any) { return walletDb.withdrawToMobileMoney(body); }

@@ -13,7 +13,7 @@ import { api, ApiError } from "@/src/api";
 import { useAuth } from "@/src/auth-context";
 import { Button, Card, Field } from "@/src/ui";
 import { Colors, Radius, Spacing, Shadow } from "@/src/theme";
-import { DatePicker } from "@/src/date-picker";
+import { DatePicker, birthDateBounds } from "@/src/date-picker";
 
 const GENDERS = ["Homme", "Femme", "Autre"];
 const COUNTRIES = [
@@ -157,7 +157,6 @@ export default function CompleteProfile() {
         city: city.trim(),
         country,
         occupation: occupation.trim(),
-        ...(idDocBase64 ? { id_doc_base64: idDocBase64 } : {}),
       });
       await refresh();
       router.replace("/kyc");
@@ -201,7 +200,13 @@ export default function CompleteProfile() {
                 <Field label="Nom de famille *" placeholder="DIALLO" value={lastName} onChangeText={setLastName} autoCapitalize="characters" testID="profile-lastname" />
                 <SelectField label="Genre" value={gender} onPress={() => setModal("gender")} testID="profile-gender" />
 
-                <DatePicker label="Date de naissance *" value={dobDate} onChange={setDobDate} testID="profile-dob" />
+                <DatePicker
+                  label="Date de naissance *"
+                  value={dobDate}
+                  onChange={setDobDate}
+                  {...birthDateBounds()}
+                  testID="profile-dob"
+                />
 
                 <Field label="Lieu de naissance *" placeholder="Douala, Cameroun" value={birthPlace} onChangeText={setBirthPlace} testID="profile-birthplace" />
 

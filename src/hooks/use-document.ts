@@ -10,12 +10,12 @@
  *   Level 2 — admin-approved KYC (kyc_status === "approved")
  */
 import { useState, useCallback } from "react";
-import { Alert, Modal, Text, TouchableOpacity, View, StyleSheet, Platform } from "react-native";
-import * as Print from "expo-print";
-import * as Sharing from "expo-sharing";
+import { Alert, Modal, Text, TouchableOpacity, View, StyleSheet } from "react-native";
 import { router } from "expo-router";
 import { api } from "@/src/api";
+import { downloadOrSharePdf } from "@/src/pdf-download";
 import { getSupabase } from "@/src/supabase";
+import { wrapYorixDocumentHtml } from "@/src/yorix-document-html";
 
 export type DocKind =
   | "tontine_certificate"
@@ -81,123 +81,65 @@ function buildCertificateHtml(kind: DocKind, data: any): string {
   });
   const fullName = data?.full_name ?? "Membre HODIX";
   const verifyCode = Math.random().toString(36).toUpperCase().slice(2, 10);
+  const brandColor = "#1B5E20";
 
-  const brandColor = "#00C896";
-  const indigoColor = "#6366F1";
+  const field = (label: string, value: string, valueStyle = "") =>
+    `<div class="field"><div class="field-label">${label}</div><div class="field-value" ${valueStyle ? `style="${valueStyle}"` : ""}>${value}</div></div>`;
 
-  const base = `
-    <html>
-    <head>
-      <meta charset="UTF-8"/>
-      <style>
-        body { font-family: 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background: #F7F8FC; color: #0D0F1A; }
-        .page { max-width: 700px; margin: 40px auto; background: #fff; border-radius: 16px; padding: 48px; box-shadow: 0 4px 32px rgba(0,0,0,0.08); }
-        .header { display: flex; align-items: center; gap: 16px; margin-bottom: 32px; border-bottom: 2px solid ${brandColor}; padding-bottom: 20px; }
-        .logo { width: 56px; height: 56px; background: ${brandColor}; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff; font-weight: 900; }
-        .brand { font-size: 28px; font-weight: 900; color: ${brandColor}; letter-spacing: -1px; }
-        .title { font-size: 22px; font-weight: 800; color: #0D0F1A; margin: 24px 0 8px; }
-        .subtitle { font-size: 14px; color: #6B7280; margin-bottom: 28px; }
-        .field { margin-bottom: 16px; }
-        .field-label { font-size: 11px; font-weight: 700; color: #6B7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-        .field-value { font-size: 16px; font-weight: 600; color: #0D0F1A; }
-        .badge { display: inline-block; background: ${brandColor}20; color: ${brandColor}; font-weight: 700; font-size: 13px; padding: 4px 14px; border-radius: 20px; margin-top: 8px; }
-        .verify { margin-top: 32px; padding: 16px; background: #F0F2F8; border-radius: 10px; }
-        .verify-label { font-size: 11px; font-weight: 700; color: #6B7280; margin-bottom: 4px; }
-        .verify-code { font-size: 18px; font-weight: 900; color: ${indigoColor}; letter-spacing: 2px; }
-        .verify-url { font-size: 11px; color: #6B7280; margin-top: 4px; }
-        .footer { margin-top: 32px; padding-top: 20px; border-top: 1px solid #E5E7EB; font-size: 11px; color: #9CA3AF; text-align: center; }
-      </style>
-    </head>
-    <body>
-      <div class="page">
-        <div class="header">
-          <div class="logo">H</div>
-          <div>
-            <div class="brand">HODIX</div>
-            <div style="font-size:12px;color:#6B7280;">Plateforme d'épargne et tontines digitales</div>
-          </div>
-        </div>
-  `;
-
-  const footer = `
-        <div class="verify">
-          <div class="verify-label">Code de vérification</div>
-          <div class="verify-code">${verifyCode}</div>
-          <div class="verify-url">https://hodix.app/verify/${verifyCode}</div>
-        </div>
-        <div class="footer">
-          Document généré le ${now} · HODIX © 2024 · Certifié authentique
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
+  const wrap = (title: string, subtitle: string, body: string) =>
+    wrapYorixDocumentHtml(body, {
+      documentTitle: title,
+      subtitle,
+      holderName: fullName,
+      verificationCode: verifyCode,
+      docRef: verifyCode,
+    });
 
   if (kind === "trust_score") {
     const score = data?.trust_score?.score ?? data?.score ?? 0;
     const level = data?.trust_score?.level ?? data?.level ?? "Bronze";
     const color = score >= 810 ? "#8B5CF6" : score >= 610 ? "#D4AF37" : score >= 310 ? "#8B9EB0" : "#CD7F32";
-    return base + `
-        <div class="title">Certificat Trust Score</div>
-        <div class="subtitle">Attestation officielle du score de confiance HODIX</div>
-        <div class="field"><div class="field-label">Titulaire</div><div class="field-value">${fullName}</div></div>
-        <div class="field">
-          <div class="field-label">Score de confiance</div>
-          <div class="field-value" style="font-size:36px;font-weight:900;color:${color};">${score} <span style="font-size:16px;color:#6B7280;">/ 1000</span></div>
-          <div class="badge" style="background:${color}20;color:${color};">${level}</div>
-        </div>
-        <div class="field"><div class="field-label">Date de certification</div><div class="field-value">${now}</div></div>
-    ` + footer;
+    return wrap("Certificat Trust Score", "Attestation officielle du score de confiance HODIX", `
+      ${field("Score de confiance", `${score} <span style="font-size:14px;color:#64748b">/ 1000</span>`, `font-size:32px;font-weight:900;color:${color};`)}
+      <div class="badge" style="background:${color}20;color:${color};">${level}</div>
+      ${field("Date de certification", now)}
+      <p style="font-size:11px;color:#64748b;margin-top:12px;">Vérification : https://hodix.app/verify/${verifyCode}</p>
+    `);
   }
 
   if (kind === "savings_summary") {
     const totalSaved = data?.total_saved ?? 0;
     const activeGoals = data?.active_goals ?? 0;
     const progressPct = data?.progress_pct ?? 0;
-    return base + `
-        <div class="title">Relevé d'Épargne</div>
-        <div class="subtitle">Résumé officiel de votre épargne HODIX</div>
-        <div class="field"><div class="field-label">Titulaire</div><div class="field-value">${fullName}</div></div>
-        <div class="field"><div class="field-label">Total épargné</div><div class="field-value" style="font-size:28px;font-weight:900;color:${brandColor};">${Math.round(totalSaved).toLocaleString("fr-FR")} XAF</div></div>
-        <div class="field"><div class="field-label">Objectifs actifs</div><div class="field-value">${activeGoals}</div></div>
-        <div class="field"><div class="field-label">Progression globale</div><div class="field-value">${progressPct}%</div></div>
-        <div class="field"><div class="field-label">Date du relevé</div><div class="field-value">${now}</div></div>
-    ` + footer;
+    return wrap("Relevé d'Épargne", "Résumé officiel de votre épargne HODIX", `
+      ${field("Total épargné", `${Math.round(totalSaved).toLocaleString("fr-FR")} XAF`, `font-size:24px;font-weight:900;color:${brandColor};`)}
+      ${field("Objectifs actifs", String(activeGoals))}
+      ${field("Progression globale", `${progressPct}%`)}
+      ${field("Date du relevé", now)}
+    `);
   }
 
   if (kind === "tontine_certificate") {
     const tontineName = data?.tontine?.name ?? data?.name ?? "Tontine HODIX";
     const role = data?.role ?? "Membre";
-    return base + `
-        <div class="title">Certificat de Participation</div>
-        <div class="subtitle">Attestation officielle de participation à une tontine HODIX</div>
-        <div class="field"><div class="field-label">Titulaire</div><div class="field-value">${fullName}</div></div>
-        <div class="field"><div class="field-label">Tontine</div><div class="field-value">${tontineName}</div></div>
-        <div class="field"><div class="field-label">Rôle</div><div class="field-value">${role}</div></div>
-        <div class="field"><div class="field-label">Date de certification</div><div class="field-value">${now}</div></div>
-    ` + footer;
+    return wrap("Certificat de Participation", "Attestation officielle de participation à une tontine HODIX", `
+      ${field("Tontine", tontineName)}
+      ${field("Rôle", role)}
+      ${field("Date de certification", now)}
+    `);
   }
 
   if (kind === "contribution_receipt") {
     const amount = data?.amount ?? 0;
     const tontineName = data?.tontine_name ?? "Tontine HODIX";
-    return base + `
-        <div class="title">Reçu de Cotisation</div>
-        <div class="subtitle">Reçu officiel de votre cotisation HODIX</div>
-        <div class="field"><div class="field-label">Payé par</div><div class="field-value">${fullName}</div></div>
-        <div class="field"><div class="field-label">Tontine</div><div class="field-value">${tontineName}</div></div>
-        <div class="field"><div class="field-label">Montant</div><div class="field-value" style="font-size:28px;font-weight:900;color:${brandColor};">${Math.round(amount).toLocaleString("fr-FR")} XAF</div></div>
-        <div class="field"><div class="field-label">Date</div><div class="field-value">${now}</div></div>
-    ` + footer;
+    return wrap("Reçu de Cotisation", "Reçu officiel de votre cotisation HODIX", `
+      ${field("Tontine", tontineName)}
+      ${field("Montant", `${Math.round(amount).toLocaleString("fr-FR")} XAF`, `font-size:24px;font-weight:900;color:${brandColor};`)}
+      ${field("Date", now)}
+    `);
   }
 
-  // Default / disbursement
-  return base + `
-      <div class="title">Attestation HODIX</div>
-      <div class="subtitle">Document officiel HODIX</div>
-      <div class="field"><div class="field-label">Titulaire</div><div class="field-value">${fullName}</div></div>
-      <div class="field"><div class="field-label">Date</div><div class="field-value">${now}</div></div>
-  ` + footer;
+  return wrap("Attestation HODIX", "Document officiel HODIX", field("Date", now));
 }
 
 /* ── Main hook ─────────────────────────────────────────────────── */
@@ -270,19 +212,8 @@ export function useDocument() {
 
         setDownloading(true);
 
-        if (Platform.OS === "web") {
-          const blob = new Blob([html], { type: "text/html" });
-          const url = URL.createObjectURL(blob);
-          window.open(url, "_blank");
-          return;
-        }
-
-        const { uri } = await Print.printToFileAsync({ html, base64: false });
-        await Sharing.shareAsync(uri, {
-          mimeType: "application/pdf",
-          dialogTitle: "Enregistrer le certificat",
-          UTI: "com.adobe.pdf",
-        });
+        const filename = `hodix-${params.kind}.pdf`;
+        await downloadOrSharePdf(html, filename, "Enregistrer le certificat");
       } catch (e: any) {
         const msg = e?.message ?? "Erreur lors de la génération du document.";
         setError(msg);

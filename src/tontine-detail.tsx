@@ -21,11 +21,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowLeft, ArrowDown, ArrowUp, Award, CheckCircle, ChevronRight,
-  Copy, Crown, MessageSquare, RefreshCw, Shield, Shuffle, Trophy, Users as UsersIcon,
+  Copy, Crown, MessageSquare, RefreshCw, Shield, Shuffle, Smartphone, Trophy, Users as UsersIcon,
   Wallet, X,
 } from "lucide-react-native";
 
 import { api, ApiError, formatXAF } from "@/src/api";
+import { useAuth } from "@/src/auth-context";
+import { openPaymentScreen } from "@/src/payment-nav";
 import { supabase } from "@/src/supabase";
 import { Button, Card, Field, SkeletonBox, SkeletonCard } from "@/src/ui";
 import { DocumentButton } from "@/src/document-button";
@@ -408,16 +410,13 @@ function DisbursementHistory({ disbursements, currency }: { disbursements: Disbu
 
 export function TontineDetailView({ id }: { id: string }) {
   const router = useRouter();
+  const { user } = useAuth();
   const [data, setData] = useState<TontineData | null>(null);
   const [loading, setLoading] = useState(true);
   const [disbursements, setDisbursements] = useState<Disbursement[]>([]);
   const [showDisbModal, setShowDisbModal] = useState(false);
   const [advanceBusy, setAdvanceBusy] = useState(false);
   const [activeTab, setActiveTab] = useState<"cycle" | "rotation" | "history" | "members" | "contributions">("cycle");
-  const [contributeAmount, setContributeAmount] = useState("");
-  const [contributeMemberId, setContributeMemberId] = useState<string | null>(null);
-  const [contributeBusy, setContributeBusy] = useState(false);
-  const [contributeError, setContributeError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
@@ -455,20 +454,19 @@ export function TontineDetailView({ id }: { id: string }) {
     } finally { setAdvanceBusy(false); }
   };
 
-  const contributeManual = async () => {
+  const openPayment = () => {
     if (!data) return;
-    const amt = parseFloat(contributeAmount);
-    if (!amt || amt <= 0) { setContributeError("Montant invalide"); return; }
-    const target = contributeMemberId ?? data.members[0]?.user_id;
-    if (!target) { setContributeError("Aucun membre"); return; }
-    setContributeError(null); setContributeBusy(true);
-    try {
-      await api.post(`/tontines/${id}/contribute`, { member_user_id: target, amount: amt });
-      setContributeAmount("");
-      await load();
-    } catch (e) {
-      setContributeError(e instanceof ApiError ? e.detail : "Erreur");
-    } finally { setContributeBusy(false); }
+    const amount = data.tontine.contribution_amount;
+    if (!amount || amount <= 0) {
+      Alert.alert("Montant invalide", "Le montant de cotisation n'est pas configuré pour cette tontine.");
+      return;
+    }
+    openPaymentScreen(router, {
+      kind: "tontine_contribution",
+      tontine_id: id,
+      amount,
+      label: data.tontine.name,
+    });
   };
 
   const shareWhatsApp = async () => {
@@ -500,6 +498,44 @@ export function TontineDetailView({ id }: { id: string }) {
   }
 
   const { tontine, is_admin, members, contributions, cycle } = data;
+  const currentCycle = tontine.current_cycle ?? 1;
+  const hasPaidCurrentCycle = !!user?.id && contributions.some(
+    (c) => c.user_id === user.id && c.cycle === currentCycle,
+  );
+  const canContribute = !!tontine.contribution_amount && tontine.contribution_amount > 0;
+
+  const ContributePanel = () => (
+    <View style={{ marginTop: 16, gap: 10 }}>
+      <Text style={styles.sectionTitle}>
+        {hasPaidCurrentCycle ? "Cotisation du cycle" : "Payer ma cotisation"}
+      </Text>
+      {hasPaidCurrentCycle ? (
+        <Card style={{ padding: 14, gap: 6, borderColor: Colors.accent, borderWidth: 1 }}>
+          <Text style={{ color: Colors.accent, fontWeight: "800" }}>✓ Cotisation enregistrée pour le cycle {currentCycle}</Text>
+          <Text style={{ color: Colors.textMuted, fontSize: 12 }}>
+            Montant : {formatXAF(tontine.contribution_amount, tontine.currency)}
+          </Text>
+        </Card>
+      ) : canContribute ? (
+        <Card style={{ padding: 16, gap: 12 }}>
+          <Text style={{ color: Colors.textMuted, fontSize: 13 }}>
+            Montant du cycle : {formatXAF(tontine.contribution_amount, tontine.currency)}
+          </Text>
+          <Button
+            label={`Cotiser — ${formatXAF(tontine.contribution_amount, tontine.currency)}`}
+            onPress={openPayment}
+            icon={<Smartphone color="#fff" size={16} />}
+            testID="tontine-pay"
+          />
+          <Text style={{ color: Colors.textSubtle, fontSize: 11, textAlign: "center" }}>
+            Paiement électronique CinetPay uniquement — crédit après confirmation du débit
+          </Text>
+        </Card>
+      ) : (
+        <Card><Text style={styles.emptyText}>Montant de cotisation non configuré.</Text></Card>
+      )}
+    </View>
+  );
 
   const TABS = [
     { key: "cycle" as const, label: "Cycle" },
@@ -577,6 +613,8 @@ export function TontineDetailView({ id }: { id: string }) {
               <Text style={styles.codeCta}>Partager</Text>
             </TouchableOpacity>
 
+            <ContributePanel />
+
             {/* PDF certificate */}
             <View style={{ marginTop: 16 }}>
               <DocumentButton kind="tontine_certificate" refId={id} compact />
@@ -620,41 +658,6 @@ export function TontineDetailView({ id }: { id: string }) {
               </TouchableOpacity>
             )}
 
-            {/* Admin: Manual contribution */}
-            {is_admin && (
-              <View style={{ marginTop: 20 }}>
-                <Text style={styles.sectionTitle}>Contribution manuelle (cash)</Text>
-                <Card style={{ padding: 16, gap: 12 }}>
-                  <Field
-                    label="Montant"
-                    value={contributeAmount}
-                    onChangeText={setContributeAmount}
-                    placeholder={tontine.contribution_amount?.toString()}
-                    keyboardType="numeric"
-                    testID="tontine-contrib-amount"
-                  />
-                  <Text style={styles.fieldLabel}>Membre</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View style={{ flexDirection: "row", gap: 8 }}>
-                      {members.map((m) => {
-                        const active = (contributeMemberId ?? members[0]?.user_id) === m.user_id;
-                        return (
-                          <TouchableOpacity
-                            key={m.id}
-                            onPress={() => setContributeMemberId(m.user_id)}
-                            style={[styles.memberChip, active && styles.memberChipActive]}
-                          >
-                            <Text style={[styles.memberChipText, active && { color: "#fff" }]}>{m.full_name}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  </ScrollView>
-                  {contributeError && <Text style={styles.errorText}>{contributeError}</Text>}
-                  <Button label="Enregistrer" onPress={contributeManual} loading={contributeBusy} testID="tontine-contrib-submit" />
-                </Card>
-              </View>
-            )}
           </>
         )}
 
@@ -723,6 +726,7 @@ export function TontineDetailView({ id }: { id: string }) {
         {/* ── TAB: CONTRIBUTIONS ── */}
         {activeTab === "contributions" && (
           <View style={{ gap: 8 }}>
+            <ContributePanel />
             {contributions.length === 0
               ? <Card><Text style={styles.emptyText}>Aucune cotisation enregistrée.</Text></Card>
               : contributions.map((c) => (
