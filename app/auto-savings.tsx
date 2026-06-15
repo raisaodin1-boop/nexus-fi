@@ -207,7 +207,7 @@ export default function AutoSavingsScreen() {
             </View>
 
             <View style={s.formActions}>
-              <Button label="Annuler" variant="outline" onPress={() => setShowForm(false)} style={{ flex: 1 }} />
+              <Button label="Annuler" variant="ghost" onPress={() => setShowForm(false)} style={{ flex: 1 }} />
               <Button label={saving ? "..." : "Activer"} onPress={handleCreate} loading={saving} style={{ flex: 1 }} />
             </View>
           </View>
@@ -223,22 +223,22 @@ const s = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: 4 },
   back: { padding: 8 },
   title: { fontSize: 20, fontWeight: "700", color: Colors.text },
-  subtitle: { fontSize: 13, color: Colors.muted, marginTop: 1 },
+  subtitle: { fontSize: 13, color: Colors.textMuted, marginTop: 1 },
   addBtn: { backgroundColor: Colors.primary, borderRadius: 20, padding: 8 },
   empty: { alignItems: "center", gap: 8, paddingVertical: 40 },
   emptyTitle: { fontSize: 17, fontWeight: "700", color: Colors.text },
-  emptyText: { fontSize: 14, color: Colors.muted, textAlign: "center", paddingHorizontal: 20 },
+  emptyText: { fontSize: 14, color: Colors.textMuted, textAlign: "center", paddingHorizontal: 20 },
   card: { backgroundColor: "#fff", borderRadius: Radius.lg, padding: Spacing.md, gap: Spacing.sm, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
   cardTop: { flexDirection: "row", alignItems: "center", gap: 12 },
   ruleIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: Colors.primary + "18", alignItems: "center", justifyContent: "center" },
   ruleName: { fontSize: 15, fontWeight: "700", color: Colors.text },
-  ruleDetail: { fontSize: 13, color: Colors.muted, marginTop: 2 },
+  ruleDetail: { fontSize: 13, color: Colors.textMuted, marginTop: 2 },
   nextRun: { backgroundColor: Colors.primary + "10", borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 5 },
   nextRunLabel: { fontSize: 12, color: Colors.primary, fontWeight: "600" },
   cardStats: { flexDirection: "row", alignItems: "center", gap: 16 },
   stat: { flex: 1 },
   statVal: { fontSize: 15, fontWeight: "700", color: Colors.text },
-  statLbl: { fontSize: 11, color: Colors.muted },
+  statLbl: { fontSize: 11, color: Colors.textMuted },
   deleteBtn: { padding: 8 },
   form: { backgroundColor: "#fff", borderRadius: Radius.lg, padding: Spacing.md, gap: 12, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
   formTitle: { fontSize: 16, fontWeight: "700", color: Colors.text },
@@ -250,7 +250,7 @@ const s = StyleSheet.create({
   freqRow: { flexDirection: "row", gap: 8, marginTop: 4 },
   freqBtn: { flex: 1, borderRadius: Radius.sm, borderWidth: 1.5, borderColor: "#E2E8F0", padding: 10, alignItems: "center" },
   freqBtnActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + "10" },
-  freqLabel: { fontSize: 12, fontWeight: "600", color: Colors.muted },
+  freqLabel: { fontSize: 12, fontWeight: "600", color: Colors.textMuted },
   freqLabelActive: { color: Colors.primary },
   formActions: { flexDirection: "row", gap: 10, marginTop: 4 },
 });

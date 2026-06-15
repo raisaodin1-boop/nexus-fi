@@ -182,7 +182,7 @@ export default function SplitExpenseScreen() {
             </TouchableOpacity>
 
             <View style={s.formActions}>
-              <Button label="Annuler" variant="outline" onPress={() => setShowForm(false)} style={{ flex: 1 }} />
+              <Button label="Annuler" variant="ghost" onPress={() => setShowForm(false)} style={{ flex: 1 }} />
               <Button label={saving ? "..." : "Créer"} onPress={handleCreate} loading={saving} style={{ flex: 1 }} />
             </View>
           </View>
@@ -197,7 +197,7 @@ export default function SplitExpenseScreen() {
                 {activeSplit.note ? <Text style={s.detailNote}>{activeSplit.note}</Text> : null}
               </View>
               <TouchableOpacity onPress={() => setActiveId(null)}>
-                <Text style={{ color: Colors.muted, fontSize: 12 }}>Fermer</Text>
+                <Text style={{ color: Colors.textMuted, fontSize: 12 }}>Fermer</Text>
               </TouchableOpacity>
             </View>
             {(() => {
@@ -289,16 +289,16 @@ const s = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: 4 },
   back: { padding: 8 },
   title: { fontSize: 20, fontWeight: "700", color: Colors.text },
-  subtitle: { fontSize: 13, color: Colors.muted, marginTop: 1 },
+  subtitle: { fontSize: 13, color: Colors.textMuted, marginTop: 1 },
   addBtn: { backgroundColor: Colors.primary, borderRadius: 20, padding: 8 },
   empty: { alignItems: "center", gap: 8, paddingVertical: 40 },
   emptyTitle: { fontSize: 17, fontWeight: "700", color: Colors.text },
-  emptyText: { fontSize: 14, color: Colors.muted, textAlign: "center", paddingHorizontal: 20 },
+  emptyText: { fontSize: 14, color: Colors.textMuted, textAlign: "center", paddingHorizontal: 20 },
   card: { backgroundColor: "#fff", borderRadius: Radius.lg, padding: Spacing.md, gap: 10, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
   cardTop: { flexDirection: "row", alignItems: "center", gap: 12 },
   splitIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: Colors.primary + "18", alignItems: "center", justifyContent: "center" },
   cardTitle: { fontSize: 15, fontWeight: "700", color: Colors.text },
-  cardSub: { fontSize: 12, color: Colors.muted, marginTop: 2 },
+  cardSub: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
   cardTotal: { fontSize: 15, fontWeight: "700", color: Colors.text },
   badge: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, marginTop: 3 },
   progressBar: { height: 5, backgroundColor: "#E2E8F0", borderRadius: 3, overflow: "hidden" },
@@ -314,11 +314,11 @@ const s = StyleSheet.create({
   detail: { backgroundColor: "#fff", borderRadius: Radius.lg, padding: Spacing.md, gap: 10, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
   detailHeader: { flexDirection: "row", alignItems: "flex-start" },
   detailTitle: { fontSize: 16, fontWeight: "700", color: Colors.text },
-  detailNote: { fontSize: 13, color: Colors.muted, marginTop: 2 },
+  detailNote: { fontSize: 13, color: Colors.textMuted, marginTop: 2 },
   pRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8, borderTopWidth: 1, borderTopColor: "#F1F5F9" },
   pRowPaid: { opacity: 0.7 },
   pAvatar: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
   pName: { fontSize: 14, fontWeight: "600", color: Colors.text },
-  pPhone: { fontSize: 12, color: Colors.muted },
+  pPhone: { fontSize: 12, color: Colors.textMuted },
   pAmount: { fontSize: 14, fontWeight: "700" },
 });
