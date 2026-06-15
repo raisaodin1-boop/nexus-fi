@@ -124,7 +124,12 @@ export async function topupFromMobileMoney(payload: TopupPayload): Promise<Walle
     p_phone: payload.phone,
     p_amount_xaf: payload.amount,
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    const msg = error.message.includes("insufficient") ? "Solde insuffisant."
+      : error.message.includes("not found") ? "Wallet introuvable — contactez le support."
+      : error.message;
+    throw new Error(msg);
+  }
   return mapTx(data as Record<string, unknown>);
 }
 
@@ -152,7 +157,13 @@ export async function withdrawToMobileMoney(payload: WithdrawPayload): Promise<W
     p_phone: payload.phone,
     p_amount_xaf: amountXaf,
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    const msg = error.message.includes("insufficient") || error.message.includes("balance")
+      ? "Solde insuffisant pour effectuer ce retrait."
+      : error.message.includes("limit") ? "Limite de retrait journalière atteinte."
+      : error.message;
+    throw new Error(msg);
+  }
 
   return { ...tx, amount: Number(tx.amount), amount_xaf: Number(tx.amount_xaf) };
 }
@@ -193,7 +204,13 @@ export async function transferToMember(payload: TransferPayload): Promise<Wallet
     p_amount_xaf: amountXaf,
     p_note: payload.note ?? null,
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    const msg = error.message.includes("insufficient") || error.message.includes("balance")
+      ? "Solde insuffisant pour ce transfert."
+      : error.message.includes("limit") ? "Limite de transfert atteinte."
+      : error.message;
+    throw new Error(msg);
+  }
 
   return { ...tx, amount: Number(tx.amount), amount_xaf: Number(tx.amount_xaf) };
 }
@@ -212,7 +229,13 @@ export async function payContributionFromWallet(tontineId: string, amount: numbe
     p_amount: amount,
     p_cycle: cycle,
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    const msg = error.message.includes("insufficient") || error.message.includes("balance")
+      ? "Solde insuffisant pour payer cette cotisation."
+      : error.message.includes("already") ? "Cotisation déjà payée pour ce cycle."
+      : error.message;
+    throw new Error(msg);
+  }
 
   return { ...tx, amount: Number(tx.amount), amount_xaf: Number(tx.amount_xaf) };
 }

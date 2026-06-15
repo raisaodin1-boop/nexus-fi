@@ -322,13 +322,22 @@ export async function adminHandlePromotion(userId: string, approve: boolean) {
   return { detail: `Promotion ${approve ? "accordée" : "refusée"}` };
 }
 
+let _lastBroadcastAt = 0;
+const BROADCAST_COOLDOWN_MS = 60 * 60 * 1000; // 1 broadcast max par heure
+
 export async function adminBroadcast(title: string, body: string) {
+  const now = Date.now();
+  if (now - _lastBroadcastAt < BROADCAST_COOLDOWN_MS) {
+    const waitMin = Math.ceil((BROADCAST_COOLDOWN_MS - (now - _lastBroadcastAt)) / 60000);
+    throw { status: 429, detail: `Attendez encore ${waitMin} min avant le prochain broadcast.` };
+  }
   const { data: profiles } = await getSupabase().from("profiles").select("id");
   if (!profiles?.length) return { detail: "Aucun membre trouvé" };
   const rows = profiles.map((p: any) => ({ user_id: p.id, title, body, type: "broadcast", is_read: false }));
   for (let i = 0; i < rows.length; i += 100) {
     await getSupabase().from("notifications").insert(rows.slice(i, i + 100));
   }
+  _lastBroadcastAt = Date.now();
   return { detail: `Message envoyé à ${profiles.length} membres` };
 }
 

@@ -5,6 +5,7 @@ import { supabase } from "@/src/supabase";
 import { sendWelcomeMessage, applyReferralBonus } from "@/src/db";
 import { normalizeEmail } from "@/src/db/helpers";
 import { getOAuthRedirectUrl } from "@/src/oauth-redirect";
+import { api } from "@/src/api";
 
 // Complete auth session on mobile (no-op on web)
 if (Platform.OS !== "web") {
@@ -99,10 +100,20 @@ async function buildUser(sbUser: any): Promise<User> {
   };
 }
 
+const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 min d'inactivité
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const initialized = useRef(false);
+  const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const resetInactivityTimer = useCallback(() => {
+    if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+    inactivityTimer.current = setTimeout(() => {
+      supabase.auth.signOut().catch(() => {});
+    }, SESSION_TIMEOUT_MS);
+  }, []);
 
   useEffect(() => {
     // Only initialize once
@@ -114,6 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (session?.user) {
         const u = await buildUser(session.user);
         setUser(u);
+        resetInactivityTimer();
         if (event === "SIGNED_IN") {
           setTimeout(async () => {
             try {
@@ -145,8 +157,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      subscription.unsubscribe();
+      if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+    };
+  }, [resetInactivityTimer]);
 
   const login = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email: normalizeEmail(email), password });
@@ -241,10 +256,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    // Clear local state immediately — no waiting for network
+    if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
     setUser(null);
     setLoading(false);
-    // Sign out from Supabase in background
     supabase.auth.signOut().catch(() => {});
   }, []);
 
