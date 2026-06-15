@@ -29,7 +29,7 @@ interface TrustScore {
   components: Record<string, number>; tips: string[];
   stats: { total_saved: number; tontines: number; associations: number; cooperatives: number; deposits_90d: number; contributions_made: number; account_age_days: number };
 }
-interface Insight { text: string; kind: string }
+interface Insight { text: string; kind: string; route?: string; action_label?: string }
 interface Series { days: number; series: { date: string; value: number }[] }
 
 export function MemberDashboard() {
@@ -261,9 +261,19 @@ export function MemberDashboard() {
         <SectionTitle>Vos insights</SectionTitle>
         <View style={{ paddingHorizontal: Spacing.xl }}>
           {insights.slice(0, 4).map((it, i) => (
-            <Card key={i} style={{ marginBottom: 10, padding: 16 }}>
-              <Text style={styles.insightText}>{it.text}</Text>
-            </Card>
+            <TouchableOpacity
+              key={i}
+              activeOpacity={0.85}
+              onPress={() => it.route && router.push(it.route as any)}
+              testID={`home-insight-${i}`}
+            >
+              <Card style={{ marginBottom: 10, padding: 16 }}>
+                <Text style={styles.insightText}>{it.text}</Text>
+                {it.action_label ? (
+                  <Text style={styles.insightAction}>{it.action_label} →</Text>
+                ) : null}
+              </Card>
+            </TouchableOpacity>
           ))}
         </View>
 
@@ -344,6 +354,7 @@ const styles = StyleSheet.create({
   promoTitle: { color: "#fff", fontWeight: "900", fontSize: 14 },
   promoDesc: { color: "rgba(255,255,255,0.85)", fontSize: 11, marginTop: 2, fontWeight: "600" },
   insightText: { color: Colors.text, fontSize: 14, lineHeight: 20, fontWeight: "500" },
+  insightAction: { color: Colors.accent, fontSize: 12, fontWeight: "700", marginTop: 8 },
   heroCard: { borderRadius: Radius.xxl, overflow: "hidden", height: 180, position: "relative" },
   heroImg: { width: "100%", height: "100%" },
   heroOverlay: { position: "absolute", left: 0, right: 0, bottom: 0, top: "30%" },

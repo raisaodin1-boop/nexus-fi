@@ -238,7 +238,7 @@ export async function contributeTontine(id: string, amount: number) {
   throwSb(error);
   await getSupabase().from("tontine_members")
     .update({ status: "a_jour" }).eq("tontine_id", id).eq("user_id", me);
-  await addIdentityEvent(me, "tontine_contribution", amount >= 50000 ? 1 : 0.5);
+  await addIdentityEvent(me, "tontine_contribution", 1);
   return { detail: "Contribution enregistrée" };
 }
 
@@ -385,7 +385,7 @@ export async function contributeTontineSecure(id: string, amount: number) {
     }
   }
 
-  await addIdentityEvent(me, "tontine_contribution", amount >= 50000 ? 1 : 0.5);
+  await addIdentityEvent(me, "tontine_contribution", 1);
   return { detail: "Contribution enregistrée", reserve_deducted: reserveAmount, net_amount: netAmount };
 }
 

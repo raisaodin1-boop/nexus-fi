@@ -295,6 +295,10 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"  && s[0] === "reports-b64" && s[1])                              return (await db.getReportHtml(s[1] as "identity" | "trust-score" | "savings")) as T;
     if (method === "GET"  && s[0] === "reports" && s[1] === "certified" && s[2])
       return (await db.getCertifiedReport(s[2] as "identity" | "trust-score" | "savings")) as T;
+    if (method === "GET"  && s[0] === "certificates" && s[1] === "purchases")
+      return (await db.listCertificatePurchases()) as T;
+    if (method === "POST" && s[0] === "certificates" && s[1] === "send-email")
+      return (await db.sendCertificateEmail(body?.kind, body?.email, body?.payment_id)) as T;
     if (method === "POST" && s[0] === "loans" && s[1] === "apply")                       return (await db.submitLoanApplication(body)) as T;
     if (method === "GET"  && s[0] === "loans" && s[1] === "applications")                  return (await db.getLoanApplications()) as T;
 

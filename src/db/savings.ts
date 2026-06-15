@@ -48,7 +48,7 @@ export async function depositSaving(id: string, amount: number, note?: string) {
   const { data: txs } = await getSupabase().from("savings_transactions").select("amount").eq("goal_id", id);
   const total = (txs ?? []).reduce((s: number, t: any) => s + Number(t.amount), 0);
   await getSupabase().from("savings_goals").update({ current_amount: total }).eq("id", id);
-  await addIdentityEvent(me, "savings_deposit", amount >= 50000 ? 1 : 0.5);
+  await addIdentityEvent(me, "savings_deposit", 1);
   invalidateCache(`savings-${me}`);
   invalidateCache(`savings-summary-${me}`);
   invalidateCache(`credit-score-${me}`);
@@ -83,6 +83,12 @@ export async function savingsGoalTransaction(
   const { data: txs } = await sb.from("savings_transactions").select("amount").eq("goal_id", goalId);
   const total = (txs ?? []).reduce((s, t) => s + Number(t.amount), 0);
   await sb.from("savings_goals").update({ current_amount: Math.max(0, total) }).eq("id", goalId);
+
+  if (kind === "deposit") {
+    await addIdentityEvent(me, "savings_deposit", 1);
+    invalidateCache(`credit-score-${me}`);
+    invalidateCache(`identity-${me}`);
+  }
 
   invalidateCache(`savings-${me}`);
   invalidateCache(`savings-summary-${me}`);

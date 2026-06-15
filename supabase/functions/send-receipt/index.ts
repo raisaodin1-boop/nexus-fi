@@ -53,6 +53,7 @@ function kindLabel(kind?: string): string {
     case "cooperative_contribution": return "Cotisation coopérative";
     case "fund_contribution": return "Contribution fonds";
     case "wallet_topup": return "Recharge wallet";
+    case "certified_report": return "Certificat authentifié";
     default: return "Paiement HODIX";
   }
 }

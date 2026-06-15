@@ -5,23 +5,49 @@ import {
   computeScore, generateTips, getTier,
   type CreditScoreResult, type MonthlySnapshot,
 } from "@/src/credit-score";
+import { computeProgression, trustLevelFromScore } from "@/src/identity-progression";
+import { enrichTips } from "@/src/insight-actions";
 
 export async function addIdentityEvent(user_id: string, event_type: string, points: number) {
   await getSupabase().from("identity_events").insert({ user_id, event_type, points_delta: points });
+}
+
+async function loadProgressionData(me: string, createdAt: string) {
+  const sb = getSupabase();
+  const [savingsTxRes, contribRes, walletTxRes] = await Promise.all([
+    sb.from("savings_transactions").select("created_at, amount").eq("user_id", me).gt("amount", 0),
+    sb.from("tontine_contributions").select("created_at").eq("user_id", me),
+    sb.from("wallet_transactions").select("created_at").eq("user_id", me).eq("type", "topup"),
+  ]);
+  return computeProgression({
+    createdAt,
+    savingsDeposits: (savingsTxRes.data ?? []).map((r: any) => ({ created_at: r.created_at })),
+    tontineContributions: (contribRes.data ?? []).map((r: any) => ({ created_at: r.created_at })),
+    walletTopups: (walletTxRes.data ?? []).map((r: any) => ({ created_at: r.created_at })),
+  });
+}
+
+/** Keep identity_scores in sync for gates (public tontines) — derived from real activity only. */
+async function syncIdentityScore(userId: string, displayScore: number) {
+  try {
+    await getSupabase().from("identity_scores").upsert({
+      user_id: userId,
+      score: displayScore,
+      updated_at: new Date().toISOString(),
+    });
+  } catch { /* non-blocking */ }
 }
 
 export async function getIdentity() {
   const me = await uid();
   return cached(`identity-${me}`, 90_000, async () => {
     const { data: sbUser } = await getSupabase().auth.getSession();
-    const [profileRes, savingsRes, tontineRes, assocRes, coopRes, eventsRes, txRes] = await Promise.all([
+    const [profileRes, savingsRes, tontineRes, assocRes, coopRes] = await Promise.all([
       getSupabase().from("profiles").select("*").eq("id", me).single(),
       getSupabase().from("savings_goals").select("current_amount").eq("user_id", me),
       getSupabase().from("tontine_members").select("tontine_id").eq("user_id", me),
       getSupabase().from("association_members").select("association_id").eq("user_id", me),
       getSupabase().from("cooperative_members").select("cooperative_id").eq("user_id", me),
-      getSupabase().from("identity_events").select("points_delta, event_type, created_at").eq("user_id", me),
-      getSupabase().from("tontine_contributions").select("amount").eq("user_id", me),
     ]);
 
     const profile = profileRes.data ?? {};
@@ -30,26 +56,33 @@ export async function getIdentity() {
     const assocCount = assocRes.data?.length ?? 0;
     const coopCount = coopRes.data?.length ?? 0;
     const groupCount = tontineCount + assocCount + coopCount;
-    const tontineContribs = (txRes.data ?? []).reduce((s: number, c: any) => s + Number(c.amount), 0);
-
-    const events = eventsRes.data ?? [];
-    const signupBonus = events.filter((e: any) => e.event_type === "signup_bonus").reduce((s: number, e: any) => s + e.points_delta, 0);
-    const txPoints = events.filter((e: any) => e.event_type !== "signup_bonus" && e.event_type !== "yearly_bonus").reduce((s: number, e: any) => s + e.points_delta, 0);
 
     const createdAt = sbUser.session?.user?.created_at ?? new Date().toISOString();
-    const ageDays = Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000);
-    const yearlyBonus = Math.floor(ageDays / 365) * 5;
-    const score = Math.min(1000, signupBonus + txPoints + yearlyBonus);
+    const progression = await loadProgressionData(me, createdAt);
+    await syncIdentityScore(me, progression.displayScore);
+    const levelConfig = trustLevelFromScore(progression.displayScore, progression.platinum_eligible);
 
-    const levelConfig = score >= 810 ? { level: "Platinum", color: "#8B5CF6", risk: "Très faible" }
-      : score >= 610 ? { level: "Or", color: "#D4AF37", risk: "Faible" }
-      : score >= 310 ? { level: "Argent", color: "#8B9EB0", risk: "Modéré" }
-      : { level: "Bronze", color: "#CD7F32", risk: "Standard" };
+    const participation = Math.min(100, groupCount * 15);
+    const longevity = Math.min(100, progression.metrics.accountAgeDays / 10.95);
+    const regularity = Math.min(100, progression.metrics.regularityPct);
+    const engagement = Math.min(100, (progression.metrics.depositCount + progression.metrics.contributionCount) * 3);
 
-    const participation = Math.min(100, groupCount * 20);
-    const longevity = Math.min(100, ageDays / 3.65);
-    const regularity = Math.min(100, (events.filter((e: any) => e.event_type === "tontine_contribution").length) * 10);
-    const engagement = Math.min(100, events.length * 5);
+    const tips = progression.level_key === "platinum"
+      ? ["Félicitations ! Vous avez atteint le niveau Platinum grâce à une activité régulière sur plusieurs années."]
+      : progression.level_key === "gold"
+      ? [
+          "Le niveau Platinum exige 3 ans d'ancienneté et des cotisations régulières.",
+          "Continuez vos dépôts mensuels — chaque transaction compte pour 1 point.",
+        ]
+      : progression.displayScore < 120
+      ? [
+          "Effectuez un dépôt d'épargne pour gagner 1 point (tout montant).",
+          "Rejoignez une tontine et cotisez régulièrement pour progresser.",
+        ]
+      : [
+          "Maintenez au moins une cotisation par mois pour gravir les échelons.",
+          "Complétez votre KYC pour renforcer votre crédibilité.",
+        ];
 
     return {
       user: {
@@ -60,19 +93,37 @@ export async function getIdentity() {
         created_at: createdAt,
       },
       trust_score: {
-        score, score_max: 1000, level: levelConfig.level, risk: levelConfig.risk, color: levelConfig.color,
-        components: { signup_bonus: signupBonus, transaction_points: txPoints, yearly_bonus: yearlyBonus, regularity, longevity, participation, engagement },
-        tips: score < 100
-          ? ["Effectuez des contributions régulières pour augmenter votre score", "Rejoignez une tontine ou association pour booster votre identité"]
-          : score < 500
-          ? ["Continuez vos contributions régulièrement", "Complétez votre profil pour +10 points"]
-          : ["Excellent score ! Partagez vos certificats avec confiance"],
-        stats: { total_saved: totalSavings, tontines: tontineCount, associations: assocCount, cooperatives: coopCount, account_age_days: ageDays },
+        score: progression.displayScore,
+        score_max: progression.scoreMax,
+        level: levelConfig.level,
+        risk: levelConfig.risk,
+        color: levelConfig.color,
+        components: {
+          activity_points: progression.activityPoints,
+          deposit_count: progression.metrics.depositCount,
+          contribution_count: progression.metrics.contributionCount,
+          signup_bonus: progression.metrics.signupBonus,
+          regularity,
+          longevity,
+          participation,
+          engagement,
+        },
+        tips,
+        stats: {
+          total_saved: totalSavings,
+          tontines: tontineCount,
+          associations: assocCount,
+          cooperatives: coopCount,
+          account_age_days: progression.metrics.accountAgeDays,
+          active_months: progression.metrics.activeMonths,
+        },
+        progression,
       },
       totals: {
         total_savings: totalSavings,
-        deposits_count: events.filter((e: any) => e.event_type === "savings_deposit").length,
-        tontine_contributions: tontineContribs, groups: groupCount,
+        deposits_count: progression.metrics.depositCount,
+        tontine_contributions: progression.metrics.contributionCount,
+        groups: groupCount,
         tontines: tontineCount, associations: assocCount, cooperatives: coopCount,
       },
       currency: "XAF",
@@ -82,28 +133,39 @@ export async function getIdentity() {
 
 export async function getIdentityProfile() {
   const me = await uid();
+  const { data: sbUser } = await getSupabase().auth.getSession();
+  const createdAt = sbUser.session?.user?.created_at ?? new Date().toISOString();
+  const progression = await loadProgressionData(me, createdAt);
+  await syncIdentityScore(me, progression.displayScore);
+
   const { data: events } = await getSupabase()
-    .from("identity_events").select("*").eq("user_id", me).order("created_at", { ascending: false });
-  const allEvents = events ?? [];
-  const points = allEvents.reduce((s: number, e: any) => s + e.points_delta, 0);
-  const displayPoints = Math.round(points * 10) / 10;
+    .from("identity_events")
+    .select("*")
+    .eq("user_id", me)
+    .order("created_at", { ascending: false })
+    .limit(20);
 
-  const tierConfig = points >= 81 ? { level: "Platinum", level_key: "platinum", color: "#8B5CF6", next: null, nextPts: 0, range: [81, 1000] }
-    : points >= 61 ? { level: "Or", level_key: "gold", color: "#D4AF37", next: "Platinum", nextPts: 81, range: [61, 80] }
-    : points >= 31 ? { level: "Argent", level_key: "silver", color: "#8B9EB0", next: "Or", nextPts: 61, range: [31, 60] }
-    : { level: "Bronze", level_key: "bronze", color: "#CD7F32", next: "Argent", nextPts: 31, range: [0, 30] };
-
-  const [lo, hi] = tierConfig.range;
-  const pct = hi > lo ? Math.min(100, ((points - lo) / (hi - lo)) * 100) : 100;
+  const recentEvents = (events ?? []).filter(
+    (e: any) => !["credit_score_snapshot", "fraud_flag"].includes(e.event_type),
+  ).slice(0, 10);
 
   return {
     profile: {
-      points, display_points: displayPoints, level: tierConfig.level, level_key: tierConfig.level_key,
-      level_color: tierConfig.color, next_level: tierConfig.next,
-      points_to_next: tierConfig.next ? Math.max(0, tierConfig.nextPts - points) : 0,
-      progress_within_level_pct: Math.max(0, pct), events_recorded: allEvents.length,
+      points: progression.activityPoints,
+      display_points: progression.activityPoints,
+      level: progression.level,
+      level_key: progression.level_key,
+      level_color: progression.level_color,
+      next_level: progression.next_level,
+      points_to_next: progression.points_to_next,
+      progress_within_level_pct: progression.progress_within_level_pct,
+      events_recorded: recentEvents.length,
+      platinum_eligible: progression.platinum_eligible,
+      platinum_requirements: progression.platinum_requirements,
+      deposit_count: progression.metrics.depositCount,
+      contribution_count: progression.metrics.contributionCount,
     },
-    recent_events: allEvents.slice(0, 10),
+    recent_events: recentEvents,
   };
 }
 
@@ -156,8 +218,9 @@ export async function getCreditScore(): Promise<CreditScoreResult> {
     try {
       await sb.from("identity_events").insert({
         user_id: me, event_type: "credit_score_snapshot",
-        points_delta: score, created_at: new Date().toISOString(),
-      });
+        points_delta: 0, created_at: new Date().toISOString(),
+        metadata: { score },
+      } as any);
     } catch { /* non-blocking */ }
 
     return { score, breakdown, tier, is_loan_eligible: score >= 700, tips: generateTips(breakdown), computed_at: new Date().toISOString() } as CreditScoreResult & { tips: string[] };
@@ -167,12 +230,13 @@ export async function getCreditScore(): Promise<CreditScoreResult> {
 export async function getCreditScoreHistory(): Promise<MonthlySnapshot[]> {
   const me = await uid();
   const { data } = await getSupabase()
-    .from("identity_events").select("points_delta, created_at")
+    .from("identity_events").select("points_delta, metadata, created_at")
     .eq("user_id", me).eq("event_type", "credit_score_snapshot").order("created_at", { ascending: true });
   const byMonth: Record<string, number> = {};
   for (const row of data ?? []) {
     const month = (row.created_at as string).slice(0, 7);
-    byMonth[month] = row.points_delta;
+    const metaScore = (row as any).metadata?.score;
+    byMonth[month] = typeof metaScore === "number" ? metaScore : row.points_delta;
   }
   return Object.entries(byMonth).map(([month, score]) => ({ month, score }));
 }
@@ -182,7 +246,7 @@ export async function getInsights() {
   return cached(`insights-${me}`, 120_000, async () => {
     const identity = await getIdentity();
     const tips = identity.trust_score.tips ?? [];
-    return { items: tips.map((text: string) => ({ text, kind: "tip" })) };
+    return { items: enrichTips(tips) };
   });
 }
 
@@ -195,7 +259,7 @@ export async function getFinancialAnalytics() {
     sb.from("savings_transactions").select("amount, type, created_at").eq("user_id", me).gte("created_at", twelveMonthsAgo),
     sb.from("tontine_contributions").select("amount, created_at").eq("user_id", me).gte("created_at", twelveMonthsAgo),
     sb.from("savings_goals").select("current_amount, target_amount, created_at, name").eq("user_id", me),
-    sb.from("identity_events").select("points_delta, event_type, created_at").eq("user_id", me).eq("event_type", "credit_score_snapshot").order("created_at", { ascending: true }).limit(24),
+    sb.from("identity_events").select("points_delta, metadata, event_type, created_at").eq("user_id", me).eq("event_type", "credit_score_snapshot").order("created_at", { ascending: true }).limit(24),
   ]);
 
   const savingsTx = savingsTxRes.data ?? [];
@@ -217,7 +281,7 @@ export async function getFinancialAnalytics() {
   const totalContributed = tontineContribs.reduce((s: number, t: any) => s + Number(t.amount), 0);
   const trustHistory = (identityEventsRes.data ?? []).map((e: any) => ({
     label: new Date(e.created_at).toLocaleDateString("fr-FR", { month: "short", year: "2-digit" }),
-    score: Number(e.points_delta ?? 0),
+    score: Number(e.metadata?.score ?? e.points_delta ?? 0),
   }));
   const projections = goals.filter((g: any) => g.target_amount > 0).map((g: any) => {
     const pct = Math.min(100, (Number(g.current_amount) / Number(g.target_amount)) * 100);
@@ -246,11 +310,15 @@ export async function getRegionalRanking(country: string) {
   const me = await uid();
   const userIds = profiles.map((p: any) => p.id);
   const { data: events } = await sb.from("identity_events")
-    .select("user_id, points_delta, created_at").in("user_id", userIds)
+    .select("user_id, points_delta, metadata, created_at").in("user_id", userIds)
     .eq("event_type", "credit_score_snapshot").order("created_at", { ascending: false });
 
   const scoreMap: Record<string, number> = {};
-  for (const e of (events ?? []) as any[]) { if (!(e.user_id in scoreMap)) scoreMap[e.user_id] = e.points_delta ?? 0; }
+  for (const e of (events ?? []) as any[]) {
+    if (!(e.user_id in scoreMap)) {
+      scoreMap[e.user_id] = Number(e.metadata?.score ?? e.points_delta ?? 0);
+    }
+  }
 
   const ranked = profiles
     .map((p: any) => ({ id: p.id, name: p.full_name, score: scoreMap[p.id] ?? 0, country: p.country }))

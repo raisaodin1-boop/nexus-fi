@@ -34,7 +34,7 @@ import { DeepLinkHandler } from "@/src/deep-link-handler";
 import { PwaSetup } from "@/src/pwa-setup";
 import { PushConsentModal } from "@/src/consent-modal";
 import { attachPushNotificationListeners, registerExpoPushToken } from "@/src/push-notifications";
-import { runDueAutoSavings } from "@/src/db/auto-savings";
+import { FloatingBackButton } from "@/src/screen-back";
 
 if (Platform.OS !== "web") {
   SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -187,6 +187,7 @@ function RootLayoutInner() {
       <FirstLaunchGuard />
       <StatusBar style="light" />
       <OfflineBanner />
+      <FloatingBackButton />
       <Stack screenOptions={{ headerShown: false, animation: "fade" }} />
     </BiometricGate>
   );

@@ -175,6 +175,9 @@ async function fulfillPayment(meta: PaymentMeta, paymentId?: string) {
         p_amount_xaf: amount,
       });
       throwSb(rpcErr);
+      const me = await uid();
+      const { addIdentityEvent } = await import("./identity");
+      await addIdentityEvent(me, "wallet_topup", 1);
       break;
     }
     case "certified_report":

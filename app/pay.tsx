@@ -183,10 +183,17 @@ export default function PayContribution() {
         provider: method,
         phone,
       });
-      router.replace({
-        pathname: "/receipt",
-        params: { paymentId, type: paymentKind },
-      } as any);
+      if (paymentKind === "certified_report") {
+        router.replace({
+          pathname: "/certificate-delivery",
+          params: { cert_kind: cert_kind ?? "identity", paymentId },
+        } as any);
+      } else {
+        router.replace({
+          pathname: "/receipt",
+          params: { paymentId, type: paymentKind },
+        } as any);
+      }
     } catch (e) {
       setError(e instanceof ApiError ? e.detail : "Paiement non confirmé — aucun crédit appliqué.");
     } finally { setBusy(false); }
@@ -223,10 +230,17 @@ export default function PayContribution() {
   // ---- DONE ----
   if (stage === "done" && finalStatus) {
     if (finalStatus === "succeeded" && paymentId) {
-      router.replace({
-        pathname: "/receipt",
-        params: { paymentId, type: paymentKind },
-      } as any);
+      if (paymentKind === "certified_report") {
+        router.replace({
+          pathname: "/certificate-delivery",
+          params: { cert_kind: cert_kind ?? "identity", paymentId },
+        } as any);
+      } else {
+        router.replace({
+          pathname: "/receipt",
+          params: { paymentId, type: paymentKind },
+        } as any);
+      }
       return null;
     }
     return (
