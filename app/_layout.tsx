@@ -33,6 +33,7 @@ import { DynamicSeo } from "@/src/dynamic-seo";
 import { DeepLinkHandler } from "@/src/deep-link-handler";
 import { PushConsentModal } from "@/src/consent-modal";
 import { attachPushNotificationListeners, registerExpoPushToken } from "@/src/push-notifications";
+import { runDueAutoSavings } from "@/src/db/auto-savings";
 
 if (Platform.OS !== "web") {
   SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -54,6 +55,8 @@ function PushSetup() {
           await registerExpoPushToken();
         }
       } catch {}
+      // Exécute les auto-épargnes en retard au démarrage
+      try { await runDueAutoSavings(); } catch {}
     })();
 
     return () => detach();

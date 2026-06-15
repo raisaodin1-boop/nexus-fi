@@ -34,15 +34,16 @@ let _cache: Rates | null = null;
 let _cacheAt = 0;
 const TTL_MS = 5 * 60 * 1000;
 
-// Static fallback (mid-2026 approx.) — only used when API and stale cache unavailable
+// Static fallback (juin 2026) — uniquement si API et cache indisponibles.
+// À mettre à jour trimestriellement si l'API reste indisponible.
 const FALLBACK_USD: Record<Currency, number> = {
   USD: 1,
-  EUR: 0.92,
-  XAF: XAF_PER_EUR * 0.92,
-  NGN: 1650,
-  GHS: 15.8,
-  KES: 132,
-  ZAR: 18.2,
+  EUR: 0.915,
+  XAF: XAF_PER_EUR * 0.915,  // ~600 XAF/USD (périmètre BCE)
+  NGN: 1620,
+  GHS: 15.5,
+  KES: 129,
+  ZAR: 18.6,
 };
 
 export async function getRates(): Promise<Rates> {

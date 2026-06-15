@@ -37,7 +37,11 @@ async function readQueue(): Promise<QueuedTx[]> {
 }
 
 async function writeQueue(queue: QueuedTx[]): Promise<void> {
-  await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+  try {
+    await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+  } catch (e) {
+    console.warn("[offline-queue] Impossible de sauvegarder la file:", e);
+  }
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────

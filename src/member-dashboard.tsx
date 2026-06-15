@@ -12,7 +12,7 @@ import {
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { Bell, ChevronRight, PiggyBank, Trophy, Users, Wallet, TrendingUp, Sparkles, QrCode, BarChart2 } from "lucide-react-native";
+import { Bell, ChevronRight, PiggyBank, Trophy, Users, Wallet, TrendingUp, Sparkles, QrCode, BarChart2, Brain, Repeat, Receipt, PieChart } from "lucide-react-native";
 
 import { useAuth } from "@/src/auth-context";
 import { api, formatXAF } from "@/src/api";
@@ -230,6 +230,14 @@ export function MemberDashboard() {
         </View>
         <View style={styles.qaRow}>
           <QuickAction icon={<Trophy color={Colors.accent} size={22} />} label="Classement" onPress={() => router.push("/ranking")} testID="home-action-ranking" />
+          <QuickAction icon={<Brain color="#8B5CF6" size={22} />} label="Conseiller IA" onPress={() => router.push("/advisor")} testID="home-action-advisor" />
+        </View>
+        <View style={styles.qaRow}>
+          <QuickAction icon={<Repeat color="#10B981" size={22} />} label="Auto-épargne" onPress={() => router.push("/auto-savings")} testID="home-action-auto-savings" />
+          <QuickAction icon={<PieChart color="#EF4444" size={22} />} label="Mon budget" onPress={() => router.push("/budget")} testID="home-action-budget" />
+        </View>
+        <View style={styles.qaRow}>
+          <QuickAction icon={<Receipt color="#F59E0B" size={22} />} label="Partager facture" onPress={() => router.push("/split-expense")} testID="home-action-split" />
           <View style={{ flex: 1 }} />
         </View>
 

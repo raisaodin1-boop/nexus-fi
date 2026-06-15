@@ -17,7 +17,7 @@ const PIN_LOCKOUT_KEY = "hodix_pin_lockout_until";
 // hashPinLegacy (djb2/FNV v1) is kept only to migrate PINs created
 // before the upgrade — see verify flow in pin-modal.
 
-const PIN_ITERATIONS = 500;
+const PIN_ITERATIONS = 10_000;
 
 export async function hashPin(pin: string, salt: string): Promise<string> {
   let digest = `hodix:${salt}:${pin}:v2`;
