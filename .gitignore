@@ -61,6 +61,9 @@ chainlit.md
 # Deployment
 .vercel
 
+# Supabase CLI local cache
+supabase/.temp/
+
 # Data and databases
 agenthub/agents/youtube/db
 

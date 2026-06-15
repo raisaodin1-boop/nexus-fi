@@ -74,7 +74,7 @@ export default function WithdrawScreen() {
   if (result) {
     // Navigate to receipt screen
     router.replace({
-      pathname: "/payments/receipt",
+      pathname: "/receipt",
       params: { paymentId: result.withdrawal_id, type: "withdrawal" },
     } as any);
     return null;
@@ -108,7 +108,7 @@ export default function WithdrawScreen() {
         </View>
       </Modal>
 
-      <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 100 }}>
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.back}>← Retour</Text>
         </TouchableOpacity>

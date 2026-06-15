@@ -1,5 +1,5 @@
 // HODIX — Complete profile after registration
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Alert, KeyboardAvoidingView, Modal, Platform, ScrollView,
   StyleSheet, Text, TouchableOpacity, View,
@@ -7,12 +7,13 @@ import {
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { Calendar, User, Phone, MapPin, Briefcase, ChevronDown, CheckCircle2 } from "lucide-react-native";
+import { User, Phone, MapPin, Briefcase, ChevronDown, CheckCircle2 } from "lucide-react-native";
 
 import { api, ApiError } from "@/src/api";
 import { useAuth } from "@/src/auth-context";
 import { Button, Card, Field } from "@/src/ui";
 import { Colors, Radius, Spacing, Shadow } from "@/src/theme";
+import { DatePicker, birthDateBounds } from "@/src/date-picker";
 
 const GENDERS = ["Homme", "Femme", "Autre"];
 const COUNTRIES = [
@@ -69,11 +70,6 @@ const selectStyles = StyleSheet.create({
   value: { fontSize: 15, color: Colors.text, fontWeight: "600" },
 });
 
-// Simple date picker using 3 selectors (day/month/year)
-const DAYS = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, "0"));
-const MONTHS = ["01 - Janvier","02 - Février","03 - Mars","04 - Avril","05 - Mai","06 - Juin","07 - Juillet","08 - Août","09 - Septembre","10 - Octobre","11 - Novembre","12 - Décembre"];
-const YEARS = Array.from({ length: 80 }, (_, i) => String(2006 - i));
-
 export default function CompleteProfile() {
   const router = useRouter();
   const { refresh } = useAuth();
@@ -86,9 +82,7 @@ export default function CompleteProfile() {
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
   const [gender, setGender] = useState("");
-  const [birthDay, setBirthDay] = useState("");
-  const [birthMonth, setBirthMonth] = useState("");
-  const [birthYear, setBirthYear] = useState("");
+  const [dobDate, setDobDate] = useState<Date | null>(null);
   const [birthPlace, setBirthPlace] = useState("");
   const [neighborhood, setNeighborhood] = useState("");
   const [city, setCity] = useState("");
@@ -100,11 +94,29 @@ export default function CompleteProfile() {
   const [idPicked, setIdPicked] = useState(false);
 
   // Modals
-  const [modal, setModal] = useState<null | "gender" | "country" | "day" | "month" | "year">(null);
+  const [modal, setModal] = useState<null | "gender" | "country">(null);
 
-  const birthDate = birthDay && birthMonth && birthYear
-    ? `${birthYear}-${birthMonth.slice(0, 2)}-${birthDay}`
-    : "";
+  const birthDate = dobDate ? dobDate.toISOString().split("T")[0] : "";
+
+  // Pre-fill form from existing profile data
+  useEffect(() => {
+    api.get<any>("/users/me").then((profile) => {
+      if (!profile) return;
+      if (profile.full_name) {
+        const parts = profile.full_name.split(" ");
+        setFirstName(parts[0] ?? "");
+        setLastName(parts.slice(1).join(" ") ?? "");
+      }
+      if (profile.phone) setPhone(profile.phone);
+      if (profile.gender) setGender(profile.gender);
+      if (profile.date_of_birth) setDobDate(new Date(profile.date_of_birth));
+      if (profile.birth_place) setBirthPlace(profile.birth_place);
+      if (profile.neighborhood) setNeighborhood(profile.neighborhood);
+      if (profile.city) setCity(profile.city);
+      if (profile.country) setCountry(profile.country);
+      if (profile.occupation) setOccupation(profile.occupation);
+    }).catch(() => {});
+  }, []);
 
   const pickId = async () => {
     try {
@@ -125,7 +137,7 @@ export default function CompleteProfile() {
   };
 
   const submitStep1 = () => {
-    if (!firstName || !lastName || !phone || !birthDate || !birthPlace || !city || !country) {
+    if (!firstName || !lastName || !phone || !dobDate || !birthPlace || !city || !country) {
       setError("Veuillez remplir tous les champs obligatoires (*)"); return;
     }
     setError(null);
@@ -135,21 +147,19 @@ export default function CompleteProfile() {
   const submit = async () => {
     setBusy(true); setError(null);
     try {
-      await api.post("/auth/complete-profile", {
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
+      await api.patch("/users/me", {
+        full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
         phone: phone.trim(),
         gender,
-        birth_date: birthDate,
+        date_of_birth: birthDate,
         birth_place: birthPlace.trim(),
         neighborhood: neighborhood.trim(),
         city: city.trim(),
         country,
         occupation: occupation.trim(),
-        ...(idDocBase64 ? { id_doc_base64: idDocBase64 } : {}),
       });
       await refresh();
-      router.replace("/(tabs)");
+      router.replace("/kyc");
     } catch (e) {
       setError(e instanceof ApiError ? e.detail : "Erreur");
     } finally { setBusy(false); }
@@ -160,12 +170,9 @@ export default function CompleteProfile() {
       {/* Modals */}
       <PickerModal visible={modal === "gender"} title="Genre" options={GENDERS} onSelect={setGender} onClose={() => setModal(null)} />
       <PickerModal visible={modal === "country"} title="Pays" options={COUNTRIES} onSelect={setCountry} onClose={() => setModal(null)} />
-      <PickerModal visible={modal === "day"} title="Jour" options={DAYS} onSelect={setBirthDay} onClose={() => setModal(null)} />
-      <PickerModal visible={modal === "month"} title="Mois" options={MONTHS} onSelect={setBirthMonth} onClose={() => setModal(null)} />
-      <PickerModal visible={modal === "year"} title="Année" options={YEARS} onSelect={setBirthYear} onClose={() => setModal(null)} />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
           {/* Header */}
           <LinearGradient colors={[Colors.primary, Colors.gradMid]} style={styles.header}>
             <Text style={styles.headerTitle}>Complétez votre profil</Text>
@@ -193,18 +200,13 @@ export default function CompleteProfile() {
                 <Field label="Nom de famille *" placeholder="DIALLO" value={lastName} onChangeText={setLastName} autoCapitalize="characters" testID="profile-lastname" />
                 <SelectField label="Genre" value={gender} onPress={() => setModal("gender")} testID="profile-gender" />
 
-                <Text style={styles.sectionTitle}><Calendar size={14} color={Colors.secondary} /> Date de naissance *</Text>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <SelectField label="Jour" value={birthDay} onPress={() => setModal("day")} />
-                  </View>
-                  <View style={{ flex: 2 }}>
-                    <SelectField label="Mois" value={birthMonth ? birthMonth.slice(0, 2) : ""} onPress={() => setModal("month")} />
-                  </View>
-                  <View style={{ flex: 1.5 }}>
-                    <SelectField label="Année" value={birthYear} onPress={() => setModal("year")} />
-                  </View>
-                </View>
+                <DatePicker
+                  label="Date de naissance *"
+                  value={dobDate}
+                  onChange={setDobDate}
+                  {...birthDateBounds()}
+                  testID="profile-dob"
+                />
 
                 <Field label="Lieu de naissance *" placeholder="Douala, Cameroun" value={birthPlace} onChangeText={setBirthPlace} testID="profile-birthplace" />
 

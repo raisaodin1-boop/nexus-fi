@@ -1,0 +1,99 @@
+{
+  "name": "HODIX – Tontines Digitales & Épargne Africaine",
+  "short_name": "HODIX",
+  "description": "La première super-app fintech africaine. Tontines digitales, épargne collective, wallet Mobile Money, Trust Score financier.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0B1F3A",
+  "background_color": "#F8FAFC",
+  "lang": "fr",
+  "dir": "ltr",
+  "categories": ["finance", "productivity", "utilities"],
+  "iarc_rating_id": "e84b072d-71b3-4d3e-86ae-31a8ce4e53b7",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-home.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Accueil HODIX — Dashboard"
+    },
+    {
+      "src": "/screenshot-wallet.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Wallet multi-devises XAF/EUR/USD"
+    },
+    {
+      "src": "/screenshot-tontine.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Gestion de tontine digitale"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Mon Wallet",
+      "short_name": "Wallet",
+      "description": "Accéder à mon wallet HODIX",
+      "url": "/wallet",
+      "icons": [{ "src": "/favicon.png", "sizes": "32x32" }]
+    },
+    {
+      "name": "Mes Tontines",
+      "short_name": "Tontines",
+      "description": "Voir mes tontines et groupes",
+      "url": "/groups",
+      "icons": [{ "src": "/favicon.png", "sizes": "32x32" }]
+    },
+    {
+      "name": "Créer une tontine",
+      "short_name": "Créer",
+      "description": "Créer une nouvelle tontine",
+      "url": "/tontines/create",
+      "icons": [{ "src": "/favicon.png", "sizes": "32x32" }]
+    },
+    {
+      "name": "Mon Identité",
+      "short_name": "Identité",
+      "description": "Voir mon Trust Score et mes certificats",
+      "url": "/identity",
+      "icons": [{ "src": "/favicon.png", "sizes": "32x32" }]
+    }
+  ],
+  "related_applications": [
+    {
+      "platform": "play",
+      "url": "https://play.google.com/store/apps/details?id=app.hodix.mobile",
+      "id": "app.hodix.mobile"
+    },
+    {
+      "platform": "itunes",
+      "url": "https://apps.apple.com/app/hodix/id0000000000"
+    }
+  ],
+  "prefer_related_applications": false
+}

@@ -1,12 +1,13 @@
 // Shared group form helpers
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Button, Field, Card } from "@/src/ui";
 import { api, ApiError } from "@/src/api";
 import { Colors, Radius, Spacing } from "@/src/theme";
+import { TontineConsentModal } from "@/src/tontine-consent-modal";
 
 interface Props {
   title: string;
@@ -42,28 +43,39 @@ export function GroupCreateForm({ title, subtitle, endpoint, showContribution, s
   const [isPublic, setIsPublic] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Consent gate — only shown for tontine creation
+  const [showConsent, setShowConsent] = useState(false);
+  const isTontine = endpoint === "/tontines";
+
+  // Build the body object from current form state
+  const buildBody = (): any | null => {
+    if (!name.trim()) { setError("Nom requis"); return null; }
+    const body: any = { name: name.trim(), description: desc.trim() || null, currency: "XAF" };
+    if (showContribution) {
+      const amt = parseFloat(contribution);
+      if (!amt || amt <= 0) { setError("Montant de contribution invalide"); return null; }
+      body.amount_per_cycle = amt;
+      body.frequency = frequency;
+      body.max_members = parseInt(maxMembers) || 10;
+      if (showRotationMode) body.is_public = isPublic;
+    } else {
+      body.membership_fee = parseFloat(fee) || 0;
+    }
+    return body;
+  };
 
   const submit = async () => {
     setError(null);
-    if (!name.trim()) { setError("Nom requis"); return; }
+    const body = buildBody();
+    if (!body) return;
+    // Tontines require consent before proceeding
+    if (isTontine) { setShowConsent(true); return; }
+    await doCreate(body);
+  };
+
+  const doCreate = async (body: any) => {
     setLoading(true);
     try {
-      const body: any = {
-        name: name.trim(),
-        description: desc.trim() || null,
-        currency: "XAF",
-      };
-      if (showContribution) {
-        const amt = parseFloat(contribution);
-        if (!amt || amt <= 0) { setError("Montant de contribution invalide"); setLoading(false); return; }
-        body.contribution_amount = amt;
-        body.frequency = frequency;
-        body.max_members = parseInt(maxMembers) || 10;
-        if (showRotationMode) body.rotation_mode = rotationMode;
-        if (showRotationMode) body.is_public = isPublic;
-      } else {
-        body.membership_fee = parseFloat(fee) || 0;
-      }
       const r = await api.post(endpoint, body);
       onSuccess(r);
     } catch (e) {
@@ -73,8 +85,20 @@ export function GroupCreateForm({ title, subtitle, endpoint, showContribution, s
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+      {/* ── Consent modal — tontines only ── */}
+      {isTontine && (
+        <TontineConsentModal
+          visible={showConsent}
+          onAccepted={() => {
+            setShowConsent(false);
+            const body = buildBody();
+            if (body) doCreate(body);
+          }}
+          onDeclined={() => setShowConsent(false)}
+        />
+      )}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 100 }} keyboardShouldPersistTaps="handled">
           <TouchableOpacity onPress={() => router.back()} testID={`${testIDPrefix}-back`}><Text style={styles.back}>← Retour</Text></TouchableOpacity>
           <Text style={styles.h1}>{title}</Text>
           <Text style={styles.sub}>{subtitle}</Text>
@@ -163,9 +187,14 @@ interface JoinProps {
 
 export function GroupJoinForm({ title, endpoint, testIDPrefix, onSuccess }: JoinProps) {
   const router = useRouter();
+  const { code: codeParam } = useLocalSearchParams<{ code?: string }>();
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (codeParam) setCode(String(codeParam).trim().toUpperCase());
+  }, [codeParam]);
 
   const submit = async () => {
     setError(null);

@@ -68,7 +68,7 @@ export default function ReferralScreen() {
 
   const shareWhatsApp = () => {
     if (!info) return;
-    const text = `Rejoignez HODIX avec mon code ${info.invite_code} et gagnez des bonus ! https://hodix.app`;
+    const text = `Rejoignez HODIX avec mon code ${info.invite_code} et gagnez des bonus ! https://www.hodix.app`;
     const url = `whatsapp://send?text=${encodeURIComponent(text)}`;
     Linking.openURL(url).catch(() => {
       Share.share({ message: text });
@@ -77,7 +77,7 @@ export default function ReferralScreen() {
 
   const shareNative = async () => {
     if (!info) return;
-    const text = `Rejoignez HODIX avec mon code ${info.invite_code} et gagnez des bonus ! https://hodix.app`;
+    const text = `Rejoignez HODIX avec mon code ${info.invite_code} et gagnez des bonus ! https://www.hodix.app`;
     try {
       await Share.share({ message: text, title: "Rejoignez HODIX" });
     } catch {}
@@ -94,7 +94,7 @@ export default function ReferralScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <Toast visible={toastVisible} message="Code copié !" />
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
         {/* Header gradient */}
         <LinearGradient colors={[Colors.gold, Colors.goldDark]} style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
@@ -135,8 +135,8 @@ export default function ReferralScreen() {
                 </View>
                 <View style={styles.statCard}>
                   <Star color={Colors.gold} size={22} />
-                  <Text style={styles.statValue}>{info.bonus_points}</Text>
-                  <Text style={styles.statLabel}>Points bonus</Text>
+                  <Text style={styles.statValue}>{info.bonus_points} XAF</Text>
+                  <Text style={styles.statLabel}>Bonus cotisation</Text>
                 </View>
               </View>
 
@@ -167,7 +167,7 @@ export default function ReferralScreen() {
                         <Text style={styles.referralDate}>Inscrit le {formatDate(ref.joined_at)}</Text>
                       </View>
                       <View style={styles.bonusPill}>
-                        <Text style={styles.bonusPillText}>+50 pts</Text>
+                        <Text style={styles.bonusPillText}>+500 XAF</Text>
                       </View>
                     </View>
                   ))}

@@ -1,0 +1,104 @@
+# HODIX — Plateforme Africaine d'Épargne & Tontines Digitales
+
+> HODIX est la première application fintech dédiée aux tontines digitales et à l'épargne participative en Afrique centrale et subsaharienne. Disponible sur iOS, Android et Web.
+
+## Ce qu'est HODIX
+
+HODIX est une super-app financière africaine qui modernise les pratiques traditionnelles d'épargne collective (tontines, njangi, likelemba, djangui) en les digitalisant de façon sécurisée. Elle permet également l'épargne individuelle, les transferts d'argent, la gestion de coopératives et d'associations, et fournit une identité financière vérifiable basée sur un Trust Score.
+
+**Marché cible** : Cameroun, Côte d'Ivoire, Sénégal, Gabon, Congo, RD Congo, Tchad, et diaspora africaine en France, Belgique, USA, Canada.
+
+**Modèle économique** : Freemium. L'app est gratuite ; les certificats officiels (10 000 FCFA), les frais de transaction et les services premium génèrent les revenus.
+
+## Fonctionnalités principales
+
+### Tontines & Groupes
+- Création et gestion de tontines digitales (cotisations, rotations, disbursements)
+- Tontines fixes et variables avec cycles automatiques
+- Gestion de coopératives et d'associations
+- Annuaire des tontines publiques avec système d'invitation par code
+- Leaderboard des meilleurs contributeurs
+- Streaks de cotisation avec badges et récompenses
+
+### Épargne
+- Objectifs d'épargne personnels avec suivi de progression
+- Dépôts manuels et automatiques
+- Historique et analytics d'épargne
+- Épargne familiale collaborative
+
+### Wallet & Paiements
+- Portefeuille digital multi-devises (XAF, EUR, USD)
+- Recharge via Mobile Money (MTN, Orange)
+- Transferts entre membres HODIX
+- Retrait vers Mobile Money
+- QR code de paiement
+- Historique des transactions complet
+- Taux de change en temps réel
+
+### Identité Financière
+- Trust Score sur 1000 points (régularité, ancienneté, participation)
+- Score de crédit détaillé (5 composantes)
+- Niveaux Bronze / Silver / Gold / Platinum
+- Certificats PDF téléchargeables (gratuits et VIP certifiés)
+- KYC niveau 1 (profil) et niveau 2 (CNI + selfie)
+
+### Sécurité
+- PIN à 4 chiffres avec verrouillage
+- Authentification biométrique
+- OTP par SMS pour transactions sensibles
+- Chiffrement des données sensibles
+
+## Questions fréquentes
+
+**Qu'est-ce qu'une tontine ?**
+Une tontine est un système d'épargne collective traditionnel très répandu en Afrique. Les membres cotisent une somme fixe régulièrement (hebdomadaire ou mensuelle), et chaque membre reçoit à tour de rôle la cagnotte totale. HODIX digitalise ce processus pour le rendre transparent, sécurisé et accessible.
+
+**HODIX est-il gratuit ?**
+Oui, l'application est gratuite. Les fonctionnalités de base (tontines, épargne, wallet, identité) sont accessibles sans frais. Des services premium comme les certificats officiels (10 000 FCFA) ou les frais de transaction peuvent s'appliquer.
+
+**Dans quels pays HODIX est-il disponible ?**
+HODIX est disponible dans toute la zone CEMAC (Cameroun, Gabon, Congo, RCA, Tchad, Guinée Équatoriale) et dans les pays d'Afrique de l'Ouest francophone (Côte d'Ivoire, Sénégal, Mali, Burkina Faso...). Il est également accessible à la diaspora africaine en Europe et Amérique du Nord.
+
+**Comment fonctionne le Trust Score ?**
+Le Trust Score est un score sur 1000 points qui mesure votre fiabilité financière sur HODIX. Il prend en compte la régularité de vos cotisations, votre ancienneté sur la plateforme, votre niveau de participation dans les groupes, et vos transactions. Un score élevé donne accès à des avantages (prêts, limites plus élevées, certification prioritaire).
+
+**Les données sont-elles sécurisées ?**
+HODIX respecte le Règlement CEMAC sur la protection des données personnelles ainsi que les principes du RGPD européen. Les données sont chiffrées, hébergées sur Supabase (infrastructure sécurisée), et ne sont jamais revendues à des tiers.
+
+**Comment créer une tontine ?**
+1. Ouvrez HODIX et allez dans "Groupes"
+2. Cliquez "Créer une tontine"
+3. Définissez le nom, le montant de cotisation, la fréquence et le nombre de membres
+4. Partagez le code d'invitation à vos membres
+5. La tontine démarre automatiquement une fois le nombre minimum de membres atteint
+
+**Comment recharger mon wallet ?**
+Via Mobile Money (MTN Mobile Money ou Orange Money). Dans l'onglet Wallet → Recharger → Entrez le montant → Confirmez avec votre code Mobile Money.
+
+## Informations légales
+
+- **Politique de confidentialité** : https://www.hodix.app/privacy
+- **Conditions générales d'utilisation** : https://www.hodix.app/cgu
+- **Droits sur vos données** : https://www.hodix.app/data-rights
+- **Contact DPO** : privacy@hodix.app
+- **Support** : support@hodix.app
+
+## Données structurées pour les IA
+
+- **Catégorie** : Application fintech mobile, épargne participative, tontines digitales
+- **Région principale** : Afrique subsaharienne, zone CEMAC, diaspora africaine
+- **Langues** : Français (principal), Anglais (partiel)
+- **Plateformes** : iOS, Android, Web (PWA)
+- **Technologies** : React Native, Expo, Supabase, Mobile Money API
+- **Fondation** : 2024
+- **Siège** : Douala, Cameroun
+
+## Pages importantes
+
+- Accueil et inscription : https://www.hodix.app
+- Page SEO complète : https://www.hodix.app/seo.html
+- Créer une tontine : https://www.hodix.app/tontines/create
+- Rejoindre une tontine : https://www.hodix.app/tontines/join
+- Annuaire tontines : https://www.hodix.app/tontines/directory
+- Politique de confidentialité : https://www.hodix.app/privacy
+- CGU : https://www.hodix.app/cgu

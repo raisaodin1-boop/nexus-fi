@@ -1,13 +1,13 @@
 // Manager dashboard component — used inside (tabs)/index.tsx when role is tontine_manager.
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Users, Building2, Network, Wallet, TrendingUp, Activity, Plus, Bell, ChevronRight } from "lucide-react-native";
 
 import { api, formatXAF } from "@/src/api";
-import { Card, SectionTitle, StatCard } from "@/src/ui";
+import { Card, SectionTitle, StatCard, SkeletonBox, SkeletonStatRow, SkeletonCard } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { LineChart } from "@/src/charts";
 import { useAuth } from "@/src/auth-context";
@@ -34,21 +34,46 @@ export function ManagerDashboard() {
   const [unread, setUnread] = useState(0);
 
   const load = useCallback(async () => {
-    try {
-      const [o, s, n] = await Promise.all([
-        api.get<Overview>("/manager/overview"),
-        api.get<Series>("/analytics/me/contributions?days=14"),
-        api.get<{ unread_count: number }>("/notifications"),
-      ]);
-      setOverview(o); setSeries(s); setUnread(n.unread_count);
-    } catch {}
+    const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
+      try { return await fn(); } catch { return null; }
+    };
+    const [o, s, n] = await Promise.all([
+      safe(() => api.get<Overview>("/manager/overview")),
+      safe(() => api.get<Series>("/analytics/me/contributions?days=14")),
+      safe(() => api.get<{ unread_count: number }>("/notifications")),
+    ]);
+    if (o) setOverview(o);
+    if (s) setSeries(s);
+    if (n) setUnread(n.unread_count ?? 0);
     setLoading(false);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  if (loading || !overview) {
-    return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator color={Colors.secondary} size="large" /></View></SafeAreaView>;
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <View style={{ padding: Spacing.xl, gap: 16 }}>
+          <SkeletonBox width={180} height={26} borderRadius={8} />
+          <SkeletonStatRow />
+          <SkeletonStatRow />
+          <SkeletonCard />
+        </View>
+      </SafeAreaView>
+    );
+  }
+  if (!overview) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.center}>
+          <Text style={{ color: Colors.text, fontWeight: "800", fontSize: 16, marginBottom: 8 }}>Tableau de bord indisponible</Text>
+          <Text style={{ color: Colors.textMuted, fontSize: 13, textAlign: "center", marginBottom: 16 }}>Impossible de charger les statistiques manager.</Text>
+          <TouchableOpacity onPress={() => { setLoading(true); load(); }} style={{ paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12, backgroundColor: Colors.secondary }}>
+            <Text style={{ color: "#fff", fontWeight: "700" }}>Réessayer</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -61,7 +86,7 @@ export function ManagerDashboard() {
           cta: "Découvrir",
         }}
       />
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <View>
             <View style={styles.rolePill}><Text style={styles.rolePillText}>TONTINE MANAGER</Text></View>
@@ -188,7 +213,7 @@ const styles = StyleSheet.create({
   heroStats: { flexDirection: "row", gap: 24, marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.1)" },
   heroStLbl: { color: "rgba(255,255,255,0.6)", fontSize: 10, fontWeight: "600", letterSpacing: 0.3 },
   heroStVal: { color: "#fff", fontSize: 14, fontWeight: "800", marginTop: 2 },
-  statsRow: { flexDirection: "row", paddingHorizontal: Spacing.xl, gap: 10, marginTop: 12 },
+  statsRow: { flexDirection: "row", paddingHorizontal: Spacing.xl, gap: 10, marginTop: 12, minWidth: 0 },
   qaGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: Spacing.xl, gap: 10 },
   qa: { width: "48%", backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.lg, borderWidth: 1, borderColor: Colors.border, gap: 10 },
   qaIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: Colors.surfaceAlt, alignItems: "center", justifyContent: "center" },

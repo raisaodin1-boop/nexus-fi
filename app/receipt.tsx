@@ -13,9 +13,11 @@ import {
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { CheckCircle2, AlertCircle, Share2, Home } from "lucide-react-native";
+import { CheckCircle2, AlertCircle, Share2, Home, Mail } from "lucide-react-native";
 
-import { api, formatXAF } from "@/src/api";
+import { api, ApiError, formatXAF } from "@/src/api";
+import { paymentKindLabel } from "@/src/payment-receipt";
+import { useToast } from "@/src/toast";
 import { Button, Card } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 
@@ -31,6 +33,9 @@ interface ReceiptData {
   reference?: string;
   commission_xaf?: number;
   created_at: string;
+  label?: string;
+  kind?: string;
+  email_sent?: boolean;
 }
 
 export function formatDateTime(dateStr: string): string {
@@ -40,10 +45,13 @@ export function formatDateTime(dateStr: string): string {
   return `${day} à ${time}`;
 }
 
-function typeLabel(type?: string): string {
+function typeLabel(type?: string, kind?: string, label?: string): string {
+  if (label?.trim()) return label;
+  if (kind) return paymentKindLabel(kind);
   if (type === "deposit") return "Dépôt";
   if (type === "withdrawal") return "Retrait";
   if (type === "contribution") return "Contribution";
+  if (type?.includes("_")) return paymentKindLabel(type);
   return type ?? "Transaction";
 }
 
@@ -73,10 +81,12 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 
 export default function ReceiptScreen() {
   const router = useRouter();
+  const { show } = useToast();
   const { paymentId, type } = useLocalSearchParams<{ paymentId: string; type?: string }>();
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -95,9 +105,31 @@ export default function ReceiptScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  const resendEmail = async () => {
+    if (!paymentId) return;
+    setEmailSending(true);
+    try {
+      const r = await api.post<{ delivery?: string; email_masked?: string }>(
+        `/payments/${paymentId}/receipt/email`,
+        { force: true },
+      );
+      show(
+        r.delivery === "email"
+          ? `Reçu envoyé à ${r.email_masked ?? "votre email"}`
+          : "Reçu disponible dans l'app (email non configuré)",
+        "success",
+      );
+      load();
+    } catch (e) {
+      show(e instanceof ApiError ? e.detail : "Envoi email impossible", "error");
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
   const shareReceipt = async () => {
     if (!receipt) return;
-    const txType = typeLabel(type || receipt.type);
+    const txType = typeLabel(type || receipt.type, receipt.kind, receipt.label);
     const st = statusBadge(receipt.status);
     const method = receipt.payment_method ?? receipt.method ?? "—";
     const ref = receipt.reference ?? receipt.id;
@@ -154,7 +186,7 @@ export default function ReceiptScreen() {
   }
 
   const st = statusBadge(receipt.status);
-  const txType = typeLabel(type || receipt.type);
+  const txType = typeLabel(type || receipt.type, receipt.kind, receipt.label);
   const receiptId = buildReceiptId(receipt);
   const method = receipt.payment_method ?? receipt.method ?? "—";
   const ref = receipt.reference ?? receipt.id;
@@ -162,7 +194,7 @@ export default function ReceiptScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <ScrollView
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -193,6 +225,15 @@ export default function ReceiptScreen() {
           <Text style={styles.amount}>{formatXAF(receipt.amount_xaf)}</Text>
           <Text style={styles.amountSub}>{txType}</Text>
 
+          <View style={styles.emailBanner}>
+            <Mail color={Colors.secondary} size={16} />
+            <Text style={styles.emailBannerText}>
+              {receipt.email_sent
+                ? "Une copie de ce reçu a été envoyée à votre adresse email."
+                : "Le reçu sera envoyé par email après confirmation du paiement."}
+            </Text>
+          </View>
+
           {/* Divider */}
           <View style={styles.divider} />
 
@@ -218,15 +259,22 @@ export default function ReceiptScreen() {
 
           {/* Action buttons */}
           <View style={{ gap: 12, paddingHorizontal: Spacing.xl, marginTop: 4 }}>
-            {/* Secondary: share */}
+            <Button
+              label={emailSending ? "Envoi en cours..." : "Renvoyer par email"}
+              variant="secondary"
+              onPress={resendEmail}
+              loading={emailSending}
+              icon={<Mail color={Colors.secondary} size={16} />}
+              testID="receipt-email"
+            />
             <TouchableOpacity onPress={shareReceipt} style={styles.shareBtn} testID="receipt-share">
               <Share2 color={Colors.secondary} size={16} />
               <Text style={styles.shareBtnText}>Partager ce reçu</Text>
             </TouchableOpacity>
-            {/* Primary: home */}
+            {/* Primary CTA */}
             <Button
-              label="Retour à l'accueil"
-              onPress={() => router.replace("/(tabs)" as any)}
+              label={type === "wallet_topup" ? "Retour au wallet" : "Retour à l'accueil"}
+              onPress={() => router.replace(type === "wallet_topup" ? "/wallet" : "/(tabs)" as any)}
               icon={<Home color="#fff" size={16} />}
               testID="receipt-home"
             />
@@ -302,7 +350,26 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: Colors.textMuted,
     marginTop: 4,
+    marginBottom: 12,
+  },
+  emailBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginHorizontal: Spacing.xl,
     marginBottom: 16,
+    padding: 12,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.secondary + "12",
+    borderWidth: 1,
+    borderColor: Colors.secondary + "30",
+  },
+  emailBannerText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    color: Colors.text,
+    lineHeight: 18,
   },
   divider: {
     height: 1,

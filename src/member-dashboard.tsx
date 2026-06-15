@@ -1,7 +1,6 @@
 // Member dashboard — premium personal fintech home.
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Image,
   RefreshControl,
   ScrollView,
@@ -13,11 +12,12 @@ import {
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { Bell, ChevronRight, PiggyBank, Users, Wallet, TrendingUp, Sparkles, QrCode } from "lucide-react-native";
+import { Bell, ChevronRight, PiggyBank, Trophy, Users, Wallet, TrendingUp, Sparkles, QrCode, BarChart2 } from "lucide-react-native";
 
 import { useAuth } from "@/src/auth-context";
 import { api, formatXAF } from "@/src/api";
-import { Card, SectionTitle, StatCard } from "@/src/ui";
+import { supabase } from "@/src/supabase";
+import { Card, SectionTitle, StatCard, SkeletonBox, SkeletonCard } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { TrustGauge } from "@/src/trust-gauge";
 import { LineChart } from "@/src/charts";
@@ -41,33 +41,87 @@ export function MemberDashboard() {
   const [trust, setTrust] = useState<TrustScore | null>(null);
   const [insights, setInsights] = useState<Insight[]>([]);
   const [unread, setUnread] = useState(0);
+  const [alertCount, setAlertCount] = useState(0);
   const [savingsSeries, setSavingsSeries] = useState<Series | null>(null);
 
   const load = useCallback(async () => {
-    try {
-      const [s, t, i, n, ss] = await Promise.all([
-        api.get<Summary>("/savings/summary"),
-        api.get<TrustScore>("/trust-score"),
-        api.get<{ items: Insight[] }>("/insights"),
-        api.get<{ unread_count: number }>("/notifications"),
-        api.get<Series>("/analytics/me/savings?days=14"),
-      ]);
-      setSummary(s); setTrust(t); setInsights(i.items); setUnread(n.unread_count);
-      setSavingsSeries(ss);
-    } catch (e) {
-      console.warn("home load", e);
-    }
+    const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
+      try { return await fn(); } catch { return null; }
+    };
+    const [s, t, i, n, ss, al] = await Promise.all([
+      safe(() => api.get<Summary>("/savings/summary")),
+      safe(() => api.get<TrustScore>("/trust-score")),
+      safe(() => api.get<{ items: Insight[] }>("/insights")),
+      safe(() => api.get<{ unread_count: number }>("/notifications")),
+      safe(() => api.get<Series>("/analytics/me/savings?days=14")),
+      safe(() => api.get<any[]>("/alerts")),
+    ]);
+    if (s) setSummary(s);
+    if (t) setTrust(t);
+    if (i) setInsights(i.items ?? []);
+    if (n) setUnread(n.unread_count ?? 0);
+    if (ss) setSavingsSeries(ss);
+    if (al) setAlertCount(Array.isArray(al) ? al.length : 0);
     setLoading(false);
   }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  // Real-time: subscribe only while screen is focused, auto-cleanup on blur
+  useFocusEffect(useCallback(() => {
+    load();
+    const userId = user?.id;
+    if (!userId) return;
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+    const ch = supabase
+      .channel(`rt-dashboard-member-${userId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "savings_transactions", filter: `user_id=eq.${userId}` }, () => { load(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "savings_goals", filter: `user_id=eq.${userId}` }, () => { load(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "tontine_contributions", filter: `user_id=eq.${userId}` }, () => { load(); })
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          // Real-time down — fall back to 30s polling
+          console.warn("[dashboard] real-time subscription failed, switching to polling:", status);
+          if (!pollTimer) pollTimer = setInterval(() => { load(); }, 30_000);
+        } else if (status === "SUBSCRIBED" && pollTimer) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
+      });
+    return () => {
+      supabase.removeChannel(ch);
+      if (pollTimer) clearInterval(pollTimer);
+    };
+  }, [load, user?.id]));
 
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.center}><ActivityIndicator size="large" color={Colors.secondary} /></View>
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
+          <View style={styles.header}>
+            <View style={{ gap: 8 }}>
+              <SkeletonBox width={80} height={14} />
+              <SkeletonBox width={140} height={26} />
+            </View>
+            <SkeletonBox width={44} height={44} borderRadius={22} />
+          </View>
+          <View style={{ paddingHorizontal: Spacing.xl }}>
+            <SkeletonBox height={200} borderRadius={20} />
+          </View>
+          <View style={styles.statsRow}>
+            <SkeletonBox height={80} borderRadius={16} style={{ flex: 1 }} />
+            <SkeletonBox height={80} borderRadius={16} style={{ flex: 1 }} />
+          </View>
+          <View style={styles.statsRow}>
+            <SkeletonBox height={80} borderRadius={16} style={{ flex: 1 }} />
+            <SkeletonBox height={80} borderRadius={16} style={{ flex: 1 }} />
+          </View>
+          <View style={{ paddingHorizontal: Spacing.xl, marginTop: 12, gap: 10 }}>
+            <SkeletonCard />
+            <SkeletonCard />
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -75,7 +129,7 @@ export function MemberDashboard() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScrollView
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.secondary} />}
         showsVerticalScrollIndicator={false}
       >
@@ -90,6 +144,25 @@ export function MemberDashboard() {
             {unread > 0 ? <View style={styles.bellDot}><Text style={styles.bellDotText}>{unread > 9 ? "9+" : unread}</Text></View> : null}
           </TouchableOpacity>
         </View>
+
+        {/* Alerts row */}
+        <TouchableOpacity
+          onPress={() => router.push("/alerts" as any)}
+          activeOpacity={0.85}
+          style={styles.alertsRow}
+          testID="home-alerts-btn"
+        >
+          <Bell color={alertCount > 0 ? Colors.warning : Colors.textMuted} size={16} />
+          <Text style={[styles.alertsRowText, alertCount > 0 && { color: Colors.warning }]}>
+            Alertes intelligentes
+          </Text>
+          {alertCount > 0 ? (
+            <View style={styles.alertsBadge}>
+              <Text style={styles.alertsBadgeText}>{alertCount}</Text>
+            </View>
+          ) : null}
+          <Text style={{ color: Colors.textMuted, fontSize: 14, marginLeft: "auto" }}>›</Text>
+        </TouchableOpacity>
 
         {/* Trust Score card */}
         <View style={{ paddingHorizontal: Spacing.xl }}>
@@ -149,6 +222,15 @@ export function MemberDashboard() {
         </View>
         <View style={styles.qaRow}>
           <QuickAction icon={<QrCode color="#7C3AED" size={22} />} label="Recevoir" onPress={() => router.push("/qr-receive")} testID="home-action-qr-receive" />
+          <QuickAction icon={<Wallet color="#10B981" size={22} />} label="Mon Wallet" onPress={() => router.push("/wallet")} testID="home-action-wallet" />
+        </View>
+        <View style={styles.qaRow}>
+          <QuickAction icon={<BarChart2 color={Colors.secondary} size={22} />} label="Tableau de bord" onPress={() => router.push("/analytics")} testID="home-action-analytics" />
+          <QuickAction icon={<Users color={Colors.primary} size={22} />} label="Famille" onPress={() => router.push("/family")} testID="home-action-family" />
+        </View>
+        <View style={styles.qaRow}>
+          <QuickAction icon={<Trophy color={Colors.accent} size={22} />} label="Classement" onPress={() => router.push("/ranking")} testID="home-action-ranking" />
+          <View style={{ flex: 1 }} />
         </View>
 
         {/* Promotion CTA for members */}
@@ -215,6 +297,29 @@ const styles = StyleSheet.create({
   bellWrap: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border },
   bellDot: { position: "absolute", top: 6, right: 6, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: Colors.danger, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   bellDotText: { color: "#fff", fontSize: 10, fontWeight: "800" },
+  alertsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: Spacing.xl,
+    marginBottom: Spacing.sm,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  alertsRowText: { color: Colors.textMuted, fontSize: 13, fontWeight: "700" },
+  alertsBadge: {
+    backgroundColor: Colors.warning,
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    minWidth: 20,
+    alignItems: "center",
+  },
+  alertsBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800" },
   scoreCard: { borderRadius: Radius.xxl, padding: 24, overflow: "hidden" },
   scoreHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
   scoreLabel: { color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: "700", letterSpacing: 1 },
@@ -222,7 +327,7 @@ const styles = StyleSheet.create({
   glow: { width: 18, height: 18, borderRadius: 9 },
   scoreFooter: { marginTop: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   scoreFooterText: { color: "rgba(255,255,255,0.8)", fontSize: 13, fontWeight: "600" },
-  statsRow: { flexDirection: "row", paddingHorizontal: Spacing.xl, gap: 10, marginTop: 12 },
+  statsRow: { flexDirection: "row", paddingHorizontal: Spacing.xl, gap: 10, marginTop: 12, minWidth: 0 },
   qaRow: { flexDirection: "row", paddingHorizontal: Spacing.xl, gap: 10, marginBottom: 10 },
   qa: { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.lg, borderWidth: 1, borderColor: Colors.border, flexDirection: "row", alignItems: "center", gap: 12 },
   qaIconBox: { width: 44, height: 44, borderRadius: 12, backgroundColor: Colors.surfaceAlt, alignItems: "center", justifyContent: "center" },

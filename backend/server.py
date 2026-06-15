@@ -33,6 +33,7 @@ from routes_payments import payments_router, sms_router, sms_admin_router  # noq
 from routes_premium import identity_v2_router, kyc_router  # noqa: E402
 from routes_fraud import fraud_router  # noqa: E402
 from routes_referral import router as referral_router  # noqa: E402
+from routes_documents import router as documents_router  # noqa: E402
 from migrations import migrate_roles  # noqa: E402
 from scheduler import start_scheduler, shutdown_scheduler  # noqa: E402
 from routes_ws import ws_router  # noqa: E402
@@ -42,8 +43,11 @@ logger = logging.getLogger("hodix")
 
 _sentry_dsn = os.environ.get("SENTRY_DSN", "")
 if _sentry_dsn:
-    import sentry_sdk
-    sentry_sdk.init(dsn=_sentry_dsn, traces_sample_rate=0.1, environment=os.environ.get("ENVIRONMENT", "production"))
+    try:
+        import sentry_sdk
+        sentry_sdk.init(dsn=_sentry_dsn, traces_sample_rate=0.1, environment=os.environ.get("ENVIRONMENT", "production"))
+    except Exception as _sentry_err:
+        logger.warning("Sentry init skipped: %s", _sentry_err)
 
 app = FastAPI(title="HODIX API", version="1.0.0")
 app.state.limiter = limiter
@@ -82,6 +86,7 @@ api_router.include_router(identity_v2_router)
 api_router.include_router(kyc_router)
 api_router.include_router(fraud_router)
 api_router.include_router(referral_router)
+api_router.include_router(documents_router)
 
 app.include_router(api_router)
 app.include_router(ws_router)

@@ -1,0 +1,29 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "REPLACE_WITH_APPLE_TEAM_ID.app.hodix.mobile",
+        "paths": [
+          "/tontines/join*",
+          "/associations/join*",
+          "/cooperatives/join*",
+          "/pay*",
+          "/auth/callback*",
+          "/credit-score",
+          "/welcome",
+          "/login",
+          "/register",
+          "/tontines/directory*",
+          "/wallet*",
+          "/notifications"
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": [
+      "REPLACE_WITH_APPLE_TEAM_ID.app.hodix.mobile"
+    ]
+  }
+}

@@ -8,8 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 logger = logging.getLogger(__name__)
 
-# Email addresses that automatically get super_admin role
-SUPER_ADMIN_EMAILS = {e.strip().lower() for e in os.environ.get("SUPER_ADMIN_EMAILS", "admin@hodix.app,raisanguemo@gmail.com").split(",") if e.strip()}
+# Email addresses that automatically get super_admin role.
+# Configured exclusively via env var — a hardcoded fallback would be a
+# privilege-escalation backdoor (anyone registering that email becomes admin).
+SUPER_ADMIN_EMAILS = {e.strip().lower() for e in os.environ.get("SUPER_ADMIN_EMAILS", "").split(",") if e.strip()}
 
 from audit import log_event
 from db import get_db

@@ -9,7 +9,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Copy, Crown, Users as UsersIcon, ChevronRight, CreditCard, MessageSquare } from "lucide-react-native";
 
-import { api, ApiError, formatXAF } from "@/src/api";
+import { api, formatXAF } from "@/src/api";
+import { openPaymentScreen, type PaymentKind } from "@/src/payment-nav";
 import { Button, Card, Field } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 
@@ -35,9 +36,7 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [amount, setAmount] = useState("");
-  const [memberId, setMemberId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -62,7 +61,7 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
   const contribs: Contrib[] = data.contributions ?? [];
 
   const shareWhatsApp = async () => {
-    const appLink = "https://hodix.app";
+    const appLink = "https://www.hodix.app";
     const message = `🏦 Rejoignez la tontine *"${item.name}"* sur Hodix !\n\n📌 Code d'invitation : *${item.invite_code}*\n\n📱 Téléchargez l'app : ${appLink}\n\nOu rejoignez directement : hodix://join?code=${item.invite_code}`;
     const url = `whatsapp://send?text=${encodeURIComponent(message)}`;
     try {
@@ -80,24 +79,28 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
   const shareGeneric = async () => {
     try {
       await Share.share({
-        message: `Rejoignez "${item.name}" sur Hodix avec le code : ${item.invite_code} — https://hodix.app`,
+        message: `Rejoignez "${item.name}" sur Hodix avec le code : ${item.invite_code} — https://www.hodix.app`,
       });
     } catch {}
   };
 
-  const contribute = async () => {
-    const amt = parseFloat(amount);
+  const paymentKind: PaymentKind =
+    detailKey === "tontine" ? "tontine_contribution"
+    : detailKey === "association" ? "association_contribution"
+    : "cooperative_contribution";
+
+  const goToPayment = (payAmount?: number) => {
+    const amt = payAmount ?? parseFloat(amount);
     if (!amt || amt <= 0) { setError("Montant invalide"); return; }
-    const target = memberId ?? members[0]?.user_id;
-    if (!target) { setError("Aucun membre"); return; }
-    setError(null); setBusy(true);
-    try {
-      await api.post(contributeEndpoint, { member_user_id: target, amount: amt });
-      setAmount("");
-      await load();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.detail : "Erreur");
-    } finally { setBusy(false); }
+    setError(null);
+    openPaymentScreen(router, {
+      kind: paymentKind,
+      amount: amt,
+      label: item?.name,
+      ...(detailKey === "tontine" ? { tontine_id: item.id } : {}),
+      ...(detailKey === "association" ? { association_id: item.id } : {}),
+      ...(detailKey === "cooperative" ? { cooperative_id: item.id } : {}),
+    });
   };
 
   const advanceRotation = async () => {
@@ -184,76 +187,43 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
             </View>
           ) : null}
 
-          {detailKey === "tontine" && item.contribution_amount ? (
-            <View style={{ marginTop: 16 }}>
-              <Button
-                testID={`${testIDPrefix}-pay-stripe`}
-                label={`💳 Payer ma contribution — ${formatXAF(item.contribution_amount, item.currency)}`}
-                variant="accent"
-                icon={<CreditCard color="#fff" size={18} />}
-                onPress={() => router.push({
-                  pathname: "/payments/pay",
-                  params: { tontine_id: item.id, amount: String(item.contribution_amount) },
-                } as any)}
-              />
-              <Text style={styles.paySubLabel}>Paiement sécurisé via Orange Money, MTN ou carte bancaire</Text>
-            </View>
-          ) : null}
-
-          {detailKey === "tontine" ? (
-            isAdmin ? (
-              <>
-                <Text style={styles.section}>Enregistrer une contribution manuelle (admin)</Text>
-                <Text style={styles.adminNote}>Réservé aux contributions en espèces vérifiées.</Text>
-                <Card>
-                  <Field testID={`${testIDPrefix}-amount`} label="Montant" placeholder={item.contribution_amount?.toString() ?? "10000"} value={amount} onChangeText={setAmount} keyboardType="number-pad" />
-                  <Text style={styles.fieldLbl}>Membre concerné</Text>
-                  <View style={{ gap: 6, marginBottom: 12 }}>
-                    {members.map((m) => {
-                      const active = (memberId ?? members[0]?.user_id) === m.user_id;
-                      return (
-                        <TouchableOpacity
-                          testID={`${testIDPrefix}-member-${m.user_id}`}
-                          key={m.id}
-                          onPress={() => setMemberId(m.user_id)}
-                          style={[styles.memberOpt, active ? { borderColor: Colors.secondary, backgroundColor: "#EFF6FF" } : null]}
-                        >
-                          <Text style={styles.memberOptText}>{m.full_name}{m.role === "admin" ? " · Admin" : ""}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                  {error ? <Text style={styles.error}>{error}</Text> : null}
-                  <Button testID={`${testIDPrefix}-contribute`} label="Enregistrer la contribution" onPress={contribute} loading={busy} />
-                </Card>
-              </>
-            ) : null
-          ) : (
-            <>
-              <Text style={styles.section}>Enregistrer une contribution</Text>
-              <Card>
-                <Field testID={`${testIDPrefix}-amount`} label="Montant" placeholder={item.contribution_amount?.toString() ?? "10000"} value={amount} onChangeText={setAmount} keyboardType="number-pad" />
-                <Text style={styles.fieldLbl}>Membre concerné</Text>
-                <View style={{ gap: 6, marginBottom: 12 }}>
-                  {members.map((m) => {
-                    const active = (memberId ?? members[0]?.user_id) === m.user_id;
-                    return (
-                      <TouchableOpacity
-                        testID={`${testIDPrefix}-member-${m.user_id}`}
-                        key={m.id}
-                        onPress={() => setMemberId(m.user_id)}
-                        style={[styles.memberOpt, active ? { borderColor: Colors.secondary, backgroundColor: "#EFF6FF" } : null]}
-                      >
-                        <Text style={styles.memberOptText}>{m.full_name}{m.role === "admin" ? " · Admin" : ""}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-                {error ? <Text style={styles.error}>{error}</Text> : null}
-                <Button testID={`${testIDPrefix}-contribute`} label="Enregistrer la contribution" onPress={contribute} loading={busy} />
-              </Card>
-            </>
-          )}
+          <View style={{ marginTop: 16 }}>
+            <Text style={styles.section}>
+              {detailKey === "tontine" ? "Cotiser" : "Contribuer"}
+            </Text>
+            <Card>
+              {detailKey === "tontine" && item.contribution_amount ? (
+                <Button
+                  testID={`${testIDPrefix}-pay-fixed`}
+                  label={`Payer ${formatXAF(item.contribution_amount, item.currency)}`}
+                  variant="accent"
+                  icon={<CreditCard color="#fff" size={18} />}
+                  onPress={() => goToPayment(item.contribution_amount)}
+                />
+              ) : (
+                <>
+                  <Field
+                    testID={`${testIDPrefix}-amount`}
+                    label="Montant (XAF)"
+                    placeholder={item.contribution_amount?.toString() ?? "10000"}
+                    value={amount}
+                    onChangeText={setAmount}
+                    keyboardType="number-pad"
+                  />
+                  <Button
+                    testID={`${testIDPrefix}-contribute`}
+                    label="Payer — mode électronique"
+                    onPress={() => goToPayment()}
+                    disabled={!amount}
+                  />
+                </>
+              )}
+              {error ? <Text style={styles.error}>{error}</Text> : null}
+              <Text style={styles.paySubLabel}>
+                Paiement CinetPay uniquement — Orange, MTN, Moov ou carte. Aucun crédit sans débit confirmé.
+              </Text>
+            </Card>
+          </View>
 
           <Text style={styles.section}>Membres ({members.length})</Text>
           <View style={{ gap: 8 }}>
