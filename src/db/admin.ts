@@ -245,7 +245,7 @@ export async function adminGetKycDetail(userId: string) {
   const sb = getSupabase();
   const [{ data: profile, error: profErr }, { data: submission, error: subErr }] = await Promise.all([
     sb.from("profiles")
-      .select("id, full_name, phone, email, country, city, address, date_of_birth, birth_place, profession, kyc_status, created_at")
+      .select("id, full_name, phone, email, country, city, address, date_of_birth, birth_place, occupation, kyc_status, created_at")
       .eq("id", userId)
       .maybeSingle(),
     sb.from("kyc_submissions")
@@ -273,7 +273,7 @@ export async function adminGetKycDetail(userId: string) {
     address: profile?.address ?? "—",
     date_of_birth: profile?.date_of_birth ?? null,
     birth_place: profile?.birth_place ?? null,
-    profession: profile?.profession ?? null,
+    profession: profile?.occupation ?? null,
     kyc_status: normalizeKycStatus(submission?.status, profile?.kyc_status),
     submission_status: submission?.status ?? null,
     submitted_at: submission?.submitted_at ?? null,
