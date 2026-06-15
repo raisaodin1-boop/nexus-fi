@@ -6,6 +6,7 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui", "browser"],
   "orientation": "portrait",
   "theme_color": "#0B1F3A",
   "background_color": "#F8FAFC",
@@ -83,6 +84,24 @@
       "description": "Voir mon Trust Score et mes certificats",
       "url": "/identity",
       "icons": [{ "src": "/favicon.png", "sizes": "32x32" }]
+    }
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "launch_handler": {
+    "client_mode": ["focus-existing", "auto"]
+  },
+  "protocol_handlers": [
+    {
+      "protocol": "web+hodix",
+      "url": "/?protocol=%s"
     }
   ],
   "related_applications": [
