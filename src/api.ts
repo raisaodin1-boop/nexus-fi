@@ -254,9 +254,10 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"   && s[0] === "admin" && s[1] === "tontines")                          return (await db.adminListTontines(body?.search)) as T;
     if (method === "PATCH" && s[0] === "admin" && s[1] === "tontines" && s[2])                  return (await db.adminUpdateTontine(s[2], body)) as T;
     if (method === "DELETE"&& s[0] === "admin" && s[1] === "tontines" && s[2])                  return (await db.adminDeleteTontine(s[2])) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "kyc" && s[2])                      return (await db.adminGetKycDetail(s[2])) as T;
     if (method === "GET"   && s[0] === "admin" && s[1] === "kyc")                               return (await db.adminListKyc()) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "kyc" && s[2] === "approve")         return (await db.adminHandleKyc(body?.user_id, true)) as T;
-    if (method === "POST"  && s[0] === "admin" && s[1] === "kyc" && s[2] === "reject")          return (await db.adminHandleKyc(body?.user_id, false)) as T;
+    if (method === "POST"  && s[0] === "admin" && s[1] === "kyc" && s[2] === "reject")          return (await db.adminHandleKyc(body?.user_id, false, body?.reason)) as T;
     if (method === "DELETE"&& s[0] === "admin" && s[1] === "kyc" && s[2])                      return (await db.adminDeleteKyc(s[2])) as T;
     if (method === "POST" && s[0] === "promotion-requests" && !s[1])                            return (await db.createPromotionRequest(body?.reason)) as T;
     if (method === "GET"  && s[0] === "promotion-requests" && s[1] === "me")                   return (await db.getMyPromotionRequest()) as T;

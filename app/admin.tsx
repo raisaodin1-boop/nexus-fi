@@ -18,7 +18,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowLeft, Users, ShieldCheck, Crown, BarChart3, Bell,
   CheckCircle, XCircle, Send, ChevronRight, ShieldAlert,
-  Search, Zap, Trash2,
+  Search, Zap,
 } from "lucide-react-native";
 
 import { api, ApiError } from "@/src/api";
@@ -28,6 +28,7 @@ import { SkeletonCard } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { useToast } from "@/src/toast";
 import { MIN_TOUCH, useResponsive } from "@/src/hooks/use-responsive";
+import { KycReviewModal, type KycReviewTarget } from "@/src/admin-kyc-review-modal";
 
 type Tab = "users" | "kyc" | "promotions" | "tontines" | "broadcast";
 
@@ -47,6 +48,9 @@ interface KycEntry {
   submitted_at?: string | null;
   verification_mode?: string | null;
   id_type?: string | null;
+  id_front_path?: string | null;
+  id_back_path?: string | null;
+  selfie_path?: string | null;
 }
 
 function isPendingKyc(status: string) {
@@ -130,6 +134,7 @@ export default function AdminConsole() {
   const [broadcastTitle, setBroadcastTitle] = useState("");
   const [broadcastBody, setBroadcastBody] = useState("");
   const [broadcasting, setBroadcasting] = useState(false);
+  const [kycReviewTarget, setKycReviewTarget] = useState<KycReviewTarget | null>(null);
 
   if (user?.role !== "super_admin") {
     return (
@@ -200,32 +205,12 @@ export default function AdminConsole() {
     return () => { if (searchDebounce.current) clearTimeout(searchDebounce.current); };
   }, [search, tab, loadUsers]);
 
-  const handleKyc = async (userId: string, approve: boolean) => {
-    try {
-      await api.post(approve ? "/admin/kyc/approve" : "/admin/kyc/reject", { user_id: userId });
-      show(approve ? "KYC approuvé ✓" : "KYC rejeté", approve ? "success" : "error");
-      load();
-      loadUsers(search, 0, false);
-    } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
-  };
-
-  const handleDeleteKyc = (userId: string, name: string) => {
-    const doIt = async () => {
-      try {
-        await api.del(`/admin/kyc/${userId}`);
-        show("Dossier KYC supprimé", "success");
-        load();
-        loadUsers(search, 0, false);
-      } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
-    };
-    if (Platform.OS === "web") {
-      if (window.confirm(`Supprimer le dossier KYC de ${name} ?`)) doIt();
-    } else {
-      Alert.alert("Supprimer KYC", `Supprimer le dossier de ${name} ?`, [
-        { text: "Annuler", style: "cancel" },
-        { text: "Supprimer", style: "destructive", onPress: doIt },
-      ]);
-    }
+  const openKycReview = (entry: KycEntry) => {
+    setKycReviewTarget({
+      user_id: entry.user_id,
+      full_name: entry.full_name,
+      kyc_status: entry.kyc_status,
+    });
   };
 
   const handlePromotion = async (userId: string, approve: boolean) => {
@@ -430,8 +415,9 @@ export default function AdminConsole() {
           renderItem={({ item: k }) => {
             const kycConf = KYC_CONFIG[k.kyc_status] ?? KYC_CONFIG.not_started;
             const pending = isPendingKyc(k.kyc_status);
+            const hasDocs = !!(k.id_front_path || k.id_back_path || k.selfie_path);
             return (
-              <View style={styles.userCard}>
+              <TouchableOpacity style={styles.userCard} onPress={() => openKycReview(k)} activeOpacity={0.85}>
                 <View style={styles.userCardLeft}>
                   <Avatar name={k.full_name} size={44} />
                   <View style={{ flex: 1 }}>
@@ -440,6 +426,11 @@ export default function AdminConsole() {
                     {!!k.country && <Text style={styles.userEmail} numberOfLines={1}>{k.country}{k.id_type ? ` · ${k.id_type}` : ""}</Text>}
                     <View style={{ marginTop: 4, flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
                       <StatusBadge config={kycConf} />
+                      {hasDocs && (
+                        <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: "#DBEAFE" }}>
+                          <Text style={{ fontSize: 10, fontWeight: "700", color: "#1D4ED8" }}>Documents</Text>
+                        </View>
+                      )}
                       {!!k.verification_mode && (
                         <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: "#EEF2FF" }}>
                           <Text style={{ fontSize: 10, fontWeight: "700", color: "#4338CA" }}>{k.verification_mode}</Text>
@@ -448,24 +439,13 @@ export default function AdminConsole() {
                     </View>
                   </View>
                 </View>
-                <View style={{ gap: 6 }}>
+                <View style={{ alignItems: "flex-end", gap: 6 }}>
+                  <ChevronRight color={Colors.textMuted} size={18} />
                   {pending && (
-                    <>
-                      <TouchableOpacity style={styles.approveBtn} onPress={() => handleKyc(k.user_id, true)}>
-                        <CheckCircle color="#fff" size={13} />
-                        <Text style={styles.approveBtnText}>OK</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.rejectBtn} onPress={() => handleKyc(k.user_id, false)}>
-                        <XCircle color="#fff" size={13} />
-                        <Text style={styles.rejectBtnText}>Non</Text>
-                      </TouchableOpacity>
-                    </>
+                    <Text style={{ fontSize: 10, fontWeight: "700", color: Colors.secondary }}>Examiner →</Text>
                   )}
-                  <TouchableOpacity style={styles.deactivateBtn} onPress={() => handleDeleteKyc(k.user_id, k.full_name)}>
-                    <Trash2 color="#EF4444" size={14} />
-                  </TouchableOpacity>
                 </View>
-              </View>
+              </TouchableOpacity>
             );
           }}
           ListEmptyComponent={<Text style={styles.empty}>Aucun dossier KYC dans Supabase</Text>}
@@ -573,6 +553,14 @@ export default function AdminConsole() {
           </View>
         </ScrollView>
       )}
+      <KycReviewModal
+        target={kycReviewTarget}
+        onClose={() => setKycReviewTarget(null)}
+        onUpdated={() => {
+          load();
+          loadUsers(search, 0, false);
+        }}
+      />
     </SafeAreaView>
   );
 }

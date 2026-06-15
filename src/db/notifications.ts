@@ -14,7 +14,7 @@ function mapNotificationKind(type?: string | null): string {
   const t = (type ?? "info").toLowerCase();
   if (["success", "payment", "promotion", "escrow_release", "tontine_cycle"].includes(t)) return "success";
   if (t === "approved" || t === "kyc") return "success";
-  if (["warning", "alert", "tontine_reminder"].includes(t) || t.includes("reject") || t.includes("retard")) return "alert";
+  if (t === "kyc_rejected" || ["warning", "alert", "tontine_reminder"].includes(t) || t.includes("reject") || t.includes("retard")) return "alert";
   return "info";
 }
 

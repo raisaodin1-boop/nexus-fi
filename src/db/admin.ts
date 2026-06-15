@@ -3,6 +3,17 @@ import { notifyUser } from "./notifications";
 import { uid, cached, throwSb, invalidateCache } from "./helpers";
 
 const PENDING_KYC = ["pending", "pending_review"] as const;
+const KYC_BUCKET = "kyc-documents";
+
+async function signedKycUrl(path?: string | null): Promise<string | null> {
+  if (!path) return null;
+  const { data, error } = await getSupabase().storage.from(KYC_BUCKET).createSignedUrl(path, 3600);
+  if (error) {
+    console.warn("signedKycUrl:", error.message);
+    return null;
+  }
+  return data.signedUrl;
+}
 
 export function normalizeKycStatus(submissionStatus?: string | null, profileStatus?: string | null): string {
   const raw = profileStatus || submissionStatus || "not_submitted";
@@ -230,16 +241,81 @@ export async function adminListKyc() {
   );
 }
 
-export async function adminHandleKyc(userId: string, approve: boolean) {
+export async function adminGetKycDetail(userId: string) {
+  const sb = getSupabase();
+  const [{ data: profile, error: profErr }, { data: submission, error: subErr }] = await Promise.all([
+    sb.from("profiles")
+      .select("id, full_name, phone, email, country, city, address, date_of_birth, birth_place, profession, kyc_status, created_at")
+      .eq("id", userId)
+      .maybeSingle(),
+    sb.from("kyc_submissions")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle(),
+  ]);
+  if (profErr) throwSb(profErr);
+  if (subErr) throwSb(subErr);
+  if (!profile && !submission) throw { status: 404, detail: "Dossier KYC introuvable" };
+
+  const [idFrontUrl, idBackUrl, selfieUrl] = await Promise.all([
+    signedKycUrl(submission?.id_front_path),
+    signedKycUrl(submission?.id_back_path),
+    signedKycUrl(submission?.selfie_path),
+  ]);
+
+  return {
+    user_id: userId,
+    full_name: profile?.full_name ?? "—",
+    email: profile?.email ?? "—",
+    phone: profile?.phone ?? "—",
+    country: profile?.country ?? submission?.country_code ?? "—",
+    city: profile?.city ?? "—",
+    address: profile?.address ?? "—",
+    date_of_birth: profile?.date_of_birth ?? null,
+    birth_place: profile?.birth_place ?? null,
+    profession: profile?.profession ?? null,
+    kyc_status: normalizeKycStatus(submission?.status, profile?.kyc_status),
+    submission_status: submission?.status ?? null,
+    submitted_at: submission?.submitted_at ?? null,
+    reviewed_at: submission?.reviewed_at ?? null,
+    verification_mode: submission?.verification_mode ?? "manual",
+    provider: submission?.provider ?? null,
+    id_type: submission?.id_type ?? null,
+    country_code: submission?.country_code ?? null,
+    rejection_reason: submission?.rejection_reason ?? null,
+    documents: {
+      id_front: submission?.id_front_path
+        ? { path: submission.id_front_path, url: idFrontUrl }
+        : null,
+      id_back: submission?.id_back_path
+        ? { path: submission.id_back_path, url: idBackUrl }
+        : null,
+      selfie: submission?.selfie_path
+        ? { path: submission.selfie_path, url: selfieUrl }
+        : null,
+    },
+  };
+}
+
+export async function adminHandleKyc(userId: string, approve: boolean, rejectionReason?: string) {
   const submissionStatus = approve ? "approved" : "rejected";
   const profileStatus = approve ? "approved" : "rejected";
   const reviewedAt = new Date().toISOString();
   const sb = getSupabase();
+  const reason = rejectionReason?.trim() || null;
+
+  if (!approve && !reason) {
+    throw { status: 400, detail: "Indiquez ce que l'utilisateur doit corriger avant de rejeter le dossier." };
+  }
 
   const { data: existing } = await sb.from("kyc_submissions").select("id").eq("user_id", userId).maybeSingle();
   if (existing) {
     const { error } = await sb.from("kyc_submissions")
-      .update({ status: submissionStatus, reviewed_at: reviewedAt })
+      .update({
+        status: submissionStatus,
+        reviewed_at: reviewedAt,
+        rejection_reason: approve ? null : reason,
+      })
       .eq("user_id", userId);
     throwSb(error);
   } else {
@@ -249,6 +325,7 @@ export async function adminHandleKyc(userId: string, approve: boolean) {
       reviewed_at: reviewedAt,
       verification_mode: "manual",
       provider: "manual",
+      rejection_reason: approve ? null : reason,
     });
     throwSb(error);
   }
@@ -256,9 +333,24 @@ export async function adminHandleKyc(userId: string, approve: boolean) {
   const { error: profErr } = await sb.from("profiles").update({ kyc_status: profileStatus }).eq("id", userId);
   throwSb(profErr);
 
-  const title = approve ? "KYC approuvé ✅" : "KYC refusé";
-  const body = approve ? "Votre identité a été vérifiée avec succès." : "Votre dossier KYC a été refusé. Contactez le support.";
-  await notifyUser({ user_id: userId, title, body, type: "kyc" });
+  if (approve) {
+    await notifyUser({
+      user_id: userId,
+      title: "KYC approuvé ✅",
+      body: "Félicitations ! Votre identité a été vérifiée. Vous pouvez maintenant effectuer des retraits et accéder aux limites complètes.",
+      type: "kyc",
+      metadata: { action_url: "/kyc" },
+    });
+  } else {
+    await notifyUser({
+      user_id: userId,
+      title: "KYC refusé — action requise",
+      body: `Votre dossier n'a pas pu être validé. À corriger : ${reason}. Soumettez un nouveau dossier depuis votre profil.`,
+      type: "kyc_rejected",
+      metadata: { action_url: "/kyc", rejection_reason: reason },
+    });
+  }
+
   invalidateCache("admin");
   return { detail: `KYC ${approve ? "approuvé" : "refusé"}` };
 }
