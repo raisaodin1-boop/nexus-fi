@@ -62,6 +62,7 @@ export async function enqueueTransaction(
   const queue = await readQueue();
   queue.push(tx);
   await writeQueue(queue);
+  requestOfflineSync();
   return tx;
 }
 
@@ -132,4 +133,11 @@ async function submitQueuedTx(tx: QueuedTx): Promise<void> {
     default:
       throw new Error(`Unknown queued tx kind: ${(tx as any).kind}`);
   }
+}
+
+function requestOfflineSync() {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+  navigator.serviceWorker.ready
+    .then((reg) => reg.active?.postMessage({ type: "REGISTER_SYNC" }))
+    .catch(() => {});
 }

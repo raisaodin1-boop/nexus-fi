@@ -31,6 +31,7 @@ import { Colors } from "@/src/theme";
 import { APP_MAX_WIDTH, shouldShowWebPhoneFrame } from "@/src/hooks/use-responsive";
 import { DynamicSeo } from "@/src/dynamic-seo";
 import { DeepLinkHandler } from "@/src/deep-link-handler";
+import { PwaSetup } from "@/src/pwa-setup";
 import { PushConsentModal } from "@/src/consent-modal";
 import { attachPushNotificationListeners, registerExpoPushToken } from "@/src/push-notifications";
 import { runDueAutoSavings } from "@/src/db/auto-savings";
@@ -179,6 +180,7 @@ function RootLayoutInner() {
   const stack = (
     <BiometricGate>
       <DynamicSeo />
+      <PwaSetup />
       <DeepLinkHandler />
       <PushSetup />
       <PushConsentGate />

@@ -1,9 +1,9 @@
 {
-  "id": "/?homescreen=1",
+  "id": "https://www.hodix.app/",
   "name": "HODIX – Tontines Digitales & Épargne Africaine",
   "short_name": "HODIX",
   "description": "La première super-app fintech africaine. Tontines digitales, épargne collective, wallet Mobile Money, Trust Score financier.",
-  "start_url": "/",
+  "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui", "browser"],
@@ -14,6 +14,26 @@
   "dir": "ltr",
   "categories": ["finance", "productivity", "utilities"],
   "iarc_rating_id": "e84b072d-71b3-4d3e-86ae-31a8ce4e53b7",
+  "handle_links": "preferred",
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  "protocol_handlers": [
+    {
+      "protocol": "web+hodix",
+      "url": "/share?url=%s"
+    }
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "GET",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
   "icons": [
     {
       "src": "/favicon.png",
@@ -54,6 +74,13 @@
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Gestion de tontine digitale"
+    },
+    {
+      "src": "/og-image.png",
+      "sizes": "1200x630",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "HODIX — Tontines digitales africaines"
     }
   ],
   "shortcuts": [
@@ -79,29 +106,18 @@
       "icons": [{ "src": "/favicon.png", "sizes": "32x32" }]
     },
     {
+      "name": "Rejoindre une tontine",
+      "short_name": "Rejoindre",
+      "description": "Coller un code d'invitation",
+      "url": "/tontines/join",
+      "icons": [{ "src": "/favicon.png", "sizes": "32x32" }]
+    },
+    {
       "name": "Mon Identité",
       "short_name": "Identité",
       "description": "Voir mon Trust Score et mes certificats",
       "url": "/identity",
       "icons": [{ "src": "/favicon.png", "sizes": "32x32" }]
-    }
-  ],
-  "share_target": {
-    "action": "/share",
-    "method": "GET",
-    "params": {
-      "title": "title",
-      "text": "text",
-      "url": "url"
-    }
-  },
-  "launch_handler": {
-    "client_mode": ["focus-existing", "auto"]
-  },
-  "protocol_handlers": [
-    {
-      "protocol": "web+hodix",
-      "url": "/?protocol=%s"
     }
   ],
   "related_applications": [

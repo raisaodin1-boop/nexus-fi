@@ -234,6 +234,7 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="apple-mobile-web-app-title" content="HODIX" />
         <meta name="application-name" content="HODIX" />
         <link rel="manifest" href="/manifest.json" />
+        <link rel="apple-touch-icon" href="/icon-192.png" />
 
         {/* ── Géolocalisation & Langue ────────────────────────────────── */}
         <meta name="geo.region" content="CM" />
