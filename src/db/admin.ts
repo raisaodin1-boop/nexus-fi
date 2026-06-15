@@ -245,11 +245,11 @@ export async function adminGetKycDetail(userId: string) {
   const sb = getSupabase();
   const [{ data: profile, error: profErr }, { data: submission, error: subErr }] = await Promise.all([
     sb.from("profiles")
-      .select("id, full_name, phone, email, country, city, address, date_of_birth, birth_place, occupation, kyc_status, created_at")
+      .select("id, full_name, phone, email, gender, country, city, neighborhood, address, date_of_birth, birth_place, occupation, kyc_status, created_at")
       .eq("id", userId)
       .maybeSingle(),
     sb.from("kyc_submissions")
-      .select("*")
+      .select("id, user_id, status, submitted_at, reviewed_at, verification_mode, provider, id_type, country_code, id_front_path, id_back_path, selfie_path, rejection_reason")
       .eq("user_id", userId)
       .maybeSingle(),
   ]);
@@ -263,17 +263,22 @@ export async function adminGetKycDetail(userId: string) {
     signedKycUrl(submission?.selfie_path),
   ]);
 
+  const addressParts = [profile?.address, profile?.neighborhood, profile?.city, profile?.country].filter(Boolean);
+
   return {
     user_id: userId,
     full_name: profile?.full_name ?? "—",
     email: profile?.email ?? "—",
     phone: profile?.phone ?? "—",
+    gender: profile?.gender ?? null,
     country: profile?.country ?? submission?.country_code ?? "—",
     city: profile?.city ?? "—",
+    neighborhood: profile?.neighborhood ?? null,
     address: profile?.address ?? "—",
+    address_full: addressParts.join(", ") || "—",
     date_of_birth: profile?.date_of_birth ?? null,
     birth_place: profile?.birth_place ?? null,
-    profession: profile?.occupation ?? null,
+    occupation: profile?.occupation ?? null,
     kyc_status: normalizeKycStatus(submission?.status, profile?.kyc_status),
     submission_status: submission?.status ?? null,
     submitted_at: submission?.submitted_at ?? null,

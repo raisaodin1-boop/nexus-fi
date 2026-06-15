@@ -15,6 +15,7 @@ interface KycStatus {
   status?: string;
   submitted_at?: string;
   verification_mode?: string;
+  rejection_reason?: string | null;
   full_name?: string;
   phone?: string;
   date_of_birth?: string;
@@ -66,6 +67,7 @@ export default function KycScreen() {
         kyc_status: profile?.kyc_status ?? kyc?.status ?? "not_submitted",
         verification_mode: kyc?.verification_mode,
         submitted_at: kyc?.submitted_at,
+        rejection_reason: kyc?.rejection_reason ?? null,
       });
     }).catch(() => {});
   }, []);
@@ -140,6 +142,13 @@ export default function KycScreen() {
           {status?.verification_mode === "automated" && kycStatus === "pending_review" && (
             <Text style={styles.autoTag}>Vérification automatique Smile Identity en cours…</Text>
           )}
+          {kycStatus === "rejected" && status?.rejection_reason ? (
+            <View style={styles.rejectionBox}>
+              <Text style={styles.rejectionTitle}>Motif du rejet</Text>
+              <Text style={styles.rejectionText}>{status.rejection_reason}</Text>
+              <Text style={styles.rejectionHint}>Corrigez les points ci-dessus puis soumettez un nouveau dossier.</Text>
+            </View>
+          ) : null}
         </Card>
 
         {canSubmit && (
@@ -230,6 +239,19 @@ const styles = StyleSheet.create({
   statusLabel: { fontSize: 20, fontWeight: "900" },
   statusDesc: { fontSize: 14, color: Colors.textMuted, textAlign: "center", lineHeight: 20 },
   autoTag: { fontSize: 12, color: Colors.secondary, fontWeight: "700", textAlign: "center" },
+  rejectionBox: {
+    marginTop: 8,
+    width: "100%",
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    borderRadius: Radius.md,
+    padding: 14,
+    gap: 6,
+  },
+  rejectionTitle: { fontSize: 12, fontWeight: "800", color: "#991B1B", textTransform: "uppercase" },
+  rejectionText: { fontSize: 14, color: "#7F1D1D", lineHeight: 20 },
+  rejectionHint: { fontSize: 12, color: Colors.textMuted, marginTop: 4 },
   sectionTitle: { fontSize: 15, fontWeight: "800", color: Colors.primary },
   hint: { fontSize: 12, color: Colors.textMuted, lineHeight: 18 },
   docRow: {

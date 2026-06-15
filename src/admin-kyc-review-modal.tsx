@@ -35,16 +35,21 @@ interface KycDetail {
   full_name: string;
   email: string;
   phone: string;
+  gender: string | null;
   country: string;
   city: string;
+  neighborhood: string | null;
   address: string;
+  address_full: string;
   date_of_birth: string | null;
   birth_place: string | null;
-  profession: string | null;
+  occupation: string | null;
   kyc_status: string;
   submitted_at: string | null;
+  reviewed_at: string | null;
   id_type: string | null;
   verification_mode: string | null;
+  rejection_reason: string | null;
   documents: {
     id_front: KycDocSlot | null;
     id_back: KycDocSlot | null;
@@ -202,14 +207,24 @@ export function KycReviewModal({
                 <FieldRow label="Nom complet" value={detail.full_name} />
                 <FieldRow label="Email" value={detail.email} />
                 <FieldRow label="Téléphone" value={detail.phone} />
+                <FieldRow label="Genre" value={detail.gender} />
                 <FieldRow label="Date de naissance" value={detail.date_of_birth} />
                 <FieldRow label="Lieu de naissance" value={detail.birth_place} />
-                <FieldRow label="Profession" value={detail.profession} />
-                <FieldRow label="Adresse" value={[detail.address, detail.city, detail.country].filter(Boolean).join(", ")} />
+                <FieldRow label="Profession" value={detail.occupation} />
+                <FieldRow label="Adresse" value={detail.address_full || [detail.address, detail.neighborhood, detail.city, detail.country].filter(Boolean).join(", ")} />
                 <FieldRow label="Type de pièce" value={detail.id_type} />
                 <FieldRow label="Mode" value={detail.verification_mode} />
                 {detail.submitted_at && (
                   <FieldRow label="Soumis le" value={new Date(detail.submitted_at).toLocaleString("fr-FR")} />
+                )}
+                {detail.reviewed_at && (
+                  <FieldRow label="Examiné le" value={new Date(detail.reviewed_at).toLocaleString("fr-FR")} />
+                )}
+                {detail.rejection_reason && (
+                  <View style={styles.rejectionBanner}>
+                    <Text style={styles.rejectionBannerTitle}>Motif de rejet</Text>
+                    <Text style={styles.rejectionBannerText}>{detail.rejection_reason}</Text>
+                  </View>
                 )}
               </View>
 
@@ -322,6 +337,16 @@ const styles = StyleSheet.create({
   },
   fieldLabel: { fontSize: 10, fontWeight: "800", color: Colors.textMuted, textTransform: "uppercase", letterSpacing: 0.4 },
   fieldValue: { fontSize: 14, fontWeight: "600", color: Colors.text, marginTop: 2 },
+  rejectionBanner: {
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    borderRadius: Radius.md,
+    padding: 12,
+    gap: 4,
+  },
+  rejectionBannerTitle: { fontSize: 11, fontWeight: "800", color: "#991B1B", textTransform: "uppercase" },
+  rejectionBannerText: { fontSize: 13, color: "#7F1D1D", lineHeight: 19 },
   docCard: {
     borderWidth: 1,
     borderColor: Colors.border,

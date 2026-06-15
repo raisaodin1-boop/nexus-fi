@@ -46,7 +46,7 @@ export async function notifyUser(opts: NotifyPayload) {
   }).select("id").single();
   throwSb(error);
 
-  if (opts.push !== false) {
+  if (opts.push !== false && data) {
     sb.functions.invoke("send-push", {
       body: {
         user_id: opts.user_id,

@@ -68,7 +68,11 @@ export async function uploadKycDocument(kind: KycDocKind, base64: string, mime =
 
 export async function getKycStatus() {
   const me = await uid();
-  const { data } = await getSupabase().from("kyc_submissions").select("*").eq("user_id", me).maybeSingle();
+  const { data } = await getSupabase()
+    .from("kyc_submissions")
+    .select("status, submitted_at, reviewed_at, verification_mode, provider, rejection_reason")
+    .eq("user_id", me)
+    .maybeSingle();
   if (!data) return { status: "not_submitted" };
   const status = data.status === "pending" ? "pending_review" : data.status;
   return { ...data, status };
