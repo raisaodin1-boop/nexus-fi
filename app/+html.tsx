@@ -303,7 +303,7 @@ export default function Root({ children }: PropsWithChildren) {
         <ScrollViewStyleReset />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){if(location.hostname==="hodix.app"){location.replace("https://www.hodix.app"+location.pathname+location.search+location.hash);}})();`,
+            __html: `(function(){if(location.hostname==="hodix.app"){location.replace("https://www.hodix.app"+location.pathname+location.search+location.hash);}if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("/sw.js").catch(function(){});});}})();`,
           }}
         />
         <style
