@@ -55,7 +55,7 @@ interface IdentityProfile {
 export default function Identity() {
   const router = useRouter();
   const { user } = useAuth();
-  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfLoadingKind, setPdfLoadingKind] = useState<"identity" | "trust-score" | "savings" | null>(null);
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [profile, setProfile] = useState<IdentityProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,13 +78,13 @@ export default function Identity() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const openPDF = async (kind: "identity" | "trust-score" | "savings") => {
-    setPdfLoading(true);
+    setPdfLoadingKind(kind);
     try {
       await sharePdfCertificate(kind);
     } catch (e: any) {
       Alert.alert("Erreur", e?.message ?? "Impossible de générer le document. Réessayez.");
     } finally {
-      setPdfLoading(false);
+      setPdfLoadingKind(null);
     }
   };
 
@@ -336,8 +336,8 @@ export default function Identity() {
         {/* FREE certificates */}
         <SectionTitle>Documents gratuits</SectionTitle>
         <View style={{ paddingHorizontal: Spacing.xl, gap: 10 }}>
-          <PDFButton testID="pdf-identity" icon={<ShieldCheck color={Colors.accent} size={20} />} title="Identité Financière" subtitle="Profil complet et vérifié" onPress={() => openPDF("identity")} loading={pdfLoading} />
-          <PDFButton testID="pdf-savings" icon={<FileText color={Colors.primary} size={20} />} title="Résumé d'épargne" subtitle="Total et engagement" onPress={() => openPDF("savings")} loading={pdfLoading} />
+          <PDFButton testID="pdf-identity" icon={<ShieldCheck color={Colors.accent} size={20} />} title="Identité Financière" subtitle="Profil complet et vérifié" onPress={() => openPDF("identity")} loading={pdfLoadingKind === "identity"} />
+          <PDFButton testID="pdf-savings" icon={<FileText color={Colors.primary} size={20} />} title="Résumé d'épargne" subtitle="Total et engagement" onPress={() => openPDF("savings")} loading={pdfLoadingKind === "savings"} />
           <Text style={styles.shareHint}>📱 Partagez par WhatsApp, Email, ou enregistrez-les directement.</Text>
         </View>
 

@@ -299,29 +299,51 @@ export default function AdminConsole() {
         ))}
       </LinearGradient>
 
-      {/* Tabs */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsRow} style={styles.tabsScroll}>
-        {TABS.map((t) => {
-          const Icon = t.icon;
-          const active = t.key === tab;
-          return (
-            <TouchableOpacity key={t.key} onPress={() => setTab(t.key)} style={[styles.tabBtn, active && styles.tabBtnActive]} activeOpacity={0.75}>
-              {active
-                ? <LinearGradient colors={["#6366F1", "#8B5CF6"]} style={styles.tabBtnGrad}>
+      {/* Tabs — hauteur fixe pour éviter l'étirement vertical */}
+      <View style={styles.tabsBar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsRow}
+          style={styles.tabsScroll}
+          bounces={false}
+        >
+          {TABS.map((t) => {
+            const Icon = t.icon;
+            const active = t.key === tab;
+            return (
+              <TouchableOpacity
+                key={t.key}
+                onPress={() => setTab(t.key)}
+                style={[styles.tabBtn, active && styles.tabBtnActive]}
+                activeOpacity={0.75}
+              >
+                {active ? (
+                  <LinearGradient colors={["#6366F1", "#8B5CF6"]} style={styles.tabBtnGrad}>
                     <Icon color="#fff" size={13} />
                     <Text style={styles.tabLabelActive}>{t.label}</Text>
-                    {!!t.count && <View style={styles.tabBadge}><Text style={styles.tabBadgeText}>{t.count}</Text></View>}
+                    {!!t.count && (
+                      <View style={styles.tabBadge}>
+                        <Text style={styles.tabBadgeText}>{t.count}</Text>
+                      </View>
+                    )}
                   </LinearGradient>
-                : <>
+                ) : (
+                  <>
                     <Icon color={Colors.textMuted} size={13} />
                     <Text style={styles.tabLabel}>{t.label}</Text>
-                    {!!t.count && <View style={[styles.tabBadge, { backgroundColor: Colors.danger }]}><Text style={styles.tabBadgeText}>{t.count}</Text></View>}
+                    {!!t.count && (
+                      <View style={[styles.tabBadge, { backgroundColor: Colors.danger }]}>
+                        <Text style={styles.tabBadgeText}>{t.count}</Text>
+                      </View>
+                    )}
                   </>
-              }
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
 
       {/* Content */}
       {loading ? (
@@ -584,15 +606,53 @@ const styles = StyleSheet.create({
   statItem: { alignItems: "center" },
   statValue: { fontSize: 22, fontWeight: "900" },
   statLabel: { fontSize: 10, color: "rgba(255,255,255,0.5)", fontWeight: "600", marginTop: 1 },
-  tabsScroll: { backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: "#E5E7EB" },
-  tabsRow: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
-  tabBtn: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.full,
-    backgroundColor: "#F1F5F9", borderWidth: 0,
+  tabsBar: {
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+    flexGrow: 0,
+    flexShrink: 0,
   },
-  tabBtnActive: { padding: 0, overflow: "hidden", borderRadius: Radius.full },
-  tabBtnGrad: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 14, paddingVertical: 8 },
+  tabsScroll: { flexGrow: 0, flexShrink: 0 },
+  tabsRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+    alignItems: "center",
+    flexDirection: "row",
+  },
+  tabBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: Radius.full,
+    backgroundColor: "#F1F5F9",
+    flexShrink: 0,
+    flexGrow: 0,
+    height: 36,
+    alignSelf: "center",
+  },
+  tabBtnActive: {
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    backgroundColor: "transparent",
+    height: 36,
+    flexShrink: 0,
+    flexGrow: 0,
+    overflow: "hidden",
+    borderRadius: Radius.full,
+  },
+  tabBtnGrad: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    height: 36,
+    borderRadius: Radius.full,
+  },
   tabLabel: { fontSize: 12, fontWeight: "700", color: "#94A3B8" },
   tabLabelActive: { fontSize: 12, fontWeight: "700", color: "#fff" },
   tabBadge: {

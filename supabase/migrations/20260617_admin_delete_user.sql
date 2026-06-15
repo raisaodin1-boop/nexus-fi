@@ -15,8 +15,8 @@ begin
     raise exception 'user_id requis';
   end if;
 
-  -- SQL Editor (service_role) ou admin connecté uniquement
-  if coalesce(auth.jwt() ->> 'role', '') <> 'service_role' then
+  -- SQL Editor Supabase (pas de JWT) ou service_role ou admin connecté
+  if auth.uid() is not null then
     if not public.is_admin() then
       raise exception 'Accès refusé';
     end if;
@@ -30,10 +30,14 @@ begin
     raise exception 'Impossible de supprimer un super_admin';
   end if;
 
-  -- Documents KYC Storage
-  delete from storage.objects
-  where bucket_id = 'kyc-documents'
-    and (storage.foldername(name))[1] = p_user_id::text;
+  -- Documents KYC Storage (Supabase bloque DELETE direct → best-effort)
+  begin
+    delete from storage.objects
+    where bucket_id = 'kyc-documents'
+      and (storage.foldername(name))[1] = p_user_id::text;
+  exception when others then
+    null;
+  end;
 
   -- Portefeuille
   delete from public.wallet_transactions
