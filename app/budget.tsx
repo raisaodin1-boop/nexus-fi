@@ -85,7 +85,7 @@ export default function BudgetScreen() {
           </View>
           <View style={s.sumDivider} />
           <View style={s.sumItem}>
-            <Text style={[s.sumVal, { color: totalBudgeted > 0 ? Colors.primary : Colors.muted }]}>
+            <Text style={[s.sumVal, { color: totalBudgeted > 0 ? Colors.primary : Colors.textMuted }]}>
               {totalBudgeted > 0 ? formatXAFAmount(totalBudgeted) : "—"}
             </Text>
             <Text style={s.sumLbl}>Budget total</Text>
@@ -182,7 +182,7 @@ export default function BudgetScreen() {
                 />
                 <View style={s.modalActions}>
                   <TouchableOpacity onPress={() => setEditModal(null)} style={s.modalCancel}>
-                    <Text style={{ color: Colors.muted, fontWeight: "600" }}>Annuler</Text>
+                    <Text style={{ color: Colors.textMuted, fontWeight: "600" }}>Annuler</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={handleSave} style={s.modalSave}>
                     <Text style={{ color: "#fff", fontWeight: "700" }}>Enregistrer</Text>
@@ -203,23 +203,23 @@ const s = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: 4 },
   back: { padding: 8 },
   title: { fontSize: 20, fontWeight: "700", color: Colors.text },
-  subtitle: { fontSize: 13, color: Colors.muted, marginTop: 1 },
+  subtitle: { fontSize: 13, color: Colors.textMuted, marginTop: 1 },
   summary: { backgroundColor: "#fff", borderRadius: Radius.lg, padding: Spacing.md, flexDirection: "row", alignItems: "center", shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
   sumItem: { flex: 1, alignItems: "center" },
   sumVal: { fontSize: 16, fontWeight: "700", color: Colors.text },
-  sumLbl: { fontSize: 11, color: Colors.muted, marginTop: 3 },
+  sumLbl: { fontSize: 11, color: Colors.textMuted, marginTop: 3 },
   sumDivider: { width: 1, height: 40, backgroundColor: "#E2E8F0" },
   globalBar: { gap: 4 },
   globalBarBg: { height: 8, backgroundColor: "#E2E8F0", borderRadius: 4, overflow: "hidden" },
   globalBarFill: { height: 8, borderRadius: 4 },
-  globalBarLabel: { fontSize: 12, color: Colors.muted, textAlign: "right" },
+  globalBarLabel: { fontSize: 12, color: Colors.textMuted, textAlign: "right" },
   sectionTitle: { fontSize: 16, fontWeight: "700", color: Colors.text },
-  sectionHint: { fontSize: 12, color: Colors.muted, marginTop: -8 },
+  sectionHint: { fontSize: 12, color: Colors.textMuted, marginTop: -8 },
   catCard: { backgroundColor: "#fff", borderRadius: Radius.lg, padding: Spacing.md, gap: 8, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
   catTop: { flexDirection: "row", alignItems: "center", gap: 12 },
   catEmoji: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   catName: { fontSize: 14, fontWeight: "700", color: Colors.text },
-  catSpent: { fontSize: 12, color: Colors.muted, marginTop: 1 },
+  catSpent: { fontSize: 12, color: Colors.textMuted, marginTop: 1 },
   overBadge: { backgroundColor: "#FEE2E2", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3 },
   overText: { fontSize: 11, color: "#EF4444", fontWeight: "700" },
   warnBadge: { backgroundColor: "#FEF3C7", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3 },
@@ -230,7 +230,7 @@ const s = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center" },
   modalBox: { backgroundColor: "#fff", borderRadius: Radius.xl, padding: 24, width: "85%", gap: 12 },
   modalTitle: { fontSize: 17, fontWeight: "700", color: Colors.text },
-  modalSub: { fontSize: 13, color: Colors.muted },
+  modalSub: { fontSize: 13, color: Colors.textMuted },
   modalInput: { borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: Radius.md, padding: 12, fontSize: 16, color: Colors.text },
   modalActions: { flexDirection: "row", gap: 10, marginTop: 4 },
   modalCancel: { flex: 1, padding: 12, alignItems: "center", borderRadius: Radius.md, borderWidth: 1.5, borderColor: "#E2E8F0" },
