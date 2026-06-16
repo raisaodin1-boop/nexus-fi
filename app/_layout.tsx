@@ -35,6 +35,7 @@ import { PwaSetup } from "@/src/pwa-setup";
 import { PushConsentModal } from "@/src/consent-modal";
 import { attachPushNotificationListeners, registerExpoPushToken } from "@/src/push-notifications";
 import { FloatingBackButton } from "@/src/screen-back";
+import { WebShellChrome } from "@/src/web-shell";
 
 if (Platform.OS !== "web") {
   SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -187,6 +188,7 @@ function RootLayoutInner() {
       <FirstLaunchGuard />
       <StatusBar style="light" />
       <OfflineBanner />
+      <WebShellChrome />
       <FloatingBackButton />
       <Stack screenOptions={{ headerShown: false, animation: "fade" }} />
     </BiometricGate>
@@ -209,7 +211,7 @@ function RootLayoutInner() {
 const webFrameStyles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#CBD5E1",
+    backgroundColor: "#E8ECF4",
     alignItems: "center",
   },
   frame: {
@@ -218,6 +220,13 @@ const webFrameStyles = StyleSheet.create({
     maxWidth: APP_MAX_WIDTH,
     backgroundColor: Colors.bg,
     overflow: "hidden",
+    borderRadius: 20,
+    marginVertical: 12,
+    ...(Platform.OS === "web"
+      ? {
+          boxShadow: "0 8px 32px rgba(15,23,42,0.12)",
+        }
+      : {}),
   },
 });
 
