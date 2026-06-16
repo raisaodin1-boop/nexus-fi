@@ -9,7 +9,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Copy, Crown, Users as UsersIcon, ChevronRight, CreditCard, MessageSquare } from "lucide-react-native";
 
-import { api, formatXAF } from "@/src/api";
+import { api, ApiError, formatXAF } from "@/src/api";
 import { openPaymentScreen, type PaymentKind } from "@/src/payment-nav";
 import { Button, Card, Field } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
@@ -37,6 +37,7 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
   const [loading, setLoading] = useState(true);
   const [amount, setAmount] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {

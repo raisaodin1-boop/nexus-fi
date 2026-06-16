@@ -10,7 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "..", "public");
 
 const BRAND = {
-  navy: "#0B1F3A",
+  navy: "#0F2847",
   blue: "#1D4ED8",
   green: "#10B981",
   white: "#FFFFFF",

@@ -18,7 +18,8 @@ import { useAuth } from "@/src/auth-context";
 import { api, formatXAF } from "@/src/api";
 import { supabase } from "@/src/supabase";
 import { Card, SectionTitle, StatCard, SkeletonBox, SkeletonCard } from "@/src/ui";
-import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
+import { Colors, Radius, Shadow, Spacing, timeGreeting } from "@/src/theme";
+import { EngagementStrip } from "@/src/engagement-strip";
 import { TrustGauge } from "@/src/trust-gauge";
 import { LineChart } from "@/src/charts";
 import { Tooltip } from "@/src/tooltip";
@@ -43,18 +44,20 @@ export function MemberDashboard() {
   const [unread, setUnread] = useState(0);
   const [alertCount, setAlertCount] = useState(0);
   const [savingsSeries, setSavingsSeries] = useState<Series | null>(null);
+  const [streakWeeks, setStreakWeeks] = useState(0);
 
   const load = useCallback(async () => {
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch { return null; }
     };
-    const [s, t, i, n, ss, al] = await Promise.all([
+    const [s, t, i, n, ss, al, st] = await Promise.all([
       safe(() => api.get<Summary>("/savings/summary")),
       safe(() => api.get<TrustScore>("/trust-score")),
       safe(() => api.get<{ items: Insight[] }>("/insights")),
       safe(() => api.get<{ unread_count: number }>("/notifications")),
       safe(() => api.get<Series>("/analytics/me/savings?days=14")),
       safe(() => api.get<any[]>("/alerts")),
+      safe(() => api.get<{ current_streak?: number }>("/streaks")),
     ]);
     if (s) setSummary(s);
     if (t) setTrust(t);
@@ -62,6 +65,7 @@ export function MemberDashboard() {
     if (n) setUnread(n.unread_count ?? 0);
     if (ss) setSavingsSeries(ss);
     if (al) setAlertCount(Array.isArray(al) ? al.length : 0);
+    if (st) setStreakWeeks(st.current_streak ?? 0);
     setLoading(false);
   }, []);
 
@@ -130,14 +134,14 @@ export function MemberDashboard() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScrollView
         contentContainerStyle={{ paddingBottom: 100 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.secondary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.hello}>Bienvenue,</Text>
-            <Text style={styles.name}>{user?.full_name?.split(" ")[0] ?? "User"}</Text>
+            <Text style={styles.hello}>{timeGreeting()}</Text>
+            <Text style={styles.name}>{user?.full_name?.split(" ")[0] ?? "Membre"}</Text>
           </View>
           <TouchableOpacity onPress={() => router.push("/notifications")} testID="home-notif-btn" style={styles.bellWrap}>
             <Bell color={Colors.primary} size={22} />
@@ -164,11 +168,17 @@ export function MemberDashboard() {
           <Text style={{ color: Colors.textMuted, fontSize: 14, marginLeft: "auto" }}>›</Text>
         </TouchableOpacity>
 
+        <EngagementStrip
+          streakWeeks={streakWeeks}
+          savingsProgressPct={summary?.progress_pct ?? 0}
+          trustScore={trust?.score}
+        />
+
         {/* Trust Score card */}
         <View style={{ paddingHorizontal: Spacing.xl }}>
           <TouchableOpacity activeOpacity={0.9} onPress={() => router.push("/(tabs)/identity")} testID="home-trust-card">
             <LinearGradient
-              colors={[Colors.primary, Colors.gradMid, Colors.secondary]}
+              colors={[Colors.gradStart, Colors.gradMid, Colors.gradEnd]}
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
               style={[styles.scoreCard, Shadow.cardDark]}
             >
@@ -221,8 +231,8 @@ export function MemberDashboard() {
           <QuickAction icon={<TrendingUp color={Colors.accentDark} size={22} />} label="Mon Identité" onPress={() => router.push("/(tabs)/identity")} testID="home-action-identity" />
         </View>
         <View style={styles.qaRow}>
-          <QuickAction icon={<QrCode color="#7C3AED" size={22} />} label="Recevoir" onPress={() => router.push("/qr-receive")} testID="home-action-qr-receive" />
-          <QuickAction icon={<Wallet color="#10B981" size={22} />} label="Mon Wallet" onPress={() => router.push("/wallet")} testID="home-action-wallet" />
+          <QuickAction icon={<QrCode color={Colors.secondary} size={22} />} label="Recevoir" onPress={() => router.push("/qr-receive")} testID="home-action-qr-receive" />
+          <QuickAction icon={<Wallet color={Colors.primary} size={22} />} label="Mon Wallet" onPress={() => router.push("/wallet")} testID="home-action-wallet" />
         </View>
         <View style={styles.qaRow}>
           <QuickAction icon={<BarChart2 color={Colors.secondary} size={22} />} label="Tableau de bord" onPress={() => router.push("/analytics")} testID="home-action-analytics" />
@@ -230,14 +240,14 @@ export function MemberDashboard() {
         </View>
         <View style={styles.qaRow}>
           <QuickAction icon={<Trophy color={Colors.accent} size={22} />} label="Classement" onPress={() => router.push("/ranking")} testID="home-action-ranking" />
-          <QuickAction icon={<Brain color="#8B5CF6" size={22} />} label="Conseiller IA" onPress={() => router.push("/advisor")} testID="home-action-advisor" />
+          <QuickAction icon={<Brain color={Colors.brandNavyLight} size={22} />} label="Conseiller IA" onPress={() => router.push("/advisor")} testID="home-action-advisor" />
         </View>
         <View style={styles.qaRow}>
-          <QuickAction icon={<Repeat color="#10B981" size={22} />} label="Auto-épargne" onPress={() => router.push("/auto-savings")} testID="home-action-auto-savings" />
-          <QuickAction icon={<PieChart color="#EF4444" size={22} />} label="Mon budget" onPress={() => router.push("/budget")} testID="home-action-budget" />
+          <QuickAction icon={<Repeat color={Colors.primary} size={22} />} label="Auto-épargne" onPress={() => router.push("/auto-savings")} testID="home-action-auto-savings" />
+          <QuickAction icon={<PieChart color={Colors.warning} size={22} />} label="Mon budget" onPress={() => router.push("/budget")} testID="home-action-budget" />
         </View>
         <View style={styles.qaRow}>
-          <QuickAction icon={<Receipt color="#F59E0B" size={22} />} label="Partager facture" onPress={() => router.push("/split-expense")} testID="home-action-split" />
+          <QuickAction icon={<Receipt color={Colors.accent} size={22} />} label="Partager facture" onPress={() => router.push("/split-expense")} testID="home-action-split" />
           <View style={{ flex: 1 }} />
         </View>
 
@@ -285,7 +295,7 @@ export function MemberDashboard() {
               style={styles.heroImg}
               resizeMode="cover"
             />
-            <LinearGradient colors={["transparent", "rgba(11,31,58,0.95)"]} style={styles.heroOverlay} />
+            <LinearGradient colors={["transparent", "rgba(15,40,71,0.95)"]} style={styles.heroOverlay} />
             <View style={styles.heroContent}>
               <Text style={styles.heroTitle}>Bâtir ensemble, durablement.</Text>
               <Text style={styles.heroSub}>Hodix transforme votre épargne en histoire financière reconnue.</Text>
@@ -311,7 +321,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: Spacing.xl, paddingVertical: Spacing.lg },
   hello: { color: Colors.textMuted, fontSize: 14, fontWeight: "600" },
-  name: { color: Colors.primary, fontSize: 26, fontWeight: "900", letterSpacing: -0.5 },
+  name: { color: Colors.brandNavy, fontSize: 26, fontWeight: "900", letterSpacing: -0.5 },
   bellWrap: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border },
   bellDot: { position: "absolute", top: 6, right: 6, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: Colors.danger, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   bellDotText: { color: "#fff", fontSize: 10, fontWeight: "800" },
@@ -354,7 +364,7 @@ const styles = StyleSheet.create({
   promoTitle: { color: "#fff", fontWeight: "900", fontSize: 14 },
   promoDesc: { color: "rgba(255,255,255,0.85)", fontSize: 11, marginTop: 2, fontWeight: "600" },
   insightText: { color: Colors.text, fontSize: 14, lineHeight: 20, fontWeight: "500" },
-  insightAction: { color: Colors.accent, fontSize: 12, fontWeight: "700", marginTop: 8 },
+  insightAction: { color: Colors.primary, fontSize: 12, fontWeight: "700", marginTop: 8 },
   heroCard: { borderRadius: Radius.xxl, overflow: "hidden", height: 180, position: "relative" },
   heroImg: { width: "100%", height: "100%" },
   heroOverlay: { position: "absolute", left: 0, right: 0, bottom: 0, top: "30%" },

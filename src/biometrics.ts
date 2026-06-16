@@ -30,8 +30,8 @@ async function readEnabledFlag(): Promise<boolean> {
   } catch {
     /* fallback below */
   }
-  const fallback = await storage.getItem(BIO_ENABLED_KEY, false);
-  return fallback === true || fallback === "1";
+  const fallback = await storage.getItem<string | boolean>(BIO_ENABLED_KEY, "");
+  return fallback === "1" || fallback === true;
 }
 
 async function writeEnabledFlag(enabled: boolean): Promise<boolean> {

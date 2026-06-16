@@ -227,7 +227,7 @@ export default function Root({ children }: PropsWithChildren) {
         <link rel="canonical" href="https://www.hodix.app/" />
 
         {/* ── PWA & App ──────────────────────────────────────────────── */}
-        <meta name="theme-color" content="#F7F8FC" />
+        <meta name="theme-color" content="#0F2847" />
         <meta name="color-scheme" content="light" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -321,7 +321,7 @@ export default function Root({ children }: PropsWithChildren) {
                 overflow-x: hidden;
                 display: flex;
                 flex-direction: column;
-                background-color: #F7F8FC;
+                background-color: #F5F8FC;
                 font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                 -webkit-font-smoothing: antialiased;
                 -moz-osx-font-smoothing: grayscale;
@@ -329,9 +329,9 @@ export default function Root({ children }: PropsWithChildren) {
                 touch-action: manipulation;
                 -webkit-tap-highlight-color: transparent;
               }
-              html { background-color: #F7F8FC; }
+              html { background-color: #F5F8FC; }
               @media (display-mode: standalone), (display-mode: fullscreen) {
-                html, body { background-color: #F7F8FC; }
+                html, body { background-color: #F5F8FC; }
               }
               body > div:first-child { position: fixed !important; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; }
               input, textarea, select { font-size: 16px !important; }

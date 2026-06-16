@@ -34,6 +34,7 @@ import { DeepLinkHandler } from "@/src/deep-link-handler";
 import { PwaSetup } from "@/src/pwa-setup";
 import { PushConsentModal } from "@/src/consent-modal";
 import { attachPushNotificationListeners, registerExpoPushToken } from "@/src/push-notifications";
+import { runDueAutoSavings } from "@/src/db/auto-savings";
 import { FloatingBackButton } from "@/src/screen-back";
 import { WebShellChrome } from "@/src/web-shell";
 
@@ -155,7 +156,7 @@ function BiometricGate({ children }: { children: React.ReactNode }) {
 }
 
 const gateStyles = StyleSheet.create({
-  container: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: Colors.bgDark, padding: 32 },
+  container: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: Colors.brandNavy, padding: 32 },
   emoji: { fontSize: 48, marginBottom: 16 },
   title: { color: "#FFFFFF", fontSize: 22, fontWeight: "700", marginBottom: 8 },
   sub: { color: "#9CA3AF", fontSize: 15, textAlign: "center", marginBottom: 28 },
@@ -186,7 +187,7 @@ function RootLayoutInner() {
       <PushSetup />
       <PushConsentGate />
       <FirstLaunchGuard />
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <OfflineBanner />
       <WebShellChrome />
       <FloatingBackButton />

@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0B1F3A"
+      "backgroundColor": "#0F2847"
     },
     "ios": {
       "supportsTablet": false,
@@ -25,7 +25,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#0B1F3A"
+        "backgroundColor": "#0F2847"
       },
       "package": "app.hodix.mobile",
       "versionCode": 1,
@@ -68,7 +68,7 @@
       "name": "HODIX – Épargne & Tontines",
       "shortName": "HODIX",
       "description": "Plateforme africaine de finance participative. Gérez vos tontines, épargnez en groupe et payez en toute sécurité.",
-      "themeColor": "#0B1F3A",
+      "themeColor": "#0F2847",
       "backgroundColor": "#F8FAFC",
       "lang": "fr",
       "scope": "/",
@@ -95,7 +95,7 @@
         "expo-notifications",
         {
           "icon": "./assets/images/icon.png",
-          "color": "#0B1F3A",
+          "color": "#0F2847",
           "sounds": []
         }
       ],

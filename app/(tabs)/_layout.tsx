@@ -29,7 +29,7 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: Colors.secondary,
+        tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textMuted,
         tabBarStyle: {
           backgroundColor: Colors.surface,
@@ -85,7 +85,7 @@ export default function TabsLayout() {
 const styles = StyleSheet.create({
   dot: {
     width: 4, height: 4, borderRadius: 2,
-    backgroundColor: Colors.secondary,
+    backgroundColor: Colors.primary,
     alignSelf: "center", marginTop: 3,
   },
 });
