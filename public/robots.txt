@@ -19,6 +19,7 @@ Disallow: /pay
 Disallow: /referral
 Disallow: /streaks
 Disallow: /ranking
+Disallow: /google34941cdf4c4a8f61.html
 
 # Sitemaps
 Sitemap: https://www.hodix.app/sitemap-index.xml
