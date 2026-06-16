@@ -10,7 +10,8 @@ export async function registerExpoPushToken(): Promise<boolean> {
     const Device = await import("expo-device");
     if (!Device.isDevice) return false;
     const Notifications = await import("expo-notifications");
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? "hodix";
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+    if (!projectId) return false;
     const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
     if (token) await api.post("/notifications/push-token", { token });
     return !!token;
