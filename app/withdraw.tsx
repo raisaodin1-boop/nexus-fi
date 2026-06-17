@@ -62,9 +62,6 @@ export default function WithdrawScreen() {
         reason,
         ...(goal_id ? { goal_id } : {}),
       });
-      if (goal_id) {
-        await api.post(`/savings/goals/${goal_id}/transactions`, { amount: amt, kind: "withdraw" }).catch(() => null);
-      }
       setResult(r);
     } catch (e) {
       setError(e instanceof ApiError ? e.detail : "Erreur");

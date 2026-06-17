@@ -143,7 +143,7 @@ async function validatePaymentTarget(me: string, payload: InitiatePayload): Prom
   return amount;
 }
 
-async function fulfillPayment(meta: PaymentMeta, paymentId?: string) {
+async function fulfillPayment(meta: PaymentMeta, paymentId: string) {
   const amount = Number(meta.amount_xaf);
   switch (meta.kind) {
     case "tontine_contribution":
@@ -156,15 +156,15 @@ async function fulfillPayment(meta: PaymentMeta, paymentId?: string) {
       break;
     case "association_contribution":
       if (!meta.association_id) break;
-      await contributeAssociation(meta.association_id, amount);
+      await contributeAssociation(meta.association_id, amount, paymentId);
       break;
     case "cooperative_contribution":
       if (!meta.cooperative_id) break;
-      await contributeCooperative(meta.cooperative_id, amount);
+      await contributeCooperative(meta.cooperative_id, amount, paymentId);
       break;
     case "fund_contribution":
       if (!meta.fund_id) break;
-      await contributeFund(meta.fund_id, amount);
+      await contributeFund(meta.fund_id, amount, paymentId);
       break;
     case "wallet_topup": {
       const { error: rpcErr } = await getSupabase().rpc("wallet_topup", {
@@ -173,6 +173,7 @@ async function fulfillPayment(meta: PaymentMeta, paymentId?: string) {
         p_provider: meta.provider ?? "CinetPay",
         p_phone: meta.phone ?? "",
         p_amount_xaf: amount,
+        p_payment_id: paymentId,
       });
       throwSb(rpcErr);
       const me = await uid();
@@ -315,7 +316,8 @@ export async function confirmCinetpayPayment(payload: ConfirmPayload) {
     throw { status: 400, detail: "Ce paiement n'est plus en attente." };
   }
 
-  const sandboxAllowed = process.env.EXPO_PUBLIC_PAYMENT_SANDBOX === "true";
+  const sandboxAllowed = typeof __DEV__ !== "undefined" && __DEV__
+    && process.env.EXPO_PUBLIC_PAYMENT_SANDBOX === "true";
   const verified = cinetpayConfigured()
     ? await verifyCinetpayTransaction(payment.id)
     : sandboxAllowed && transactionId.length >= 8;
@@ -327,14 +329,20 @@ export async function confirmCinetpayPayment(payload: ConfirmPayload) {
   const meta = parsePaymentMeta(payment.description);
   if (!meta) throw { status: 500, detail: "Métadonnées de paiement invalides." };
 
-  const { error: updErr } = await getSupabase()
+  const { data: locked, error: lockErr } = await getSupabase()
     .from("payments")
     .update({
       status: "succeeded",
       description: `${payment.description} · ref:${transactionId}`,
     })
-    .eq("id", payment.id);
-  throwSb(updErr);
+    .eq("id", payment.id)
+    .eq("status", "pending_cinetpay")
+    .select("id")
+    .maybeSingle();
+  throwSb(lockErr);
+  if (!locked) {
+    throw { status: 409, detail: "Ce paiement est déjà en cours de traitement ou finalisé." };
+  }
 
   await fulfillPayment(meta, payment.id);
 

@@ -4,8 +4,8 @@ import { Platform } from "react-native";
 import { supabase } from "@/src/supabase";
 import { sendWelcomeMessage, applyReferralBonus } from "@/src/db";
 import { normalizeEmail } from "@/src/db/helpers";
+import { notifyUser } from "@/src/db/notifications";
 import { getOAuthRedirectUrl } from "@/src/oauth-redirect";
-import { api } from "@/src/api";
 
 // Complete auth session on mobile (no-op on web)
 if (Platform.OS !== "web") {
@@ -144,12 +144,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 } catch (welcomeErr) {
                   logAuthBestEffort("welcome message", welcomeErr);
                   // Fallback: in-app notification so user gets a greeting even if email fails
-                  api.post("/notifications", {
+                  await notifyUser({
                     user_id: session.user!.id,
                     title: "Bienvenue sur HODIX 🎉",
                     body: `Bonjour ${name} ! Votre compte est prêt. Commencez par compléter votre profil.`,
                     type: "system",
-                  }).catch(() => {});
+                  });
                 }
               }
             } catch (err) { logAuthBestEffort("welcome message", err); }

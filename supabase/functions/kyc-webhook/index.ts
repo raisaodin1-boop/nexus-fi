@@ -14,6 +14,14 @@ function json(body: unknown, status = 200): Response {
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ ok: false }, 405);
 
+  const secret = Deno.env.get("KYC_WEBHOOK_SECRET")?.trim();
+  if (secret) {
+    const auth = req.headers.get("authorization") ?? "";
+    const sig = req.headers.get("x-smile-signature") ?? req.headers.get("x-webhook-secret") ?? "";
+    const valid = auth === `Bearer ${secret}` || sig === secret;
+    if (!valid) return json({ ok: false, error: "Non autorisé" }, 401);
+  }
+
   const payload = await req.json().catch(() => ({}));
   const partnerParams = payload?.PartnerParams ?? payload?.partner_params ?? {};
   const userId = String(partnerParams.user_id ?? "").trim();

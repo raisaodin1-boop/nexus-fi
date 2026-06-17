@@ -312,6 +312,38 @@ export async function requestWithdrawal(body: {
   };
 }
 
+export async function getWithdrawalReceipt(withdrawalId: string) {
+  const me = await uid();
+  const { data, error } = await getSupabase()
+    .from("withdrawal_requests")
+    .select("id, amount_xaf, commission_xaf, net_xaf, method, phone, status, created_at, reason")
+    .eq("id", withdrawalId)
+    .eq("user_id", me)
+    .maybeSingle();
+  throwSb(error);
+  if (!data) throw { status: 404, detail: "Demande de retrait introuvable." };
+
+  const methodLabel = data.method === "bank" ? "Virement bancaire"
+    : data.method === "orange" ? "Orange Money"
+    : data.method === "mtn" ? "MTN Money"
+    : String(data.method ?? "—");
+
+  return {
+    id: data.id,
+    receipt_id: data.id,
+    amount_xaf: Number(data.amount_xaf),
+    commission_xaf: Number(data.commission_xaf ?? 0),
+    method: methodLabel,
+    payment_method: methodLabel,
+    type: "withdrawal",
+    kind: "withdrawal",
+    status: data.status ?? "pending",
+    label: "Demande de retrait",
+    reference: data.id.slice(0, 8).toUpperCase(),
+    created_at: data.created_at,
+  };
+}
+
 /* ── Payment config (admin) ───────────────────────────────── */
 
 export async function getPaymentConfig() {

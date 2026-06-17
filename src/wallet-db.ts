@@ -113,24 +113,8 @@ export interface TopupPayload {
   phone: string;
 }
 
-export async function topupFromMobileMoney(payload: TopupPayload): Promise<WalletTx> {
-  if (!Number.isFinite(payload.amount) || payload.amount <= 0) throw new Error("Montant invalide.");
-  if (!/^\+?[\d\s\-]{8,15}$/.test(payload.phone)) throw new Error("Numéro de téléphone invalide.");
-
-  const { data, error } = await getSupabase().rpc("wallet_topup", {
-    p_amount: payload.amount,
-    p_currency: payload.currency ?? "XAF",
-    p_provider: payload.provider,
-    p_phone: payload.phone,
-    p_amount_xaf: payload.amount,
-  });
-  if (error) {
-    const msg = error.message.includes("insufficient") ? "Solde insuffisant."
-      : error.message.includes("not found") ? "Wallet introuvable — contactez le support."
-      : error.message;
-    throw new Error(msg);
-  }
-  return mapTx(data as Record<string, unknown>);
+export async function topupFromMobileMoney(_payload: TopupPayload): Promise<WalletTx> {
+  throw new Error("Recharge wallet via la page de paiement CinetPay uniquement.");
 }
 
 // ─── Withdrawal to Mobile Money ───────────────────────────────────────────────
@@ -171,7 +155,8 @@ export async function withdrawToMobileMoney(payload: WithdrawPayload): Promise<W
 // ─── Peer-to-peer transfer ────────────────────────────────────────────────────
 
 export interface TransferPayload {
-  to_phone_or_email: string;   // lookup by phone or email
+  to_phone_or_email?: string;
+  to_user_id?: string;
   amount: number;
   currency: Currency;
   note?: string;
@@ -185,13 +170,23 @@ export async function transferToMember(payload: TransferPayload): Promise<Wallet
   const rates = await getRates();
   const amountXaf = convert(payload.amount, payload.currency, "XAF", rates);
 
-  // Resolve recipient
-  const search = payload.to_phone_or_email.trim();
-  const isEmail = search.includes("@");
-  const profileQuery = isEmail
-    ? sb.from("profiles").select("id, full_name").eq("email", search.toLowerCase()).maybeSingle()
-    : sb.from("profiles").select("id, full_name").eq("phone", search).maybeSingle();
-  const { data: recipient } = await profileQuery;
+  let recipient: { id: string; full_name: string | null } | null = null;
+
+  if (payload.to_user_id) {
+    const { data } = await sb.from("profiles").select("id, full_name").eq("id", payload.to_user_id).maybeSingle();
+    recipient = data;
+  } else if (payload.to_phone_or_email) {
+    const search = payload.to_phone_or_email.trim();
+    const isEmail = search.includes("@");
+    const profileQuery = isEmail
+      ? sb.from("profiles").select("id, full_name").eq("email", search.toLowerCase()).maybeSingle()
+      : sb.from("profiles").select("id, full_name").eq("phone", search).maybeSingle();
+    const { data } = await profileQuery;
+    recipient = data;
+  } else {
+    throw new Error("Destinataire requis.");
+  }
+
   if (!recipient) throw new Error("Membre introuvable. Vérifiez l'email ou le téléphone.");
   if (recipient.id === me) throw new Error("Impossible de vous transférer à vous-même.");
 

@@ -72,27 +72,28 @@ export async function savingsGoalTransaction(
     throw { status: 400, detail: "Solde insuffisant sur cet objectif." };
   }
 
-  const signed = kind === "withdraw" ? -amount : amount;
+  if (kind === "deposit") {
+    throw {
+      status: 403,
+      detail: "Dépôt électronique requis. Utilisez la page de paiement — aucun crédit sans débit confirmé.",
+    };
+  }
+
+  const signed = -amount;
   await sb.from("savings_transactions").insert({
     goal_id: goalId,
     user_id: me,
     amount: signed,
-    note: kind === "withdraw" ? "Retrait" : "Dépôt",
+    note: "Retrait",
   });
 
   const { data: txs } = await sb.from("savings_transactions").select("amount").eq("goal_id", goalId);
   const total = (txs ?? []).reduce((s, t) => s + Number(t.amount), 0);
   await sb.from("savings_goals").update({ current_amount: Math.max(0, total) }).eq("id", goalId);
 
-  if (kind === "deposit") {
-    await addIdentityEvent(me, "savings_deposit", 1);
-    invalidateCache(`credit-score-${me}`);
-    invalidateCache(`identity-${me}`);
-  }
-
   invalidateCache(`savings-${me}`);
   invalidateCache(`savings-summary-${me}`);
-  return { detail: kind === "withdraw" ? "Retrait enregistré" : "Dépôt enregistré" };
+  return { detail: "Retrait enregistré" };
 }
 
 export async function getSavingsAnalytics(goalId: string) {

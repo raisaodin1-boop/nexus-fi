@@ -1,6 +1,6 @@
 import { getSupabase } from "@/src/supabase";
 import { notifyUser } from "./notifications";
-import { uid, cached, throwSb, invalidateCache } from "./helpers";
+import { uid, cached, throwSb, invalidateCache, requireAdmin } from "./helpers";
 
 const PENDING_KYC = ["pending", "pending_review"] as const;
 const KYC_BUCKET = "kyc-documents";
@@ -27,6 +27,7 @@ export function isKycPending(status?: string | null): boolean {
 }
 
 export async function getAdminAnalytics() {
+  await requireAdmin();
   return cached("admin-analytics", 90_000, async () => {
     const safe = async <T>(fn: () => PromiseLike<T>, fallback: T): Promise<T> => {
       try { return await fn(); } catch { return fallback; }
@@ -72,6 +73,7 @@ export async function getAdminAnalytics() {
 }
 
 export async function getAdminStats() {
+  await requireAdmin();
   const [users, tontines, kyc] = await Promise.all([
     getSupabase().from("profiles").select("*", { count: "exact", head: true }),
     getSupabase().from("tontines").select("*", { count: "exact", head: true }),
@@ -81,6 +83,7 @@ export async function getAdminStats() {
 }
 
 export async function adminListUsers(search = "", offset = 0, limit = 50) {
+  await requireAdmin();
   const pageSize = Math.min(Math.max(limit, 1), 100);
   const from = Math.max(offset, 0);
   let q = getSupabase().from("profiles")
@@ -101,18 +104,21 @@ export async function adminListUsers(search = "", offset = 0, limit = 50) {
 }
 
 export async function adminUpdateUserRole(userId: string, role: string) {
+  await requireAdmin();
   const { error } = await getSupabase().from("profiles").update({ role }).eq("id", userId);
   throwSb(error);
   return { detail: "Rôle mis à jour" };
 }
 
 export async function adminDeactivateUser(userId: string) {
+  await requireAdmin();
   const { error } = await getSupabase().from("profiles").update({ role: "suspended" }).eq("id", userId);
   throwSb(error);
   return { detail: "Utilisateur suspendu" };
 }
 
 export async function adminListTontines(search = "") {
+  await requireAdmin();
   let q = getSupabase().from("tontines")
     .select("id, name, amount_per_cycle, frequency, max_members, invite_code, created_at, owner_id")
     .order("created_at", { ascending: false }).limit(100);
@@ -148,12 +154,14 @@ export async function adminListTontines(search = "") {
 }
 
 export async function adminUpdateTontine(id: string, updates: { status?: string; auto_close_date?: string | null }) {
+  await requireAdmin();
   const { error } = await getSupabase().from("tontines").update(updates).eq("id", id);
   if (error) throw { status: 400, detail: "Erreur mise à jour — exécutez d'abord le SQL d'initialisation dans Supabase." };
   return { detail: "Tontine mise à jour" };
 }
 
 export async function adminDeleteTontine(id: string) {
+  await requireAdmin();
   await getSupabase().from("tontine_contributions").delete().eq("tontine_id", id);
   await getSupabase().from("tontine_members").delete().eq("tontine_id", id);
   const { error } = await getSupabase().from("tontines").delete().eq("id", id);
@@ -162,6 +170,7 @@ export async function adminDeleteTontine(id: string) {
 }
 
 export async function adminListKyc() {
+  await requireAdmin();
   const sb = getSupabase();
   const { data: submissions, error } = await sb
     .from("kyc_submissions")
@@ -242,6 +251,7 @@ export async function adminListKyc() {
 }
 
 export async function adminGetKycDetail(userId: string) {
+  await requireAdmin();
   const sb = getSupabase();
   const [{ data: profile, error: profErr }, { data: submission, error: subErr }] = await Promise.all([
     sb.from("profiles")
@@ -303,6 +313,7 @@ export async function adminGetKycDetail(userId: string) {
 }
 
 export async function adminHandleKyc(userId: string, approve: boolean, rejectionReason?: string) {
+  await requireAdmin();
   const submissionStatus = approve ? "approved" : "rejected";
   const profileStatus = approve ? "approved" : "rejected";
   const reviewedAt = new Date().toISOString();
@@ -361,6 +372,7 @@ export async function adminHandleKyc(userId: string, approve: boolean, rejection
 }
 
 export async function adminDeleteKyc(userId: string) {
+  await requireAdmin();
   const sb = getSupabase();
   const { error } = await sb.from("kyc_submissions").delete().eq("user_id", userId);
   throwSb(error);
@@ -393,6 +405,7 @@ export async function getMyPromotionRequest() {
 }
 
 export async function adminListPromotionRequests() {
+  await requireAdmin();
   const { data } = await getSupabase().from("notifications")
     .select("id, user_id, body, created_at, is_read").eq("type", "promotion_request").order("created_at", { ascending: false }).limit(50);
   const userIds = [...new Set((data ?? []).map((n: any) => n.user_id))];
@@ -409,6 +422,7 @@ export async function adminListPromotionRequests() {
 }
 
 export async function adminHandlePromotion(userId: string, approve: boolean) {
+  await requireAdmin();
   if (approve) {
     await getSupabase().from("profiles").update({ role: "tontine_manager" }).eq("id", userId);
     await getSupabase().from("notifications").insert({ user_id: userId, title: "Promotion accordée 🎉", body: "Félicitations ! Vous êtes maintenant Tontine Manager.", type: "promotion" });
@@ -423,6 +437,7 @@ let _lastBroadcastAt = 0;
 const BROADCAST_COOLDOWN_MS = 60 * 60 * 1000; // 1 broadcast max par heure
 
 export async function adminBroadcast(title: string, body: string) {
+  await requireAdmin();
   const now = Date.now();
   if (now - _lastBroadcastAt < BROADCAST_COOLDOWN_MS) {
     const waitMin = Math.ceil((BROADCAST_COOLDOWN_MS - (now - _lastBroadcastAt)) / 60000);
@@ -439,6 +454,7 @@ export async function adminBroadcast(title: string, body: string) {
 }
 
 export async function getUsersSeries(days = 14) {
+  await requireAdmin();
   return cached(`users-series`, 120_000, async () => {
     const since = new Date(Date.now() - days * 86400000).toISOString();
     const { data } = await getSupabase().from("profiles").select("created_at").gte("created_at", since).order("created_at", { ascending: true });

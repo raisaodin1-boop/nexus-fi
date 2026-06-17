@@ -25,12 +25,9 @@ export function parseDeepLink(url: string): string | null {
 function parseHodixScheme(url: string): string | null {
   const pay = decodeQR(url);
   if (pay) {
-    const params = new URLSearchParams({
-      label: pay.name,
-      amount: String(pay.amount ?? ""),
-      kind: "wallet_topup",
-    });
-    return `/pay?${params.toString()}`;
+    const params = new URLSearchParams({ to: pay.to, name: pay.name });
+    if (pay.amount) params.set("amount", String(pay.amount));
+    return `/wallet/transfer?${params.toString()}`;
   }
 
   const u = new URL(url);
