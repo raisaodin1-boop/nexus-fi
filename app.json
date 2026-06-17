@@ -20,7 +20,10 @@
       "associatedDomains": [
         "applinks:www.hodix.app",
         "applinks:hodix.app"
-      ]
+      ],
+      "infoPlist": {
+        "UIBackgroundModes": ["remote-notification"]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -36,7 +39,8 @@
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
         "USE_BIOMETRIC",
-        "USE_FINGERPRINT"
+        "USE_FINGERPRINT",
+        "POST_NOTIFICATIONS"
       ],
       "intentFilters": [
         {

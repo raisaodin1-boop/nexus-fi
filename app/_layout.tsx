@@ -33,7 +33,7 @@ import { DynamicSeo } from "@/src/dynamic-seo";
 import { DeepLinkHandler } from "@/src/deep-link-handler";
 import { PwaSetup } from "@/src/pwa-setup";
 import { PushConsentModal } from "@/src/consent-modal";
-import { attachPushNotificationListeners, registerExpoPushToken } from "@/src/push-notifications";
+import { attachPushNotificationListeners, requestPushPermissionAndRegister, syncNotificationBadge } from "@/src/push-notifications";
 import { runDueAutoSavings } from "@/src/db/auto-savings";
 import { FloatingBackButton } from "@/src/screen-back";
 import { WebShellChrome } from "@/src/web-shell";
@@ -55,10 +55,11 @@ function PushSetup() {
       try {
         const me = await api.get<{ push_consent?: boolean | null }>("/users/me");
         if (me.push_consent === true) {
-          await registerExpoPushToken();
+          await requestPushPermissionAndRegister();
+        } else {
+          await syncNotificationBadge();
         }
       } catch {}
-      // Exécute les auto-épargnes en retard au démarrage
       try { await runDueAutoSavings(); } catch {}
     })();
 

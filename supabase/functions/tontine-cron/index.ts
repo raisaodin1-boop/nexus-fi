@@ -6,19 +6,6 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const FREQ_DAYS: Record<string, number> = { weekly: 7, biweekly: 14, monthly: 30, quarterly: 90 };
 
-async function triggerPush(userId: string, title: string, body: string, type: string) {
-  try {
-    await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-push`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ user_id: userId, title, body, type }),
-    });
-  } catch { /* best-effort */ }
-}
-
 async function sendSms(phone: string, body: string): Promise<boolean> {
   const sid = Deno.env.get("TWILIO_ACCOUNT_SID");
   const token = Deno.env.get("TWILIO_AUTH_TOKEN");
@@ -76,7 +63,6 @@ Deno.serve(async (req) => {
       const title = hoursLeft < 0 ? "Cotisation en retard" : "Rappel cotisation tontine";
       const body = `${t.name} — cycle ${cycle}. ${hoursLeft < 0 ? "Vous êtes en retard." : "Échéance demain."}`;
       await admin.from("notifications").insert({ user_id: m.user_id, title, body, type: "tontine_reminder", is_read: false });
-      await triggerPush(m.user_id, title, body, "tontine_reminder");
       const phone = String((m as any).profiles?.phone ?? "").replace(/[\s\-]/g, "");
       if (phone) await sendSms(phone, `HODIX : ${body}`);
       reminders++;
@@ -93,7 +79,14 @@ Deno.serve(async (req) => {
           cycle_deadline: nextDeadline,
         }).eq("id", t.id);
         for (const m of members ?? []) {
-          await triggerPush(m.user_id, `Cycle ${cycle + 1} — ${t.name}`, "Nouveau cycle démarré automatiquement.", "tontine_cycle");
+          await admin.from("notifications").insert({
+            user_id: m.user_id,
+            title: `Cycle ${cycle + 1} — ${t.name}`,
+            body: "Nouveau cycle démarré automatiquement.",
+            type: "tontine_cycle",
+            is_read: false,
+            metadata: { action_url: `/tontines/${t.id}` },
+          });
         }
         advanced++;
       }
@@ -109,7 +102,14 @@ Deno.serve(async (req) => {
     await admin.from("tontine_escrow").update({ status: "released" }).eq("id", row.id);
     const ownerId = (row as any).tontines?.owner_id;
     if (ownerId) {
-      await triggerPush(ownerId, "Escrow libéré", `Cycle ${row.cycle} — fonds disponibles.`, "escrow_release");
+      await admin.from("notifications").insert({
+        user_id: ownerId,
+        title: "Escrow libéré",
+        body: `Cycle ${row.cycle} — fonds disponibles.`,
+        type: "escrow_release",
+        is_read: false,
+        metadata: { action_url: `/tontines/${row.tontine_id}` },
+      });
     }
     escrowReleased++;
   }

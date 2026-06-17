@@ -163,7 +163,7 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
       await db.markNotifRead(s[1]);
       return { detail: "Lu" } as T;
     }
-    if (method === "POST" && s[0] === "notifications" && s[1] === "push-token")        return (await db.savePushToken(body?.token)) as T;
+    if (method === "POST" && s[0] === "notifications" && s[1] === "push-token")        return (await db.savePushToken(body?.token, body?.platform)) as T;
     if (method === "POST" && s[0] === "notifications" && s[1] === "consent")          return (await db.saveNotificationConsent(!!body?.push_consent, body?.marketing_consent)) as T;
 
     // ── Credit score

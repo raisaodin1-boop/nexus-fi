@@ -11,19 +11,6 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-async function triggerPush(userId: string, title: string, body: string) {
-  try {
-    await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-push`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ user_id: userId, title, body, type: "kyc" }),
-    });
-  } catch { /* best-effort */ }
-}
-
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ ok: false }, 405);
 
@@ -61,7 +48,6 @@ Deno.serve(async (req) => {
   await admin.from("notifications").insert({
     user_id: userId, title, body, type: "kyc", is_read: false,
   });
-  await triggerPush(userId, title, body);
 
   return json({ ok: true, user_id: userId, job_id: jobId, status });
 });

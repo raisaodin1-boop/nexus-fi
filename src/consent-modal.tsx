@@ -40,6 +40,7 @@ export function PushConsentModal({ visible, onAccept, onDecline }: Props) {
 
           <View style={styles.list}>
             {[
+              "Messages et annonces Hodix",
               "Rappels de cotisations à venir",
               "Confirmation de vos paiements",
               "Alertes de sécurité (connexion suspecte, nouvelle transaction)",

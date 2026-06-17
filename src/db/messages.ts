@@ -229,7 +229,6 @@ export async function sendMessage(body: {
         body: `${sender?.full_name ?? "Un membre"} : ${content.slice(0, 60)}…`,
         type: "info",
         metadata: { action_url: `/messages?tontine_id=${body.tontine_id}` },
-        push: false,
       }).catch(() => {});
     }
   }

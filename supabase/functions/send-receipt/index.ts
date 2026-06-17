@@ -230,18 +230,18 @@ Deno.serve(async (req) => {
       type: "receipt",
       is_read: false,
     });
+  } else {
+    try {
+      await fetch(`${supabaseUrl}/functions/v1/send-push`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ user_id: user.id, title: pushTitle, body: pushBody, type: "receipt" }),
+      });
+    } catch { /* best-effort */ }
   }
-
-  try {
-    await fetch(`${supabaseUrl}/functions/v1/send-push`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ user_id: user.id, title: pushTitle, body: pushBody, type: "receipt" }),
-    });
-  } catch { /* best-effort */ }
 
   return json({
     ok: true,
