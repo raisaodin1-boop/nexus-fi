@@ -12,7 +12,7 @@ import {
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { Bell, ChevronRight, PiggyBank, Trophy, Users, Wallet, TrendingUp, Sparkles, QrCode, BarChart2, Brain, Repeat, Receipt, PieChart } from "lucide-react-native";
+import { Bell, ChevronRight, PiggyBank, Trophy, Users, Wallet, TrendingUp, Sparkles, QrCode, BarChart2, Brain, Repeat, Receipt, PieChart, MessageCircle } from "lucide-react-native";
 
 import { useAuth } from "@/src/auth-context";
 import { api, formatXAF } from "@/src/api";
@@ -42,6 +42,7 @@ export function MemberDashboard() {
   const [trust, setTrust] = useState<TrustScore | null>(null);
   const [insights, setInsights] = useState<Insight[]>([]);
   const [unread, setUnread] = useState(0);
+  const [msgUnread, setMsgUnread] = useState(0);
   const [alertCount, setAlertCount] = useState(0);
   const [savingsSeries, setSavingsSeries] = useState<Series | null>(null);
   const [streakWeeks, setStreakWeeks] = useState(0);
@@ -50,7 +51,7 @@ export function MemberDashboard() {
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch { return null; }
     };
-    const [s, t, i, n, ss, al, st] = await Promise.all([
+    const [s, t, i, n, ss, al, st, mu] = await Promise.all([
       safe(() => api.get<Summary>("/savings/summary")),
       safe(() => api.get<TrustScore>("/trust-score")),
       safe(() => api.get<{ items: Insight[] }>("/insights")),
@@ -58,6 +59,7 @@ export function MemberDashboard() {
       safe(() => api.get<Series>("/analytics/me/savings?days=14")),
       safe(() => api.get<any[]>("/alerts")),
       safe(() => api.get<{ current_streak?: number }>("/streaks")),
+      safe(() => api.get<{ unread_count: number }>("/messages/unread-count")),
     ]);
     if (s) setSummary(s);
     if (t) setTrust(t);
@@ -66,6 +68,7 @@ export function MemberDashboard() {
     if (ss) setSavingsSeries(ss);
     if (al) setAlertCount(Array.isArray(al) ? al.length : 0);
     if (st) setStreakWeeks(st.current_streak ?? 0);
+    if (mu) setMsgUnread(mu.unread_count ?? 0);
     setLoading(false);
   }, []);
 
@@ -81,6 +84,7 @@ export function MemberDashboard() {
       .on("postgres_changes", { event: "*", schema: "public", table: "savings_transactions", filter: `user_id=eq.${userId}` }, () => { load(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "savings_goals", filter: `user_id=eq.${userId}` }, () => { load(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "tontine_contributions", filter: `user_id=eq.${userId}` }, () => { load(); })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => { load(); })
       .subscribe((status) => {
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
           // Real-time down — fall back to 30s polling
@@ -247,8 +251,8 @@ export function MemberDashboard() {
           <QuickAction icon={<PieChart color={Colors.warning} size={22} />} label="Mon budget" onPress={() => router.push("/budget")} testID="home-action-budget" />
         </View>
         <View style={styles.qaRow}>
+          <QuickAction icon={<MessageCircle color={Colors.secondary} size={22} />} label="Messagerie" onPress={() => router.push("/messages")} testID="home-action-messages" badge={msgUnread} />
           <QuickAction icon={<Receipt color={Colors.accent} size={22} />} label="Partager facture" onPress={() => router.push("/split-expense")} testID="home-action-split" />
-          <View style={{ flex: 1 }} />
         </View>
 
         {/* Promotion CTA for members */}
@@ -307,10 +311,17 @@ export function MemberDashboard() {
   );
 }
 
-function QuickAction({ icon, label, onPress, testID }: { icon: React.ReactNode; label: string; onPress: () => void; testID?: string }) {
+function QuickAction({ icon, label, onPress, testID, badge }: { icon: React.ReactNode; label: string; onPress: () => void; testID?: string; badge?: number }) {
   return (
     <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={[styles.qa, Shadow.card]} testID={testID}>
-      <View style={styles.qaIconBox}>{icon}</View>
+      <View style={styles.qaIconBox}>
+        {icon}
+        {badge && badge > 0 ? (
+          <View style={styles.qaBadge}>
+            <Text style={styles.qaBadgeText}>{badge > 9 ? "9+" : badge}</Text>
+          </View>
+        ) : null}
+      </View>
       <Text style={styles.qaLabel}>{label}</Text>
     </TouchableOpacity>
   );
@@ -358,7 +369,22 @@ const styles = StyleSheet.create({
   statsRow: { flexDirection: "row", paddingHorizontal: Spacing.xl, gap: 10, marginTop: 12, minWidth: 0 },
   qaRow: { flexDirection: "row", paddingHorizontal: Spacing.xl, gap: 10, marginBottom: 10 },
   qa: { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.lg, borderWidth: 1, borderColor: Colors.border, flexDirection: "row", alignItems: "center", gap: 12 },
-  qaIconBox: { width: 44, height: 44, borderRadius: 12, backgroundColor: Colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
+  qaIconBox: { width: 44, height: 44, borderRadius: 12, backgroundColor: Colors.surfaceAlt, alignItems: "center", justifyContent: "center", position: "relative" },
+  qaBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: Colors.surface,
+  },
+  qaBadgeText: { color: "#fff", fontSize: 9, fontWeight: "800" },
   qaLabel: { color: Colors.text, fontWeight: "700", fontSize: 13, flex: 1 },
   promoCta: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16, borderRadius: Radius.xl },
   promoTitle: { color: "#fff", fontWeight: "900", fontSize: 14 },

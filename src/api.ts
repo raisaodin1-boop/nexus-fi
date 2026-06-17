@@ -264,14 +264,21 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"   && s[0] === "admin" && s[1] === "promotion-requests")                return (await db.adminListPromotionRequests()) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "promotion" && s[2] === "approve")   return (await db.adminHandlePromotion(body?.user_id, true)) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "promotion" && s[2] === "reject")    return (await db.adminHandlePromotion(body?.user_id, false)) as T;
-    if (method === "POST"  && s[0] === "admin" && s[1] === "broadcast")                         return (await db.adminBroadcast(body?.title, body?.body)) as T;
+    if (method === "POST"  && s[0] === "admin" && s[1] === "broadcast")                         return (await db.adminSendAdvertisement(body?.title, body?.body)) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "messages" && s[2] === "threads")     return (await db.adminListMessageThreads()) as T;
     if (method === "GET"   && s[0] === "admin" && s[1] === "messages")                          return (await db.adminListAllMessages()) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "messages")                          return (await db.adminSendMessageToUser(body?.user_id, body?.content)) as T;
+    if (method === "POST"  && s[0] === "admin" && s[1] === "advertisement")                     return (await db.adminSendAdvertisement(body?.title, body?.content)) as T;
 
     // ── Messages
     if (method === "GET"  && s[0] === "messages" && s[1] === "conversations")                   return (await db.listConversations()) as T;
+    if (method === "GET"  && s[0] === "messages" && s[1] === "search")                         return (await db.searchMessageRecipients(query.get("q") ?? "")) as T;
+    if (method === "GET"  && s[0] === "messages" && s[1] === "unread-count")                   return ({ unread_count: await db.getUnreadCount() }) as T;
     if (method === "GET"  && s[0] === "messages" && s[1] === "admin")                           return (await db.listMessages("admin")) as T;
-    if (method === "GET"  && s[0] === "messages" && s[1] === "tontine" && s[2])                 return (await db.listMessages("tontine", s[2])) as T;
+    if (method === "GET"  && s[0] === "messages" && s[1] === "broadcast")                      return (await db.listMessages("broadcast")) as T;
+    if (method === "GET"  && s[0] === "messages" && s[1] === "direct" && s[2])                 return (await db.listMessages("direct", s[2])) as T;
+    if (method === "GET"  && s[0] === "messages" && s[1] === "tontine" && s[2])                 return (await db.listMessages("tontine", undefined, s[2])) as T;
+    if (method === "POST" && s[0] === "messages" && s[1] === "thread" && s[2] === "read")       return (await db.markThreadRead(body?.thread_type, body?.peer_id, body?.tontine_id)) as T;
     if (method === "POST" && s[0] === "messages")                                               return (await db.sendMessage(body)) as T;
     if (method === "PATCH"&& s[0] === "messages" && s[1] && s[2] === "read")                   return (await db.markMessageRead(s[1])) as T;
 

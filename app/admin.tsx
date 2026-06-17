@@ -18,7 +18,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowLeft, Users, ShieldCheck, Crown, BarChart3, Bell,
   CheckCircle, XCircle, Send, ChevronRight, ShieldAlert,
-  Search, Zap,
+  Search, Zap, MessageCircle,
 } from "lucide-react-native";
 
 import { api, ApiError } from "@/src/api";
@@ -30,7 +30,7 @@ import { useToast } from "@/src/toast";
 import { MIN_TOUCH, useResponsive } from "@/src/hooks/use-responsive";
 import { KycReviewModal, type KycReviewTarget } from "@/src/admin-kyc-review-modal";
 
-type Tab = "users" | "kyc" | "promotions" | "tontines" | "broadcast";
+type Tab = "users" | "kyc" | "promotions" | "tontines" | "messages" | "broadcast";
 
 interface AdminUser {
   id: string; email: string; full_name: string; role: string;
@@ -73,6 +73,21 @@ interface AdminStats {
   total_users: number;
   total_tontines: number;
   pending_kyc: number;
+}
+interface AdminMessageThread {
+  user_id: string;
+  full_name: string;
+  last_message: string;
+  last_at: string;
+  unread_count: number;
+}
+interface AdminChatMessage {
+  id: string;
+  sender_id: string;
+  recipient_id: string | null;
+  content: string;
+  created_at: string;
+  sender_name?: string;
 }
 
 const ROLE_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
@@ -134,6 +149,11 @@ export default function AdminConsole() {
   const [broadcastTitle, setBroadcastTitle] = useState("");
   const [broadcastBody, setBroadcastBody] = useState("");
   const [broadcasting, setBroadcasting] = useState(false);
+  const [msgThreads, setMsgThreads] = useState<AdminMessageThread[]>([]);
+  const [activeMsgUser, setActiveMsgUser] = useState<AdminMessageThread | null>(null);
+  const [adminChatMsgs, setAdminChatMsgs] = useState<AdminChatMessage[]>([]);
+  const [adminReply, setAdminReply] = useState("");
+  const [sendingReply, setSendingReply] = useState(false);
   const [kycReviewTarget, setKycReviewTarget] = useState<KycReviewTarget | null>(null);
 
   if (user?.role !== "super_admin") {
@@ -163,6 +183,24 @@ export default function AdminConsole() {
     setUsersLoadingMore(false);
   }, []);
 
+  const loadMessageThreads = useCallback(async () => {
+    try {
+      const data = await api.get<AdminMessageThread[]>("/admin/messages/threads");
+      setMsgThreads(data);
+    } catch {
+      setMsgThreads([]);
+    }
+  }, []);
+
+  const loadAdminChat = useCallback(async (userId: string) => {
+    try {
+      const data = await api.get<AdminChatMessage[]>(`/messages/direct/${userId}`);
+      setAdminChatMsgs(data);
+    } catch {
+      setAdminChatMsgs([]);
+    }
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
@@ -184,15 +222,20 @@ export default function AdminConsole() {
   useFocusEffect(useCallback(() => {
     load();
     loadUsers(search, 0, false);
+    loadMessageThreads();
     const ch = supabase
       .channel("rt-admin-console")
       .on("postgres_changes", { event: "*", schema: "public", table: "kyc_submissions" }, () => { load(); loadUsers(search, 0, false); })
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => { load(); loadUsers(search, 0, false); })
       .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () => { load(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "tontines" }, () => { load(); })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => {
+        loadMessageThreads();
+        if (activeMsgUser) loadAdminChat(activeMsgUser.user_id);
+      })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [load, loadUsers, search]));
+  }, [load, loadUsers, search, loadMessageThreads, activeMsgUser, loadAdminChat]));
 
   useEffect(() => {
     if (tab !== "users") return;
@@ -253,19 +296,44 @@ export default function AdminConsole() {
     if (!broadcastTitle.trim() || !broadcastBody.trim()) { show("Remplissez le titre et le message", "error"); return; }
     setBroadcasting(true);
     try {
-      await api.post("/admin/broadcast", { title: broadcastTitle.trim(), body: broadcastBody.trim() });
-      show("Notification envoyée à tous les membres !", "success");
+      const res = await api.post<{ detail: string }>("/admin/broadcast", { title: broadcastTitle.trim(), body: broadcastBody.trim() });
+      show(res.detail ?? "Annonce envoyée à tous les membres !", "success");
       setBroadcastTitle(""); setBroadcastBody("");
     } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
     finally { setBroadcasting(false); }
   };
+
+  const handleAdminReply = async () => {
+    if (!activeMsgUser || !adminReply.trim()) return;
+    setSendingReply(true);
+    try {
+      await api.post("/admin/messages", { user_id: activeMsgUser.user_id, content: adminReply.trim() });
+      setAdminReply("");
+      await loadAdminChat(activeMsgUser.user_id);
+      loadMessageThreads();
+      show("Message envoyé", "success");
+    } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
+    finally { setSendingReply(false); }
+  };
+
+  const openMsgThread = async (thread: AdminMessageThread) => {
+    setActiveMsgUser(thread);
+    loadAdminChat(thread.user_id);
+    try {
+      await api.post("/messages/thread/read", { thread_type: "direct", peer_id: thread.user_id });
+      loadMessageThreads();
+    } catch {}
+  };
+
+  const msgUnreadTotal = msgThreads.reduce((s, t) => s + t.unread_count, 0);
 
   const TABS: { key: Tab; label: string; icon: any; count?: number }[] = [
     { key: "users", label: "Membres", icon: Users, count: userTotal || undefined },
     { key: "kyc", label: "KYC", icon: ShieldCheck, count: kyc.filter(k => isPendingKyc(k.kyc_status)).length || undefined },
     { key: "promotions", label: "Promos", icon: Crown, count: promos.filter(p => p.status === "pending").length || undefined },
     { key: "tontines", label: "Tontines", icon: BarChart3 },
-    { key: "broadcast", label: "Broadcast", icon: Bell },
+    { key: "messages", label: "Messages", icon: MessageCircle, count: msgUnreadTotal || undefined },
+    { key: "broadcast", label: "Annonces", icon: Bell },
   ];
 
   return (
@@ -542,14 +610,91 @@ export default function AdminConsole() {
           }}
           ListEmptyComponent={<Text style={styles.empty}>Aucune tontine</Text>}
         />
+      ) : tab === "messages" ? (
+        <View style={{ flex: 1 }}>
+          {activeMsgUser ? (
+            <View style={{ flex: 1 }}>
+              <View style={styles.msgThreadHeader}>
+                <TouchableOpacity onPress={() => setActiveMsgUser(null)} style={styles.backBtn}>
+                  <ArrowLeft color={Colors.text} size={18} />
+                </TouchableOpacity>
+                <Avatar name={activeMsgUser.full_name} size={36} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.userName} numberOfLines={1}>{activeMsgUser.full_name}</Text>
+                  <Text style={styles.userEmail}>Conversation privée</Text>
+                </View>
+              </View>
+              <FlatList
+                data={adminChatMsgs}
+                keyExtractor={(m) => m.id}
+                contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 8, gap: 8 }}
+                renderItem={({ item: m }) => {
+                  const mine = m.sender_id === user?.id;
+                  return (
+                    <View style={[styles.adminBubble, mine ? styles.adminBubbleMe : styles.adminBubbleThem]}>
+                      {!mine && m.sender_name ? <Text style={styles.adminBubbleSender}>{m.sender_name}</Text> : null}
+                      <Text style={[styles.adminBubbleText, mine && { color: "#fff" }]}>{m.content}</Text>
+                    </View>
+                  );
+                }}
+                ListEmptyComponent={<Text style={styles.empty}>Aucun message</Text>}
+              />
+              <View style={styles.adminReplyRow}>
+                <TextInput
+                  style={styles.adminReplyInput}
+                  value={adminReply}
+                  onChangeText={setAdminReply}
+                  placeholder="Répondre au membre…"
+                  placeholderTextColor={Colors.textMuted}
+                  multiline
+                />
+                <TouchableOpacity
+                  style={[styles.adminReplySend, (!adminReply.trim() || sendingReply) && { opacity: 0.5 }]}
+                  onPress={handleAdminReply}
+                  disabled={!adminReply.trim() || sendingReply}
+                >
+                  {sendingReply ? <ActivityIndicator color="#fff" size="small" /> : <Send color="#fff" size={16} />}
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <FlatList
+              data={msgThreads}
+              keyExtractor={(t) => t.user_id}
+              contentContainerStyle={{ paddingHorizontal: Spacing.xl, paddingBottom: 100, gap: 10 }}
+              renderItem={({ item: t }) => (
+                <TouchableOpacity style={styles.userCard} onPress={() => openMsgThread(t)} activeOpacity={0.85}>
+                  <View style={styles.userCardLeft}>
+                    <Avatar name={t.full_name} size={44} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.userName} numberOfLines={1}>{t.full_name}</Text>
+                      <Text style={styles.userEmail} numberOfLines={2}>{t.last_message}</Text>
+                    </View>
+                  </View>
+                  <View style={{ alignItems: "flex-end", gap: 6 }}>
+                    {t.unread_count > 0 ? (
+                      <View style={styles.msgUnreadBadge}>
+                        <Text style={styles.msgUnreadText}>{t.unread_count}</Text>
+                      </View>
+                    ) : null}
+                    <ChevronRight color={Colors.textMuted} size={18} />
+                  </View>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={<Text style={styles.empty}>Aucun message de membre</Text>}
+            />
+          )}
+        </View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: Spacing.xl, gap: 16, paddingBottom: 100 }}>
           <View style={styles.broadcastCard}>
             <LinearGradient colors={["#6366F1", "#8B5CF6"]} style={styles.broadcastIconBg}>
               <Bell color="#fff" size={22} />
             </LinearGradient>
-            <Text style={styles.broadcastTitle}>Notification globale</Text>
-            <Text style={styles.broadcastDesc}>Envoyez une notification push à l'ensemble de la communauté Hodix.</Text>
+            <Text style={styles.broadcastTitle}>Canal publicitaire</Text>
+            <Text style={styles.broadcastDesc}>
+              Envoyez une annonce à tous les membres : notification push + message dans « Annonces HODIX ».
+            </Text>
             <TextInput
               style={styles.broadcastInput}
               value={broadcastTitle}
@@ -720,4 +865,58 @@ const styles = StyleSheet.create({
   sendBtn: { borderRadius: 14, overflow: "hidden", marginTop: 4 },
   sendBtnGrad: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 15 },
   sendBtnText: { color: "#fff", fontSize: 15, fontWeight: "800" },
+  msgThreadHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: 12,
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  adminBubble: { maxWidth: "80%", padding: 12, borderRadius: 14 },
+  adminBubbleMe: { alignSelf: "flex-end", backgroundColor: Colors.primary },
+  adminBubbleThem: { alignSelf: "flex-start", backgroundColor: "#F1F5F9" },
+  adminBubbleSender: { fontSize: 11, fontWeight: "700", color: Colors.primary, marginBottom: 4 },
+  adminBubbleText: { fontSize: 14, color: Colors.text, lineHeight: 20 },
+  adminReplyRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8,
+    padding: Spacing.xl,
+    backgroundColor: "#fff",
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+  },
+  adminReplyInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: "#1E293B",
+    maxHeight: 100,
+    outlineStyle: "none",
+  } as any,
+  adminReplySend: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  msgUnreadBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.danger,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  msgUnreadText: { color: "#fff", fontSize: 11, fontWeight: "800" },
 });
