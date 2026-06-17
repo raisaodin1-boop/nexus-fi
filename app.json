@@ -16,13 +16,13 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.hodix.mobile",
-      "buildNumber": "1",
       "associatedDomains": [
         "applinks:www.hodix.app",
         "applinks:hodix.app"
       ],
       "infoPlist": {
-        "UIBackgroundModes": ["remote-notification"]
+        "UIBackgroundModes": ["remote-notification"],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
