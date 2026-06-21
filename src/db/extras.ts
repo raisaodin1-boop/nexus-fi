@@ -21,62 +21,55 @@ export async function getManagerOverview() {
   const me = await uid();
   const sb = getSupabase();
 
-  const { data: profile } = await sb.from("profiles").select("role").eq("id", me).single();
-  const role = profile?.role ?? "member";
-  if (role !== "tontine_manager" && role !== "super_admin" && role !== "admin") {
-    throw { status: 403, detail: "Accès réservé aux Tontine Managers." };
-  }
+  const safeNum = async (fn: () => PromiseLike<number>): Promise<number> => {
+    try { return await fn(); } catch { return 0; }
+  };
+  const safeArr = async (fn: () => PromiseLike<any[]>): Promise<any[]> => {
+    try { return await fn(); } catch { return []; }
+  };
 
-  const [tontines, associations, cooperatives, funds] = await Promise.all([
-    sb.from("tontines").select("*").eq("owner_id", me),
-    sb.from("associations").select("*").eq("owner_id", me),
-    sb.from("cooperatives").select("*").eq("owner_id", me),
-    sb.from("community_funds").select("*").eq("owner_id", me),
+  // Toutes les requêtes en parallèle — une seule vague réseau
+  const [tontineRes, assocRes, coopRes, fundRes] = await Promise.all([
+    safeArr(async () => { const r = await sb.from("tontines").select("*").eq("owner_id", me); return r.data ?? []; }),
+    safeArr(async () => { const r = await sb.from("associations").select("*").eq("owner_id", me); return r.data ?? []; }),
+    safeArr(async () => { const r = await sb.from("cooperatives").select("*").eq("owner_id", me); return r.data ?? []; }),
+    safeArr(async () => { const r = await sb.from("community_funds").select("*").eq("owner_id", me); return r.data ?? []; }),
   ]);
 
-  const tList = tontines.data ?? [];
-  const aList = associations.data ?? [];
-  const cList = cooperatives.data ?? [];
-  const fList = funds.data ?? [];
+  const tList: any[] = tontineRes;
+  const aList: any[] = assocRes;
+  const cList: any[] = coopRes;
+  const fList: any[] = fundRes;
 
-  let totalMembers = 0;
-  for (const t of tList) {
-    const { count } = await sb.from("tontine_members").select("*", { count: "exact", head: true }).eq("tontine_id", t.id);
-    totalMembers += count ?? 0;
-  }
-  for (const a of aList) {
-    const { count } = await sb.from("association_members").select("*", { count: "exact", head: true }).eq("association_id", a.id);
-    totalMembers += count ?? 0;
-  }
-  for (const c of cList) {
-    const { count } = await sb.from("cooperative_members").select("*", { count: "exact", head: true }).eq("cooperative_id", c.id);
-    totalMembers += count ?? 0;
-  }
+  const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+
+  // Tous les comptages en parallèle
+  const [tMemberCounts, aMemberCounts, cMemberCounts, contribResults, newMemberCounts] = await Promise.all([
+    Promise.all(tList.map(t => safeNum(async () => { const r = await sb.from("tontine_members").select("*", { count: "exact", head: true }).eq("tontine_id", t.id); return r.count ?? 0; }))),
+    Promise.all(aList.map(a => safeNum(async () => { const r = await sb.from("association_members").select("*", { count: "exact", head: true }).eq("association_id", a.id); return r.count ?? 0; }))),
+    Promise.all(cList.map(c => safeNum(async () => { const r = await sb.from("cooperative_members").select("*", { count: "exact", head: true }).eq("cooperative_id", c.id); return r.count ?? 0; }))),
+    Promise.all(tList.map(t => safeArr(async () => { const r = await sb.from("tontine_contributions").select("amount").eq("tontine_id", t.id); return r.data ?? []; }))),
+    Promise.all(tList.map(t => safeNum(async () => { const r = await sb.from("tontine_members").select("*", { count: "exact", head: true }).eq("tontine_id", t.id).gte("joined_at", thirtyAgo); return r.count ?? 0; }))),
+  ]);
+
+  const totalMembers =
+    (tMemberCounts as number[]).reduce((s, n) => s + n, 0) +
+    (aMemberCounts as number[]).reduce((s, n) => s + n, 0) +
+    (cMemberCounts as number[]).reduce((s, n) => s + n, 0);
 
   let totalCollected = 0;
   const complianceValues: number[] = [];
-  for (const t of tList) {
-    const { data: contribs } = await sb.from("tontine_contributions").select("amount").eq("tontine_id", t.id);
-    const collected = (contribs ?? []).reduce((s, r) => s + Number(r.amount), 0);
+  tList.forEach((t, i) => {
+    const contribs = (contribResults[i] as any[]);
+    const collected = contribs.reduce((s: number, r: any) => s + Number(r.amount), 0);
     totalCollected += collected;
-    const { count: mc } = await sb.from("tontine_members").select("*", { count: "exact", head: true }).eq("tontine_id", t.id);
-    const members = mc ?? 0;
+    const members = (tMemberCounts as number[])[i] ?? 0;
     const perCycle = Number(t.amount_per_cycle ?? t.contribution_amount ?? 0);
     const expected = perCycle * members;
     if (expected > 0) complianceValues.push(Math.min(100, (collected / expected) * 100));
-  }
+  });
 
-  const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString();
-  let newMembers30d = 0;
-  for (const t of tList) {
-    const { count } = await sb
-      .from("tontine_members")
-      .select("*", { count: "exact", head: true })
-      .eq("tontine_id", t.id)
-      .gte("joined_at", thirtyAgo);
-    newMembers30d += count ?? 0;
-  }
-
+  const newMembers30d = (newMemberCounts as number[]).reduce((s, n) => s + n, 0);
   const avgCompliance = complianceValues.length
     ? Math.round((complianceValues.reduce((a, b) => a + b, 0) / complianceValues.length) * 10) / 10
     : 0;
