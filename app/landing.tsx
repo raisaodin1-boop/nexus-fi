@@ -422,7 +422,7 @@ export default function LandingScreen() {
 const ss = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: LIGHT },
   scroll: { alignItems: "center", paddingBottom: 48 },
-  container: { width: "100%", paddingHorizontal: 20 },
+  container: { width: "100%", maxWidth: 1100, alignSelf: "center", paddingHorizontal: 20 },
 
   // Nav
   nav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 18 },
@@ -439,10 +439,10 @@ const ss = StyleSheet.create({
   glowE: { position: "absolute", width: 320, height: 320, borderRadius: 160, backgroundColor: EMERALD, opacity: 0.09, top: -100, right: -80 },
   glowG: { position: "absolute", width: 200, height: 200, borderRadius: 100, backgroundColor: GOLD, opacity: 0.07, bottom: -60, left: -40 },
   glowB: { position: "absolute", width: 180, height: 180, borderRadius: 90, backgroundColor: "#3B82F6", opacity: 0.06, top: 40, left: -60 },
-  heroInner: { gap: 28 },
+  heroInner: { gap: 28, width: "100%" },
   heroInnerWide: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  heroCopy: { flex: 1 },
-  heroVisual: { alignItems: "center", minWidth: 300 },
+  heroCopy: { flex: 1, minWidth: 0 },
+  heroVisual: { alignItems: "center", width: 300, flexShrink: 0 },
   chip: { alignSelf: "flex-start", backgroundColor: "rgba(16,185,129,0.14)", borderWidth: 1, borderColor: "rgba(16,185,129,0.3)", paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, marginBottom: 18 },
   chipText: { color: EMERALD, fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
   heroTitle: { fontSize: 30, fontWeight: "900", color: "#F8FAFC", lineHeight: 38, letterSpacing: -0.8, marginBottom: 14 },
