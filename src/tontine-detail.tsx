@@ -641,7 +641,7 @@ export function TontineDetailView({ id }: { id: string }) {
                 <Shield size={20} color="#F59E0B" />
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: "#92400E", fontWeight: "800", fontSize: 13 }}>Sécurité & Garanties</Text>
-                  <Text style={{ color: "#B45309", fontSize: 11, marginTop: 1 }}>Escrow · Fonds de réserve · Votes d'exclusion</Text>
+                  <Text style={{ color: "#B45309", fontSize: 11, marginTop: 1 }}>Escrow · Réserve · Giga-Garant · Votes</Text>
                 </View>
                 <Text style={{ color: "#F59E0B", fontSize: 20, fontWeight: "300" }}>›</Text>
               </View>

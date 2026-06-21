@@ -26,7 +26,7 @@ import {
 
 const { width } = Dimensions.get("window");
 
-type VisualKind = "stack" | "trust" | "community" | "card" | "chart" | "sparkle";
+type VisualKind = "stack" | "trust" | "community" | "card" | "chart" | "sparkle" | "auction";
 
 interface Slide {
   id: string;
@@ -68,6 +68,16 @@ const SLIDES: Slide[] = [
     gradient: ["#0B1F3A", "#0F766E", "#0D5C56"],
     stat: { value: "98%", label: "de cotisations à temps" },
     visual: "community",
+  },
+  {
+    id: "auction",
+    title: "Enchères Tontine",
+    subtitle: "urgence, prime, transparence",
+    description:
+      "Un membre a besoin du tour de table avant son rang ? Il enchérit avec une prime — le surplus revient au groupe. Pensé pour les gérants et les Njangi camerounais.",
+    gradient: ["#1E1B4B", "#5B21B6", "#0F2847"],
+    stat: { value: "24h", label: "fenêtre d'enchères par cycle" },
+    visual: "auction",
   },
   {
     id: "wallet",
@@ -116,6 +126,16 @@ function SlideVisual({ kind }: { kind: VisualKind }) {
             {[EMERALD, "#1E56A0", "#C9A227", "#8B5CF6"].map((c, i) => (
               <View key={i} style={[styles.communityDot, { backgroundColor: c }]} />
             ))}
+          </View>
+        </View>
+      )}
+      {kind === "auction" && (
+        <View style={styles.auctionVisual}>
+          <Text style={styles.auctionEmoji}>🔨</Text>
+          <View style={styles.auctionCard}>
+            <Text style={styles.auctionCardLabel}>Prime enchère</Text>
+            <Text style={styles.auctionCardAmount}>+5 000 XAF</Text>
+            <Text style={styles.auctionCardHint}>Redistribuée aux membres</Text>
           </View>
         </View>
       )}
@@ -317,6 +337,19 @@ const styles = StyleSheet.create({
   communityVisual: { alignItems: "center", gap: 16 },
   communityDots: { flexDirection: "row", gap: 8 },
   communityDot: { width: 8, height: 8, borderRadius: 4 },
+  auctionVisual: { flexDirection: "row", alignItems: "center", gap: 20 },
+  auctionEmoji: { fontSize: 48 },
+  auctionCard: {
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(201,162,39,0.3)",
+    minWidth: 160,
+  },
+  auctionCardLabel: { color: "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: "600" },
+  auctionCardAmount: { color: "#C9A227", fontSize: 22, fontWeight: "900", marginTop: 4 },
+  auctionCardHint: { color: EMERALD, fontSize: 11, fontWeight: "600", marginTop: 4 },
   cardVisual: { alignItems: "center", gap: 20 },
   sparkleVisual: { alignItems: "center", gap: 20, flexDirection: "row" },
   statBadge: {

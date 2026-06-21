@@ -140,7 +140,7 @@ export default function TransferScreen() {
         <View style={styles.infoBanner}>
           <Info size={16} color={Colors.secondary} />
           <Text style={styles.infoText}>
-            Transfert instantané entre membres Hodix. Aucun frais.
+            Transfert instantané entre membres HODIX — 0 FCFA de frais HODIX. Les frais MoMo ne s'appliquent qu'à l'entrée et à la sortie vers votre opérateur.
           </Text>
         </View>
 

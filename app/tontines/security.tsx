@@ -21,6 +21,7 @@ import {
   TrendingDown,
   CheckCircle,
   XCircle,
+  Handshake,
 } from "lucide-react-native";
 import { api, formatXAF } from "@/src/api";
 import { Card, Button } from "@/src/ui";
@@ -63,6 +64,19 @@ interface CreatorReputation {
   avg_rating: number | null;
   rating_count: number;
   creator_id: string;
+}
+
+interface GuarantorRow {
+  id: string;
+  member_id: string;
+  member_name: string;
+  guarantor_name: string;
+  status: string;
+}
+
+interface MyGuarantor {
+  id: string;
+  guarantor_name: string;
 }
 
 /* ── Helpers ─────────────────────────────────────────────────── */
@@ -110,6 +124,11 @@ export default function SecurityScreen() {
   const [ratingComment, setRatingComment] = useState("");
   const [ratingBusy, setRatingBusy] = useState(false);
 
+  const [guarantors, setGuarantors] = useState<GuarantorRow[]>([]);
+  const [myGuarantors, setMyGuarantors] = useState<MyGuarantor[]>([]);
+  const [guarantorInput, setGuarantorInput] = useState("");
+  const [guarantorBusy, setGuarantorBusy] = useState(false);
+
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -118,18 +137,22 @@ export default function SecurityScreen() {
         try { return await fn(); } catch { return null; }
       };
 
-      const [escrowRes, reserveRes, overdueRes, votesRes, tontineRes] = await Promise.all([
+      const [escrowRes, reserveRes, overdueRes, votesRes, tontineRes, guarantorsRes, myGuarantorsRes] = await Promise.all([
         safe(() => api.get<EscrowData>(`/tontines/${id}/escrow`)),
         safe(() => api.get<ReserveData>(`/tontines/${id}/reserve`)),
         safe(() => api.get<OverdueMember[]>(`/tontines/${id}/overdue`)),
         safe(() => api.get<ExclusionVote[]>(`/tontines/${id}/exclusion-votes`)),
         safe(() => api.get<any>(`/tontines/${id}`)),
+        safe(() => api.get<GuarantorRow[]>(`/tontines/${id}/guarantors`)),
+        safe(() => api.get<MyGuarantor[]>(`/tontines/${id}/my-guarantors`)),
       ]);
 
       if (escrowRes) setEscrow(escrowRes);
       if (reserveRes) setReserve(reserveRes);
       if (overdueRes) setOverdue(overdueRes);
       if (votesRes) setVotes(votesRes);
+      if (guarantorsRes) setGuarantors(guarantorsRes);
+      if (myGuarantorsRes) setMyGuarantors(myGuarantorsRes);
 
       if (tontineRes) {
         setTontineName(tontineRes.tontine?.name ?? "");
@@ -210,6 +233,52 @@ export default function SecurityScreen() {
     } finally {
       setRatingBusy(false);
     }
+  };
+
+  const submitGuarantors = async () => {
+    if (!guarantorInput.trim()) {
+      Alert.alert("Requis", "Indiquez le téléphone ou l'email de vos garants HODIX (max 2, séparés par une virgule).");
+      return;
+    }
+    setGuarantorBusy(true);
+    try {
+      const res = await api.post<{ assigned: number }>(`/tontines/${id}/guarantors`, {
+        guarantors: guarantorInput.split(/[,;]/).map((s) => s.trim()).filter(Boolean),
+      });
+      Alert.alert("Giga-Garant", `${res.assigned} garant(s) enregistré(s).`);
+      setGuarantorInput("");
+      load();
+    } catch (e: any) {
+      Alert.alert("Erreur", e?.detail ?? e?.message ?? "Impossible d'enregistrer les garants.");
+    } finally {
+      setGuarantorBusy(false);
+    }
+  };
+
+  const activateGuarantee = (member: OverdueMember) => {
+    Alert.alert(
+      "Activer Giga-Garant",
+      `Notifier les garants de ${member.full_name} pour défaut de paiement ?`,
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Activer",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const res = await api.post<{ claimed: number }>(`/tontines/${id}/guarantors/claim`, {
+                user_id: member.user_id,
+                reason: "Défaut de cotisation",
+              });
+              Alert.alert("Garantie activée", `${res.claimed} garant(s) notifié(s).`);
+              load();
+            } catch (e: any) {
+              Alert.alert("Erreur", e?.detail ?? "Impossible d'activer la garantie.");
+            }
+          },
+        },
+      ],
+    );
   };
 
   /* ── Render ── */
@@ -397,6 +466,46 @@ export default function SecurityScreen() {
           </Card>
         )}
 
+        {/* ── B2. Giga-Garant ── */}
+        <Card style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Handshake size={16} color={Colors.primary} />
+            <Text style={styles.cardTitle}>Giga-Garant — caution solidaire</Text>
+          </View>
+          <Text style={styles.coverageDesc}>
+            Désignez jusqu'à 2 membres HODIX comme garants. En cas de défaut, l'admin peut activer la garantie solidaire.
+          </Text>
+
+          {myGuarantors.length > 0 && (
+            <View style={{ gap: 6, marginTop: 8 }}>
+              <Text style={styles.infoLabel}>Vos garants :</Text>
+              {myGuarantors.map((g) => (
+                <Text key={g.id} style={styles.infoText}>• {g.guarantor_name}</Text>
+              ))}
+            </View>
+          )}
+
+          <TextInput
+            style={[styles.textInput, { minHeight: 44, marginTop: 10 }]}
+            placeholder="Téléphone ou email garant (virgule pour 2e)"
+            placeholderTextColor={Colors.textSubtle}
+            value={guarantorInput}
+            onChangeText={setGuarantorInput}
+          />
+          <Button label="Enregistrer mes garants" onPress={submitGuarantors} loading={guarantorBusy} style={{ marginTop: 8 }} />
+
+          {guarantors.length > 0 && (
+            <View style={{ gap: 8, marginTop: 12 }}>
+              <Text style={styles.infoLabel}>Garants du groupe</Text>
+              {guarantors.slice(0, 8).map((g) => (
+                <Text key={g.id} style={styles.infoText}>
+                  {g.member_name} → {g.guarantor_name} ({g.status})
+                </Text>
+              ))}
+            </View>
+          )}
+        </Card>
+
         {/* ── C. Overdue Members Card ── */}
         <Card style={styles.card}>
           <View style={styles.cardHeader}>
@@ -425,14 +534,22 @@ export default function SecurityScreen() {
                     </Text>
                   </View>
                   {m.cycles_late > 1 && (
-                    <TouchableOpacity
-                      onPress={() => { setVoteTarget(m); setVoteReason(null); setVoteResult(null); }}
-                      style={styles.voteBtn}
-                      activeOpacity={0.85}
-                    >
-                      <XCircle size={12} color={Colors.danger} />
-                      <Text style={styles.voteBtnText}>Voter l'exclusion</Text>
-                    </TouchableOpacity>
+                    <View style={{ gap: 6 }}>
+                      <TouchableOpacity
+                        onPress={() => { setVoteTarget(m); setVoteReason(null); setVoteResult(null); }}
+                        style={styles.voteBtn}
+                        activeOpacity={0.85}
+                      >
+                        <XCircle size={12} color={Colors.danger} />
+                        <Text style={styles.voteBtnText}>Voter l'exclusion</Text>
+                      </TouchableOpacity>
+                      {isCreator && (
+                        <TouchableOpacity onPress={() => activateGuarantee(m)} style={styles.guarantorBtn} activeOpacity={0.85}>
+                          <Handshake size={12} color={Colors.primary} />
+                          <Text style={styles.guarantorBtnText}>Giga-Garant</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   )}
                 </View>
               ))}
@@ -757,6 +874,18 @@ const styles = StyleSheet.create({
     borderColor: Colors.danger + "44",
   },
   voteBtnText: { fontSize: 10, fontWeight: "700", color: Colors.danger },
+  guarantorBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: Colors.primaryLight,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: Colors.primary + "44",
+  },
+  guarantorBtnText: { fontSize: 10, fontWeight: "700", color: Colors.primary },
 
   voteName: { fontSize: 14, fontWeight: "700", color: Colors.text },
   voteCount: { fontSize: 13, fontWeight: "800" },

@@ -22,7 +22,7 @@ type SavingsType = "flexible" | "locked" | "recurring";
 
 const TYPES: { key: SavingsType; label: string; desc: string; icon: any; color: string }[] = [
   { key: "flexible", label: "Flexible", desc: "Dépôts et retraits libres à tout moment.", icon: Target, color: Colors.accent },
-  { key: "locked", label: "Verrouillé", desc: "Fonds bloqués jusqu'à la date cible.", icon: Lock, color: Colors.secondary },
+  { key: "locked", label: "Verrouillé", desc: "Bloqué jusqu'à la date cible. Retrait anticipé : pénalité 5 % ou approbation tuteur.", icon: Lock, color: Colors.secondary },
   { key: "recurring", label: "Récurrent", desc: "Versements automatiques périodiques.", icon: Repeat, color: Colors.primary },
 ];
 
@@ -34,12 +34,17 @@ export default function SavingsCreate() {
   const [targetAmount, setTargetAmount] = useState("");
   const [deadline, setDeadline] = useState<Date | null>(null);
   const [type, setType] = useState<SavingsType>("flexible");
+  const [guardian, setGuardian] = useState("");
   const [saving, setSaving] = useState(false);
 
   const handleCreate = async () => {
     if (!name.trim()) { show("Donnez un nom à votre objectif", "error"); return; }
     const amount = Number(targetAmount);
     if (!amount || amount <= 0) { show("Montant cible invalide", "error"); return; }
+    if (type === "locked" && !deadline) {
+      show("Une date limite est requise pour un compte verrouillé", "error");
+      return;
+    }
     setSaving(true);
     try {
       await api.post("/savings/goals", {
@@ -48,6 +53,9 @@ export default function SavingsCreate() {
         savings_type: type,
         deadline: deadline ? deadline.toISOString().slice(0, 10) : null,
         currency: "XAF",
+        ...(type === "locked" && guardian.trim()
+          ? { guardian_phone_or_email: guardian.trim() }
+          : {}),
       });
       show("Objectif créé avec succès !", "success");
       router.replace("/(tabs)/savings" as any);
@@ -117,6 +125,21 @@ export default function SavingsCreate() {
             })}
           </View>
 
+          {type === "locked" && (
+            <>
+              <Field
+                label="Tuteur d'épargne (optionnel)"
+                value={guardian}
+                onChangeText={setGuardian}
+                placeholder="Téléphone ou email d'un proche sur HODIX"
+                testID="savings-guardian"
+              />
+              <Text style={styles.lockHint}>
+                Sans tuteur : retrait anticipé possible avec pénalité de 5 % (min. 500 XAF). Avec tuteur : déblocage sur approbation.
+              </Text>
+            </>
+          )}
+
           <Button
             label="Créer l'objectif"
             onPress={handleCreate}
@@ -147,4 +170,5 @@ const styles = StyleSheet.create({
   },
   typeName: { fontSize: 15, fontWeight: "800" },
   typeDesc: { fontSize: 12, color: Colors.textMuted, lineHeight: 16 },
+  lockHint: { fontSize: 12, color: Colors.textMuted, lineHeight: 18, marginTop: -8 },
 });

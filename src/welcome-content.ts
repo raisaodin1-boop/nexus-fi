@@ -171,6 +171,37 @@ export const LANDING_I18N = {
     section_community_body: "Njangi, Ajo, Chama, Stokvel — une seule plateforme pour vos cercles d'épargne.",
     section_security_title: "Sécurité & conformité",
     section_security_body: "Chiffrement de bout en bout, KYC intégré et transactions protégées pour chaque membre.",
+    security_section_title: "Vos fonds, protégés",
+    security_eyebrow: "Sécurité",
+    fees_eyebrow: "Frais",
+    security_section_sub:
+      "HODIX combine sécurité bancaire et transparence communautaire — conçu pour la confiance camerounaise.",
+    security_items: [
+      { emoji: "🔐", title: "KYC & identité vérifiée", body: "Profil validé, CNI niveau 2, certificats PDF officiels." },
+      { emoji: "🛡️", title: "Escrow 1er cycle", body: "Les cotisations du premier cycle sont séquestrées jusqu'à validation du groupe." },
+      { emoji: "📱", title: "PIN & biométrie", body: "Verrouillage wallet, OTP SMS sur transactions sensibles, détection fraude." },
+      { emoji: "⚖️", title: "Conformité CEMAC", body: "Données chiffrées, hébergement sécurisé, respect des principes RGPD." },
+    ],
+    fees_section_title: "Transparence totale sur les frais",
+    fees_section_sub: "Pas de mauvaise surprise au moment du dépôt ou du retrait.",
+    fees_rows: [
+      { label: "Cotiser dans votre groupe HODIX", value: "0 FCFA", highlight: true },
+      { label: "Transfert wallet → wallet (membre HODIX)", value: "0 FCFA", highlight: true },
+      { label: "Payer une cotisation depuis le wallet", value: "0 FCFA", highlight: true },
+      { label: "Dépôt Mobile Money (MTN / Orange)", value: "Frais opérateur", highlight: false },
+      { label: "Retrait vers MoMo", value: "Frais opérateur", highlight: false },
+    ],
+    fees_note:
+      "L'argent circule gratuitement au sein de HODIX. Les frais Mobile Money ne s'appliquent qu'à l'entrée et à la sortie vers votre opérateur.",
+    auction_section_title: "Enchères Tontine — le tour de table en urgence",
+    auction_section_sub:
+      "Besoin urgent ? Un membre peut « acheter » son tour en proposant une prime. Le surplus est redistribué au groupe — comme au Cameroun, en digital.",
+    auction_steps: [
+      "L'admin lance les enchères pour le cycle en cours",
+      "Les membres enchérissent (prime supplémentaire)",
+      "Le gagnant reçoit la cagnotte, le groupe partage la prime",
+    ],
+    auction_cta: "Créer ma tontine",
 
     final_title: "Votre confiance.\nVotre réputation.\nVotre avenir financier.",
     final_sub: "Rejoignez 12 000 membres qui bâtissent leur identité financière avec HODIX.",
@@ -234,6 +265,37 @@ export const LANDING_I18N = {
     section_community_body: "Njangi, Ajo, Chama, Stokvel — one platform for your savings circles.",
     section_security_title: "Security & compliance",
     section_security_body: "End-to-end encryption, built-in KYC and protected transactions for every member.",
+    security_section_title: "Your funds, protected",
+    security_eyebrow: "Security",
+    fees_eyebrow: "Fees",
+    security_section_sub:
+      "HODIX combines banking-grade security with community transparency — built for real trust.",
+    security_items: [
+      { emoji: "🔐", title: "KYC & verified identity", body: "Validated profile, ID level 2, official PDF certificates." },
+      { emoji: "🛡️", title: "Cycle 1 escrow", body: "First-cycle contributions held in escrow until the group is validated." },
+      { emoji: "📱", title: "PIN & biometrics", body: "Wallet lock, SMS OTP on sensitive transactions, fraud detection." },
+      { emoji: "⚖️", title: "CEMAC compliance", body: "Encrypted data, secure hosting, GDPR-aligned principles." },
+    ],
+    fees_section_title: "Full fee transparency",
+    fees_section_sub: "No surprises when you deposit or withdraw.",
+    fees_rows: [
+      { label: "Contribute within your HODIX group", value: "0 XAF", highlight: true },
+      { label: "Wallet → wallet transfer (HODIX member)", value: "0 XAF", highlight: true },
+      { label: "Pay contribution from wallet", value: "0 XAF", highlight: true },
+      { label: "Mobile Money top-up (MTN / Orange)", value: "Operator fees", highlight: false },
+      { label: "Withdraw to MoMo", value: "Operator fees", highlight: false },
+    ],
+    fees_note:
+      "Money moves free inside HODIX. Mobile Money fees apply only when entering or leaving via your operator.",
+    auction_section_title: "Tontine Auctions — urgent turn bidding",
+    auction_section_sub:
+      "Need cash fast? A member can bid for this cycle's pot with a premium. Surplus is shared with the group — familiar culture, digital execution.",
+    auction_steps: [
+      "Admin opens auctions for the current cycle",
+      "Members bid (extra premium)",
+      "Winner takes the pot, the group shares the premium",
+    ],
+    auction_cta: "Create my tontine",
 
     final_title: "Your trust.\nYour reputation.\nYour financial future.",
     final_sub: "Join 12,000 members building their financial identity with HODIX.",

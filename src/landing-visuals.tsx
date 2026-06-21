@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
   useWindowDimensions,
 } from "react-native";
@@ -388,6 +389,119 @@ export function AppShowcase({
   );
 }
 
+export type SecurityItem = { emoji: string; title: string; body: string };
+export type FeeRow = { label: string; value: string; highlight: boolean };
+
+export function SecurityFeesSection({
+  securityTitle,
+  securitySub,
+  securityItems,
+  securityEyebrow,
+  feesEyebrow,
+  feesTitle,
+  feesSub,
+  feesRows,
+  feesNote,
+  isWide,
+}: {
+  securityTitle: string;
+  securitySub: string;
+  securityItems: SecurityItem[];
+  securityEyebrow: string;
+  feesEyebrow: string;
+  feesTitle: string;
+  feesSub: string;
+  feesRows: FeeRow[];
+  feesNote: string;
+  isWide: boolean;
+}) {
+  return (
+    <View style={lvStyles.securityFeesWrap}>
+      <View style={[lvStyles.securityFeesGrid, isWide && lvStyles.securityFeesGridWide]}>
+        <View style={lvStyles.securityBlock}>
+          <Text style={lvStyles.blockEyebrow}>{securityEyebrow}</Text>
+          <Text style={lvStyles.blockTitle}>{securityTitle}</Text>
+          <Text style={lvStyles.blockSub}>{securitySub}</Text>
+          <View style={lvStyles.securityItems}>
+            {securityItems.map((item) => (
+              <View key={item.title} style={lvStyles.securityCard}>
+                <Text style={lvStyles.securityEmoji}>{item.emoji}</Text>
+                <View style={lvStyles.securityCardCopy}>
+                  <Text style={lvStyles.securityCardTitle}>{item.title}</Text>
+                  <Text style={lvStyles.securityCardBody}>{item.body}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+        <View style={lvStyles.feesBlock}>
+          <Text style={lvStyles.blockEyebrow}>{feesEyebrow}</Text>
+          <Text style={lvStyles.blockTitle}>{feesTitle}</Text>
+          <Text style={lvStyles.blockSub}>{feesSub}</Text>
+          <View style={lvStyles.feesTable}>
+            {feesRows.map((row) => (
+              <View key={row.label} style={lvStyles.feesRow}>
+                <Text style={lvStyles.feesLabel}>{row.label}</Text>
+                <Text style={[lvStyles.feesValue, row.highlight && lvStyles.feesValueFree]}>
+                  {row.value}
+                </Text>
+              </View>
+            ))}
+          </View>
+          <View style={lvStyles.feesNoteBox}>
+            <Text style={lvStyles.feesNoteText}>{feesNote}</Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+export function AuctionHighlight({
+  title,
+  subtitle,
+  steps,
+  ctaLabel,
+  onCta,
+}: {
+  title: string;
+  subtitle: string;
+  steps: string[];
+  ctaLabel: string;
+  onCta: () => void;
+}) {
+  return (
+    <View style={lvStyles.auctionWrap}>
+      <View style={lvStyles.auctionBadge}>
+        <Text style={lvStyles.auctionBadgeText}>Exclusif HODIX</Text>
+      </View>
+      <Text style={lvStyles.auctionTitle}>{title}</Text>
+      <Text style={lvStyles.auctionSub}>{subtitle}</Text>
+      <View style={lvStyles.auctionSteps}>
+        {steps.map((step, i) => (
+          <View key={step} style={lvStyles.auctionStepRow}>
+            <View style={lvStyles.auctionStepNum}>
+              <Text style={lvStyles.auctionStepNumText}>{i + 1}</Text>
+            </View>
+            <Text style={lvStyles.auctionStepText}>{step}</Text>
+          </View>
+        ))}
+      </View>
+      <View style={lvStyles.auctionVisual}>
+        <Text style={lvStyles.auctionVisualEmoji}>🔨</Text>
+        <View style={lvStyles.auctionVisualCard}>
+          <Text style={lvStyles.auctionVisualLabel}>Prime enchère</Text>
+          <Text style={lvStyles.auctionVisualAmount}>+5 000 XAF</Text>
+          <Text style={lvStyles.auctionVisualHint}>Redistribuée au groupe</Text>
+        </View>
+      </View>
+      <TouchableOpacity style={lvStyles.auctionCta} onPress={onCta} activeOpacity={0.85}>
+        <Text style={lvStyles.auctionCtaText}>{ctaLabel}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 const lvStyles = StyleSheet.create({
   emotionalWrap: {
     position: "relative",
@@ -506,4 +620,130 @@ const lvStyles = StyleSheet.create({
     color: NAVY,
     textAlign: "center",
   },
+  securityFeesWrap: { width: "100%" },
+  securityFeesGrid: { gap: 20 },
+  securityFeesGridWide: { flexDirection: "row", alignItems: "flex-start" },
+  securityBlock: { flex: 1, minWidth: 280 },
+  feesBlock: { flex: 1, minWidth: 280 },
+  blockEyebrow: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: EMERALD,
+    textTransform: "uppercase",
+    letterSpacing: 1.5,
+    marginBottom: 8,
+  },
+  blockTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: NAVY,
+    marginBottom: 8,
+    letterSpacing: -0.3,
+  },
+  blockSub: { fontSize: 14, color: "#64748B", lineHeight: 21, marginBottom: 16 },
+  securityItems: { gap: 10 },
+  securityCard: {
+    flexDirection: "row",
+    gap: 12,
+    backgroundColor: "#FFF",
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  securityEmoji: { fontSize: 22 },
+  securityCardCopy: { flex: 1 },
+  securityCardTitle: { fontSize: 14, fontWeight: "800", color: NAVY, marginBottom: 4 },
+  securityCardBody: { fontSize: 12, color: "#64748B", lineHeight: 18 },
+  feesTable: {
+    backgroundColor: "#FFF",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    overflow: "hidden",
+  },
+  feesRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+    gap: 12,
+  },
+  feesLabel: { flex: 1, fontSize: 13, color: "#475569", lineHeight: 18 },
+  feesValue: { fontSize: 13, fontWeight: "700", color: NAVY },
+  feesValueFree: { color: EMERALD, fontWeight: "800" },
+  feesNoteBox: {
+    marginTop: 12,
+    backgroundColor: "rgba(16,185,129,0.08)",
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "rgba(16,185,129,0.2)",
+  },
+  feesNoteText: { fontSize: 12, color: "#0F766E", lineHeight: 18, fontWeight: "600" },
+  auctionWrap: {
+    backgroundColor: "#FFF",
+    borderRadius: 24,
+    padding: 28,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: NAVY,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 24,
+    elevation: 4,
+  },
+  auctionBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(124,58,237,0.12)",
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+    marginBottom: 12,
+  },
+  auctionBadgeText: { color: "#7C3AED", fontSize: 11, fontWeight: "800", letterSpacing: 0.5 },
+  auctionTitle: { fontSize: 24, fontWeight: "800", color: NAVY, marginBottom: 10, letterSpacing: -0.3 },
+  auctionSub: { fontSize: 15, color: "#64748B", lineHeight: 22, marginBottom: 20 },
+  auctionSteps: { gap: 12, marginBottom: 20 },
+  auctionStepRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  auctionStepNum: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(124,58,237,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  auctionStepNumText: { color: "#7C3AED", fontWeight: "800", fontSize: 13 },
+  auctionStepText: { flex: 1, fontSize: 14, color: "#334155", lineHeight: 20, paddingTop: 4 },
+  auctionVisual: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+  },
+  auctionVisualEmoji: { fontSize: 36 },
+  auctionVisualCard: {
+    flex: 1,
+    backgroundColor: NAVY,
+    borderRadius: 12,
+    padding: 14,
+  },
+  auctionVisualLabel: { color: "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: "600" },
+  auctionVisualAmount: { color: GOLD, fontSize: 20, fontWeight: "900", marginTop: 4 },
+  auctionVisualHint: { color: EMERALD, fontSize: 11, fontWeight: "600", marginTop: 4 },
+  auctionCta: {
+    alignSelf: "flex-start",
+    backgroundColor: "#7C3AED",
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  auctionCtaText: { color: "#FFF", fontWeight: "800", fontSize: 15 },
 });

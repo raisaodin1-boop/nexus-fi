@@ -26,6 +26,7 @@ import {
   CommunityAvatars,
 } from "@/src/welcome-visuals";
 import { CAROUSEL_SLIDES, LANDING_I18N, WELCOME_I18N } from "@/src/welcome-content";
+import { AuctionHighlight, SecurityFeesSection } from "@/src/landing-visuals";
 import { APP_MAX_WIDTH } from "@/src/hooks/use-responsive";
 
 const NAVY    = "#0B1F3A";
@@ -244,6 +245,37 @@ export default function LandingScreen() {
               <StatPill value={copy.stats_countries} label={copy.stats_countries_label} />
               <View style={ss.statDivider} />
               <StatPill value={copy.stats_collected} label={copy.stats_collected_label} />
+            </View>
+          </FadeIn>
+
+          {/* ── Security & fees ───────────────────────────────── */}
+          <FadeIn delay={60}>
+            <View style={ss.section}>
+              <SecurityFeesSection
+                securityEyebrow={copy.security_eyebrow}
+                feesEyebrow={copy.fees_eyebrow}
+                securityTitle={copy.security_section_title}
+                securitySub={copy.security_section_sub}
+                securityItems={copy.security_items}
+                feesTitle={copy.fees_section_title}
+                feesSub={copy.fees_section_sub}
+                feesRows={copy.fees_rows}
+                feesNote={copy.fees_note}
+                isWide={isWide}
+              />
+            </View>
+          </FadeIn>
+
+          {/* ── Tontine auctions ──────────────────────────────── */}
+          <FadeIn delay={80}>
+            <View style={ss.section}>
+              <AuctionHighlight
+                title={copy.auction_section_title}
+                subtitle={copy.auction_section_sub}
+                steps={copy.auction_steps}
+                ctaLabel={copy.auction_cta}
+                onCta={() => router.push("/register")}
+              />
             </View>
           </FadeIn>
 

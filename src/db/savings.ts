@@ -35,8 +35,23 @@ export async function getSaving(id: string) {
 
 export async function createSaving(body: Record<string, any>) {
   const me = await uid();
-  const { data, error } = await getSupabase()
-    .from("savings_goals").insert({ ...body, user_id: me, current_amount: 0 }).select().single();
+  const sb = getSupabase();
+  const insertBody: Record<string, any> = { ...body, user_id: me, current_amount: 0 };
+
+  if (body.guardian_phone_or_email && body.savings_type === "locked") {
+    const search = String(body.guardian_phone_or_email).trim();
+    const isEmail = search.includes("@");
+    const { data: guardian } = isEmail
+      ? await sb.from("profiles").select("id").eq("email", search.toLowerCase()).maybeSingle()
+      : await sb.from("profiles").select("id").eq("phone", search).maybeSingle();
+    if (guardian?.id && guardian.id !== me) {
+      insertBody.lock_guardian_id = guardian.id;
+    }
+    delete insertBody.guardian_phone_or_email;
+  }
+
+  const { data, error } = await sb
+    .from("savings_goals").insert(insertBody).select().single();
   throwSb(error);
   invalidateCache(`savings-${me}`);
   return data;
@@ -68,19 +83,12 @@ export async function depositSaving(id: string, amount: number, note?: string, p
 
 export async function savingsGoalTransaction(
   goalId: string,
-  body: { amount?: number; kind?: "withdraw" | "deposit" },
+  body: { amount?: number; kind?: "withdraw" | "deposit"; early?: boolean },
 ) {
   const me = await uid();
-  const sb = getSupabase();
   const amount = Math.abs(Number(body.amount ?? 0));
   const kind = body.kind ?? "deposit";
   if (amount <= 0) throw { status: 400, detail: "Montant invalide." };
-
-  const { data: goal } = await sb.from("savings_goals").select("current_amount").eq("id", goalId).eq("user_id", me).maybeSingle();
-  if (!goal) throw { status: 404, detail: "Objectif introuvable." };
-  if (kind === "withdraw" && Number(goal.current_amount) < amount) {
-    throw { status: 400, detail: "Solde insuffisant sur cet objectif." };
-  }
 
   if (kind === "deposit") {
     throw {
@@ -89,21 +97,28 @@ export async function savingsGoalTransaction(
     };
   }
 
-  const signed = -amount;
-  await sb.from("savings_transactions").insert({
-    goal_id: goalId,
-    user_id: me,
-    amount: signed,
-    note: "Retrait",
+  const { data, error } = await getSupabase().rpc("savings_withdraw_goal", {
+    p_goal_id: goalId,
+    p_amount: amount,
+    p_early: !!body.early,
   });
-
-  const { data: txs } = await sb.from("savings_transactions").select("amount").eq("goal_id", goalId);
-  const total = (txs ?? []).reduce((s, t) => s + Number(t.amount), 0);
-  await sb.from("savings_goals").update({ current_amount: Math.max(0, total) }).eq("id", goalId);
+  if (error) {
+    throw { status: 400, detail: error.message };
+  }
 
   invalidateCache(`savings-${me}`);
   invalidateCache(`savings-summary-${me}`);
-  return { detail: "Retrait enregistré" };
+  return data ?? { detail: "Retrait enregistré" };
+}
+
+export async function grantSavingsEarlyUnlock(goalId: string) {
+  const me = await uid();
+  const { error } = await getSupabase().rpc("savings_grant_early_unlock", {
+    p_goal_id: goalId,
+  });
+  if (error) throw { status: 403, detail: error.message };
+  invalidateCache(`savings-${me}`);
+  return { detail: "Déblocage anticipé approuvé pour 48 h." };
 }
 
 export async function getSavingsAnalytics(goalId: string) {

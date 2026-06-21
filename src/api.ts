@@ -82,6 +82,12 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "disbursements")       return (await db.recordTontineDisbursement(s[1], body)) as T;
     if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "vote-exclusion")        return (await db.voteExclusion(s[1], body?.user_id, body?.reason ?? "")) as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "exclusion-votes")       return (await db.getExclusionVotes(s[1])) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "guarantors")           return (await db.listTontineGuarantors(s[1])) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "my-guarantors")        return (await db.getMyGuarantorAssignments(s[1])) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "guarantors" && s[3] === "claim")
+      return (await db.claimGuarantorLiability(s[1], body?.user_id, body?.reason)) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "guarantors")
+      return (await db.assignTontineGuarantors(s[1], body?.guarantors ?? body?.guarantor_refs ?? [])) as T;
     if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "rate-creator")          return (await db.rateCreator(s[1], Number(body?.rating), body?.comment)) as T;
     if (method === "GET"  && s[0] === "creator-reputation" && s[1])                           return (await db.getCreatorReputation(s[1])) as T;
     if (method === "POST" && s[0] === "security" && s[1] === "device-fingerprint")            return (await db.registerDeviceFingerprint(body?.fingerprint)) as T;
@@ -132,6 +138,8 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "POST" && s[0] === "savings" && s[1] && s[2] === "deposit")         return db.rejectDirectPayment() as T;
     if (method === "POST" && s[0] === "savings" && s[1] === "goals" && s[2] && s[3] === "transactions")
       return (await db.savingsGoalTransaction(s[2], body)) as T;
+    if (method === "POST" && s[0] === "savings" && s[1] === "goals" && s[2] && s[3] === "unlock")
+      return (await db.grantSavingsEarlyUnlock(s[2])) as T;
 
     // ── Manager
     if (method === "GET" && s[0] === "manager" && s[1] === "overview")                   return (await db.getManagerOverview()) as T;

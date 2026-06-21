@@ -34,7 +34,7 @@ const ROLES: { key: RoleChoice; label: string; sub: string; icon: React.ReactNod
   {
     key: "tontine_manager",
     label: "Gérant de tontine",
-    sub: "Créer et administrer des tontines, gérer des membres",
+    sub: "Créer des tontines, lancer les enchères, gérer vos membres",
     icon: <Users color="#fff" size={22} />,
     gradient: ["#059669", "#10B981"],
   },

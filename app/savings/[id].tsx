@@ -1,9 +1,9 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { TrendingUp } from "lucide-react-native";
+import { Lock, TrendingUp } from "lucide-react-native";
 import { api, formatXAF } from "@/src/api";
 import { openPaymentScreen } from "@/src/payment-nav";
 import { Button, Card, Field } from "@/src/ui";
@@ -21,7 +21,9 @@ export default function SavingsDetail() {
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [amount, setAmount] = useState("");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [withdrawing, setWithdrawing] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -42,6 +44,11 @@ export default function SavingsDetail() {
   }
 
   const goal = data.savings_goal ?? data.goal ?? data;
+  const savingsType = goal.savings_type ?? goal.type;
+  const isLocked = savingsType === "locked";
+  const deadline = goal.deadline ? new Date(goal.deadline) : null;
+  const beforeDeadline = deadline ? new Date() < deadline : false;
+  const hasGuardian = !!goal.lock_guardian_id;
 
   const progress = goal.target_amount > 0
     ? Math.min(100, Math.round((goal.current_amount / goal.target_amount) * 100))
@@ -59,6 +66,57 @@ export default function SavingsDetail() {
     });
   };
 
+  const doWithdraw = async (early: boolean) => {
+    const amt = parseFloat(withdrawAmount);
+    if (!amt || amt <= 0) { setError("Montant invalide"); return; }
+    setWithdrawing(true);
+    setError(null);
+    try {
+      const res = await api.post<any>(`/savings/goals/${id}/transactions`, {
+        amount: amt,
+        kind: "withdraw",
+        early,
+      });
+      const penalty = res?.penalty_xaf ?? 0;
+      Alert.alert(
+        "Retrait effectué",
+        penalty > 0
+          ? `Pénalité discipline : ${formatXAF(penalty)} retenus sur votre retrait.`
+          : "Votre retrait a été enregistré.",
+      );
+      setWithdrawAmount("");
+      await load();
+    } catch (e: any) {
+      setError(e?.detail ?? e?.message ?? "Retrait impossible");
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
+  const handleWithdraw = () => {
+    const amt = parseFloat(withdrawAmount);
+    if (!amt || amt <= 0) { setError("Montant invalide"); return; }
+    if (isLocked && beforeDeadline) {
+      if (hasGuardian) {
+        Alert.alert(
+          "Compte verrouillé",
+          "Votre tuteur d'épargne doit approuver le déblocage. Contactez-le sur HODIX.",
+        );
+        return;
+      }
+      Alert.alert(
+        "Retrait anticipé",
+        `Une pénalité de 5 % (min. 500 XAF) s'appliquera avant la date du ${deadline?.toLocaleDateString("fr-FR")}. Continuer ?`,
+        [
+          { text: "Annuler", style: "cancel" },
+          { text: "Retirer avec pénalité", style: "destructive", onPress: () => doWithdraw(true) },
+        ],
+      );
+      return;
+    }
+    doWithdraw(false);
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -72,6 +130,16 @@ export default function SavingsDetail() {
             <Text style={styles.typePillText}>{TYPE_LABELS[goal.savings_type ?? goal.type] ?? (goal.savings_type ?? goal.type)}</Text>
           </View>
         ) : null}
+
+        {isLocked && beforeDeadline && (
+          <View style={styles.lockBanner}>
+            <Lock size={16} color="#92400E" />
+            <Text style={styles.lockBannerText}>
+              Verrouillé jusqu'au {deadline?.toLocaleDateString("fr-FR")}.
+              {hasGuardian ? " Tuteur requis pour débloquer." : " Retrait anticipé : pénalité 5 %."}
+            </Text>
+          </View>
+        )}
 
         <Card style={{ marginTop: 16, gap: 14 }}>
           <View style={styles.row}>
@@ -101,6 +169,31 @@ export default function SavingsDetail() {
             <Text style={{ color: "#fff", fontSize: 20, fontWeight: "300" }}>›</Text>
           </LinearGradient>
         </TouchableOpacity>
+
+        {(goal.current_amount ?? 0) > 0 && (
+          <>
+            <Text style={styles.section}>Retirer des fonds</Text>
+            <Card>
+              <Field
+                testID="savings-withdraw-amount"
+                label="Montant (XAF)"
+                placeholder="5000"
+                value={withdrawAmount}
+                onChangeText={setWithdrawAmount}
+                keyboardType="number-pad"
+              />
+              {error ? <Text style={styles.error}>{error}</Text> : null}
+              <Button
+                testID="savings-withdraw-submit"
+                label={isLocked && beforeDeadline ? "Demander un retrait" : "Retirer"}
+                onPress={handleWithdraw}
+                loading={withdrawing}
+                variant="secondary"
+                disabled={!withdrawAmount}
+              />
+            </Card>
+          </>
+        )}
 
         <Text style={styles.section}>Déposer des fonds</Text>
         <Card>
@@ -140,6 +233,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 4,
   },
   typePillText: { color: Colors.primaryDark, fontWeight: "700", fontSize: 12 },
+  lockBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    marginTop: 12,
+    backgroundColor: "#FEF3C7",
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  lockBannerText: { flex: 1, fontSize: 12, color: "#92400E", lineHeight: 18, fontWeight: "600" },
   section: { fontSize: 14, fontWeight: "800", color: Colors.text, marginTop: 24, marginBottom: 10 },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   label: { fontSize: 13, color: Colors.textMuted, fontWeight: "600" },

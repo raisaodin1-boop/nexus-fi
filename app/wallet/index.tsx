@@ -186,6 +186,12 @@ export default function WalletScreen() {
               )}
             </LinearGradient>
 
+            <View style={[styles.feeStrip, { marginHorizontal: horizontalPad }]}>
+              <Text style={styles.feeStripText}>
+                Transferts et cotisations entre membres HODIX : 0 FCFA. Frais MoMo uniquement à l'entrée et à la sortie.
+              </Text>
+            </View>
+
             <View style={[styles.actions, { marginHorizontal: horizontalPad }]}>
               {[
                 { label: "Recharger",  icon: ArrowDownLeft,  route: "/wallet/topup",    color: "#10B981" },
@@ -271,6 +277,15 @@ const styles = StyleSheet.create({
   currencyChipTextActive: { color: "#0B1F3A" },
   allBalances: { flexDirection: "row", gap: 8, marginTop: 2, flexWrap: "wrap" },
   balSub: { fontSize: 11, color: "rgba(255,255,255,0.45)" },
+  feeStrip: {
+    backgroundColor: "rgba(16,185,129,0.1)",
+    borderRadius: Radius.lg,
+    padding: 12,
+    marginBottom: Spacing.lg,
+    borderWidth: 1,
+    borderColor: "rgba(16,185,129,0.25)",
+  },
+  feeStripText: { fontSize: 12, color: "#0F766E", fontWeight: "600", lineHeight: 18, textAlign: "center" },
   actions: { flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.xl },
   actionBtn: { flex: 1, alignItems: "center", gap: 6, minWidth: 0 },
   actionIcon: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
