@@ -30,6 +30,7 @@ import { useToast } from "@/src/toast";
 import { MIN_TOUCH, useResponsive } from "@/src/hooks/use-responsive";
 import { KycReviewModal, type KycReviewTarget } from "@/src/admin-kyc-review-modal";
 import { AdminCompliancePanel } from "@/src/admin-compliance-panel";
+import { AdminPromotionRequestsPanel } from "@/src/admin-promotion-requests";
 
 type Tab = "users" | "kyc" | "promotions" | "tontines" | "messages" | "broadcast" | "compliance";
 
@@ -58,7 +59,15 @@ function isPendingKyc(status: string) {
   return status === "pending_review" || status === "pending";
 }
 interface PromoRequest {
-  id: string; user_id: string; full_name: string; email: string; status: string; created_at: string;
+  id: string;
+  user_id: string;
+  full_name: string;
+  email: string;
+  phone?: string;
+  kyc_status?: string;
+  reason: string;
+  status: string;
+  created_at: string;
 }
 interface AdminTontine {
   id: string; name: string; invite_code: string; status: string; members_count: number; created_at: string;
@@ -268,14 +277,6 @@ export default function AdminConsole() {
       full_name: entry.full_name,
       kyc_status: entry.kyc_status,
     });
-  };
-
-  const handlePromotion = async (userId: string, approve: boolean) => {
-    try {
-      await api.post(approve ? "/admin/promotion/approve" : "/admin/promotion/reject", { user_id: userId });
-      show(approve ? "Promotion accordée !" : "Demande refusée", approve ? "success" : "error");
-      load();
-    } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
   };
 
   const handleRoleChange = async (userId: string, newRole: string) => {
@@ -556,45 +557,41 @@ export default function AdminConsole() {
           ListEmptyComponent={<Text style={styles.empty}>Aucun dossier KYC dans Supabase</Text>}
         />
       ) : tab === "promotions" ? (
-        <FlatList
-          data={promos}
-          keyExtractor={(p) => p.id}
-          contentContainerStyle={{ paddingHorizontal: Spacing.xl, paddingBottom: 100, gap: 10 }}
-          renderItem={({ item: p }) => {
-            const statusConf = p.status === "pending"
-              ? { label: "En attente", bg: "#FEF3C7", color: "#92400E" }
-              : p.status === "approved"
-              ? { label: "Approuvé", bg: "#D1FAE5", color: "#065F46" }
-              : { label: "Refusé", bg: "#FEE2E2", color: "#991B1B" };
-            return (
-              <View style={styles.userCard}>
-                <View style={styles.userCardLeft}>
-                  <Avatar name={p.full_name} size={44} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.userName} numberOfLines={1}>{p.full_name}</Text>
-                    <Text style={styles.userEmail} numberOfLines={1}>{p.email}</Text>
-                    <View style={{ marginTop: 4 }}>
-                      <StatusBadge config={statusConf} />
+        <ScrollView contentContainerStyle={{ paddingHorizontal: Spacing.xl, paddingBottom: 100, gap: 16 }}>
+          <Text style={styles.sectionHeading}>En attente ({promos.filter((p) => p.status === "pending").length})</Text>
+          <AdminPromotionRequestsPanel
+            requests={promos}
+            onChanged={load}
+            onSuccess={(msg) => show(msg, "success")}
+            onError={(msg) => show(msg, "error")}
+          />
+
+          {promos.filter((p) => p.status !== "pending").length > 0 ? (
+            <>
+              <Text style={styles.sectionHeading}>Historique</Text>
+              {promos.filter((p) => p.status !== "pending").map((p) => {
+                const statusConf = p.status === "approved"
+                  ? { label: "Approuvé", bg: "#D1FAE5", color: "#065F46" }
+                  : { label: "Refusé", bg: "#FEE2E2", color: "#991B1B" };
+                return (
+                  <View key={p.id} style={styles.userCard}>
+                    <View style={styles.userCardLeft}>
+                      <Avatar name={p.full_name} size={44} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.userName} numberOfLines={1}>{p.full_name}</Text>
+                        <Text style={styles.userEmail} numberOfLines={1}>{p.email}</Text>
+                        <Text style={styles.userEmail} numberOfLines={2}>{p.reason}</Text>
+                        <View style={{ marginTop: 4 }}>
+                          <StatusBadge config={statusConf} />
+                        </View>
+                      </View>
                     </View>
                   </View>
-                </View>
-                {p.status === "pending" && (
-                  <View style={{ gap: 6 }}>
-                    <TouchableOpacity style={styles.approveBtn} onPress={() => handlePromotion(p.user_id, true)}>
-                      <CheckCircle color="#fff" size={13} />
-                      <Text style={styles.approveBtnText}>OK</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.rejectBtn} onPress={() => handlePromotion(p.user_id, false)}>
-                      <XCircle color="#fff" size={13} />
-                      <Text style={styles.rejectBtnText}>Non</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-            );
-          }}
-          ListEmptyComponent={<Text style={styles.empty}>Aucune demande de promotion</Text>}
-        />
+                );
+              })}
+            </>
+          ) : null}
+        </ScrollView>
       ) : tab === "tontines" ? (
         <FlatList
           data={tontines}
@@ -863,6 +860,7 @@ const styles = StyleSheet.create({
   },
   rejectBtnText: { color: "#fff", fontSize: 11, fontWeight: "800" },
   empty: { textAlign: "center", color: "#94A3B8", fontWeight: "600", marginTop: 48, fontSize: 14 },
+  sectionHeading: { color: Colors.text, fontSize: 15, fontWeight: "900", marginBottom: 4 },
   pageHint: { fontSize: 12, color: Colors.textMuted, marginBottom: 10, textAlign: "center" },
   broadcastCard: {
     backgroundColor: "#fff", borderRadius: 20, padding: 20, gap: 14,

@@ -15,6 +15,8 @@ import { DegradedDataBanner } from "@/src/degraded-banner";
 import { Card, StatCard, SkeletonBox, SkeletonCard } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { LineChart } from "@/src/charts";
+import { AdminPromotionRequestsPanel, type PromotionRequestRow } from "@/src/admin-promotion-requests";
+import { useToast } from "@/src/toast";
 
 interface Series { days: number; series: { date: string; value: number }[] }
 
@@ -84,10 +86,12 @@ function SectionHeader({ children, accent }: { children: string; accent?: string
 
 export function AdminDashboard() {
   const router = useRouter();
+  const { show } = useToast();
   const [analytics, setAnalytics] = useState<Analytics>(DEFAULT_ANALYTICS);
   const [savings, setSavings] = useState<Series | null>(null);
   const [usersSeries, setUsersSeries] = useState<Series | null>(null);
   const [pendingReqs, setPendingReqs] = useState(0);
+  const [promoRequests, setPromoRequests] = useState<PromotionRequestRow[]>([]);
   const [openFraudAlerts, setOpenFraudAlerts] = useState(0);
   const [criticalFraudAlerts, setCriticalFraudAlerts] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -108,7 +112,10 @@ export function AdminDashboard() {
     setAnalyticsDegraded(!a);
     if (s) setSavings(s);
     if (u) setUsersSeries(u);
-    if (p) setPendingReqs(p.filter((r: any) => r.status === "pending").length);
+    if (p) {
+      setPromoRequests(p as PromotionRequestRow[]);
+      setPendingReqs(p.filter((r: any) => r.status === "pending").length);
+    }
     if (comp) {
       setOpenFraudAlerts(comp.open_fraud_alerts);
       setCriticalFraudAlerts(comp.critical_fraud_alerts ?? 0);
@@ -184,7 +191,11 @@ export function AdminDashboard() {
 
         {/* Alert Banners */}
         {pendingReqs > 0 ? (
-          <TouchableOpacity onPress={() => router.push("/admin")} style={[styles.alertCard, Shadow.card]} testID="admin-pending-banner">
+          <TouchableOpacity
+            onPress={() => router.push({ pathname: "/admin", params: { tab: "promotions" } } as any)}
+            style={[styles.alertCard, Shadow.card]}
+            testID="admin-pending-banner"
+          >
             <View style={[styles.alertIcon, { backgroundColor: Colors.warning }]}><Users color="#fff" size={18} /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.alertTitle}>{pendingReqs} demande{pendingReqs > 1 ? "s" : ""} de promotion en attente</Text>
@@ -193,6 +204,17 @@ export function AdminDashboard() {
             <ChevronRight color={Colors.text} size={16} />
           </TouchableOpacity>
         ) : null}
+
+        <SectionHeader>Demandes Tontine Manager</SectionHeader>
+        <View style={{ paddingHorizontal: Spacing.xl, marginBottom: 8 }}>
+          <AdminPromotionRequestsPanel
+            requests={promoRequests}
+            compact
+            onChanged={load}
+            onSuccess={(msg) => show(msg, "success")}
+            onError={(msg) => show(msg, "error")}
+          />
+        </View>
 
         {openFraudAlerts > 0 ? (
           <TouchableOpacity

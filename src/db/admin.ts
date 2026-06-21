@@ -103,12 +103,18 @@ export async function getAdminAnalytics() {
 
 export async function getAdminStats() {
   await requireAdmin();
-  const [users, tontines, kyc] = await Promise.all([
+  const [users, tontines, kyc, promos] = await Promise.all([
     getSupabase().from("profiles").select("*", { count: "exact", head: true }),
     getSupabase().from("tontines").select("*", { count: "exact", head: true }),
     getSupabase().from("kyc_submissions").select("*", { count: "exact", head: true }).eq("status", "pending"),
+    getSupabase().from("promotion_requests").select("*", { count: "exact", head: true }).eq("status", "pending"),
   ]);
-  return { total_users: users.count ?? 0, total_tontines: tontines.count ?? 0, pending_kyc: kyc.count ?? 0 };
+  return {
+    total_users: users.count ?? 0,
+    total_tontines: tontines.count ?? 0,
+    pending_kyc: kyc.count ?? 0,
+    pending_promotions: promos.count ?? 0,
+  };
 }
 
 export async function adminListUsers(search = "", offset = 0, limit = 50) {
@@ -412,54 +418,184 @@ export async function adminDeleteKyc(userId: string) {
 }
 
 export async function createPromotionRequest(reason: string) {
+  const trimmed = (reason ?? "").trim();
+  if (trimmed.length < 10) throw { status: 400, detail: "Veuillez fournir une motivation d'au moins 10 caractères." };
+
   const { data: { user } } = await getSupabase().auth.getUser();
   if (!user) throw { status: 401, detail: "Non authentifié." };
-  const { data: existing } = await getSupabase().from("notifications")
-    .select("id, is_read, created_at").eq("user_id", user.id).eq("type", "promotion_request").order("created_at", { ascending: false }).limit(1).maybeSingle();
-  if (existing && !existing.is_read) throw { status: 400, detail: "Vous avez déjà une demande en attente." };
-  const { data, error } = await getSupabase().from("notifications")
-    .insert({ user_id: user.id, title: "Demande de promotion Manager", body: reason, type: "promotion_request", is_read: false })
-    .select("id, user_id, body, created_at, is_read").single();
+
+  const sb = getSupabase();
+  const { data: profile } = await sb.from("profiles").select("role").eq("id", user.id).single();
+  if (profile?.role !== "member") {
+    throw { status: 400, detail: "Seuls les membres peuvent demander une promotion Manager." };
+  }
+
+  const { data: existing } = await sb.from("promotion_requests")
+    .select("id").eq("user_id", user.id).eq("status", "pending").maybeSingle();
+  if (existing) throw { status: 400, detail: "Vous avez déjà une demande en attente." };
+
+  const { data, error } = await sb.from("promotion_requests")
+    .insert({ user_id: user.id, reason: trimmed, status: "pending" })
+    .select("id, user_id, reason, status, created_at").single();
   if (error) throw { status: 400, detail: error.message };
-  return { id: data.id, user_id: data.user_id, reason: data.body, status: "pending", created_at: data.created_at };
+
+  await notifyUser({
+    user_id: user.id,
+    title: "Demande envoyée",
+    body: "Votre demande de promotion Tontine Manager est en cours d'examen par l'équipe HODIX.",
+    type: "promotion_request",
+  });
+
+  invalidateCache("admin");
+  return data;
 }
 
 export async function getMyPromotionRequest() {
   const { data: { user } } = await getSupabase().auth.getUser();
   if (!user) throw { status: 401, detail: "Non authentifié." };
-  const { data } = await getSupabase().from("notifications")
-    .select("id, user_id, body, created_at, is_read").eq("user_id", user.id).eq("type", "promotion_request").order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const { data } = await getSupabase().from("promotion_requests")
+    .select("id, user_id, reason, status, created_at, decided_at, decision_note")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
   if (!data) return null;
-  return { id: data.id, user_id: data.user_id, reason: data.body, status: data.is_read ? "processed" : "pending", created_at: data.created_at };
+  if (data.status === "cancelled") return null;
+  return data;
 }
 
 export async function adminListPromotionRequests() {
   await requireAdmin();
-  const { data } = await getSupabase().from("notifications")
-    .select("id, user_id, body, created_at, is_read").eq("type", "promotion_request").order("created_at", { ascending: false }).limit(50);
-  const userIds = [...new Set((data ?? []).map((n: any) => n.user_id))];
-  const profileMap: Record<string, any> = {};
-  try {
-    const { data: profiles } = await getSupabase().from("profiles").select("id, full_name, phone").in("id", userIds);
-    for (const p of profiles ?? []) profileMap[p.id] = p;
-  } catch {}
-  return (data ?? []).map((n: any) => ({
-    id: n.id, user_id: n.user_id, full_name: profileMap[n.user_id]?.full_name ?? "—",
-    phone: profileMap[n.user_id]?.phone ?? "—", body: n.body, created_at: n.created_at,
-    status: n.is_read ? "processed" : "pending",
+  const { data, error } = await getSupabase().from("promotion_requests")
+    .select("id, user_id, reason, status, created_at, decided_at, decision_note")
+    .order("created_at", { ascending: false })
+    .limit(100);
+  throwSb(error);
+
+  const userIds = [...new Set((data ?? []).map((r: { user_id: string }) => r.user_id))];
+  const profileMap: Record<string, { full_name: string; email: string; phone: string; kyc_status: string }> = {};
+  if (userIds.length) {
+    const { data: profiles } = await getSupabase()
+      .from("profiles")
+      .select("id, full_name, email, phone, kyc_status")
+      .in("id", userIds);
+    for (const p of profiles ?? []) {
+      profileMap[p.id] = {
+        full_name: p.full_name ?? "—",
+        email: p.email ?? "—",
+        phone: p.phone ?? "—",
+        kyc_status: p.kyc_status ?? "not_submitted",
+      };
+    }
+  }
+
+  return (data ?? []).map((r: any) => ({
+    id: r.id,
+    user_id: r.user_id,
+    full_name: profileMap[r.user_id]?.full_name ?? "—",
+    email: profileMap[r.user_id]?.email ?? "—",
+    phone: profileMap[r.user_id]?.phone ?? "—",
+    kyc_status: profileMap[r.user_id]?.kyc_status ?? "not_submitted",
+    reason: r.reason,
+    status: r.status,
+    created_at: r.created_at,
+    decided_at: r.decided_at,
+    decision_note: r.decision_note,
   }));
 }
 
-export async function adminHandlePromotion(userId: string, approve: boolean) {
+export async function adminHandlePromotion(userId: string, approve: boolean, requestId?: string) {
   await requireAdmin();
-  if (approve) {
-    await getSupabase().from("profiles").update({ role: "tontine_manager" }).eq("id", userId);
-    await getSupabase().from("notifications").insert({ user_id: userId, title: "Promotion accordée 🎉", body: "Félicitations ! Vous êtes maintenant Tontine Manager.", type: "promotion" });
+  const me = await uid();
+  const sb = getSupabase();
+
+  let req: any = null;
+  if (requestId) {
+    const { data } = await sb.from("promotion_requests").select("*").eq("id", requestId).maybeSingle();
+    req = data;
   } else {
-    await getSupabase().from("notifications").insert({ user_id: userId, title: "Promotion refusée", body: "Votre demande de promotion Manager a été examinée et refusée.", type: "promotion" });
+    const { data } = await sb.from("promotion_requests")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    req = data;
   }
-  await getSupabase().from("notifications").update({ is_read: true }).eq("user_id", userId).eq("type", "promotion_request");
-  return { detail: `Promotion ${approve ? "accordée" : "refusée"}` };
+  if (!req || req.status !== "pending") {
+    throw { status: 404, detail: "Aucune demande en attente pour ce membre." };
+  }
+
+  const targetUserId = req.user_id as string;
+  const { data: profile } = await sb.from("profiles").select("kyc_status, role, full_name").eq("id", targetUserId).single();
+  const now = new Date().toISOString();
+
+  if (approve) {
+    if (profile?.role === "member") {
+      const { error: roleErr } = await sb.from("profiles").update({ role: "tontine_manager" }).eq("id", targetUserId);
+      throwSb(roleErr);
+    }
+    await sb.from("promotion_requests").update({
+      status: "approved",
+      decided_by: me,
+      decided_at: now,
+      updated_at: now,
+    }).eq("id", req.id);
+
+    await notifyUser({
+      user_id: targetUserId,
+      title: "Promotion accordée 🎉",
+      body: "Félicitations ! Vous êtes maintenant Tontine Manager. Vous pouvez créer des tontines et accéder au tableau de bord communautaire.",
+      type: "promotion",
+    });
+  } else {
+    const kycApproved = profile?.kyc_status === "approved";
+    const rejectBody = kycApproved
+      ? "Votre demande de promotion Manager a été examinée et refusée. Vous pourrez soumettre une nouvelle demande depuis votre profil lorsque vous le souhaiterez."
+      : "Votre demande de promotion Manager a été examinée. Pour devenir Tontine Manager, complétez d'abord la vérification d'identité (KYC) dans Profil → KYC, puis soumettez une nouvelle demande.";
+
+    await sb.from("promotion_requests").update({
+      status: "rejected",
+      decided_by: me,
+      decided_at: now,
+      decision_note: kycApproved ? "Refusée par l'admin" : "KYC requis avant nouvelle demande",
+      updated_at: now,
+    }).eq("id", req.id);
+
+    await notifyUser({
+      user_id: targetUserId,
+      title: "Promotion refusée",
+      body: rejectBody,
+      type: "promotion_rejected",
+    });
+  }
+
+  await sb.from("notifications")
+    .update({ is_read: true })
+    .eq("user_id", targetUserId)
+    .eq("type", "promotion_request");
+
+  invalidateCache("admin");
+  return { detail: approve ? "Promotion accordée" : "Demande refusée" };
+}
+
+export async function adminDeletePromotionRequest(requestId: string) {
+  await requireAdmin();
+  const sb = getSupabase();
+  const { data: req } = await sb.from("promotion_requests").select("id, user_id").eq("id", requestId).maybeSingle();
+  if (!req) throw { status: 404, detail: "Demande introuvable." };
+
+  const { error } = await sb.from("promotion_requests").delete().eq("id", requestId);
+  throwSb(error);
+
+  await sb.from("notifications")
+    .delete()
+    .eq("user_id", req.user_id)
+    .eq("type", "promotion_request");
+
+  invalidateCache("admin");
+  return { detail: "Demande supprimée" };
 }
 
 let _lastBroadcastAt = 0;
