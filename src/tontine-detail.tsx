@@ -419,22 +419,27 @@ export function TontineDetailView({ id }: { id: string }) {
   const { user } = useAuth();
   const [data, setData] = useState<TontineData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [disbursements, setDisbursements] = useState<Disbursement[]>([]);
   const [showDisbModal, setShowDisbModal] = useState(false);
   const [advanceBusy, setAdvanceBusy] = useState(false);
   const [activeTab, setActiveTab] = useState<"cycle" | "rotation" | "history" | "members" | "contributions">("cycle");
 
   const load = useCallback(async () => {
-    const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
-      try { return await fn(); } catch { return null; }
-    };
-    const [d, disbs] = await Promise.all([
-      safe(() => api.get<TontineData>(`/tontines/${id}`)),
-      safe(() => api.get<Disbursement[]>(`/tontines/${id}/disbursements`)),
-    ]);
-    if (d) setData(d);
-    if (disbs) setDisbursements(disbs);
-    setLoading(false);
+    setLoadError(null);
+    try {
+      const [d, disbs] = await Promise.all([
+        api.get<TontineData>(`/tontines/${id}`),
+        api.get<Disbursement[]>(`/tontines/${id}/disbursements`).catch(() => [] as Disbursement[]),
+      ]);
+      setData(d);
+      setDisbursements(Array.isArray(disbs) ? disbs : []);
+    } catch (e) {
+      setData(null);
+      setLoadError(e instanceof ApiError ? e.detail : "Impossible de charger la tontine.");
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
 
   // Real-time: subscribe only while screen is focused
@@ -487,7 +492,7 @@ export function TontineDetailView({ id }: { id: string }) {
     }
   };
 
-  if (loading || !data) {
+  if (loading) {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.header}>
@@ -499,6 +504,23 @@ export function TontineDetailView({ id }: { id: string }) {
           <SkeletonBox height={200} borderRadius={20} />
           <SkeletonCard /><SkeletonCard />
         </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  if (!data) {
+    return (
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <ArrowLeft color={Colors.primary} size={22} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Tontine</Text>
+        </View>
+        <View style={{ padding: Spacing.xl, gap: 16, alignItems: "center", marginTop: 40 }}>
+          <Text style={styles.emptyText}>{loadError ?? "Tontine introuvable ou accès refusé."}</Text>
+          <Button label="Réessayer" onPress={() => { setLoading(true); load(); }} />
+        </View>
       </SafeAreaView>
     );
   }

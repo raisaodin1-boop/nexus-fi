@@ -1,5 +1,5 @@
 /* HODIX — Service Worker: offline shell, asset cache, background sync, push */
-const CACHE_VERSION = "hodix-pwa-v4";
+const CACHE_VERSION = "hodix-pwa-v5";
 const PRECACHE = [
   "/",
   "/manifest.json",
@@ -70,7 +70,9 @@ self.addEventListener("fetch", (event) => {
           return response;
         })
         .catch(() =>
-          caches.match(request).then((cached) => cached || caches.match("/") || caches.match("/offline.html")),
+          caches.match(request).then(
+            (cached) => cached || caches.match("/") || caches.match("/offline.html") || new Response("Hors ligne", { status: 503, headers: { "Content-Type": "text/plain" } }),
+          ),
         ),
     );
     return;
@@ -103,7 +105,11 @@ self.addEventListener("fetch", (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(request)),
+      .catch(() =>
+        caches.match(request).then(
+          (cached) => cached || new Response("", { status: 504, statusText: "Offline" }),
+        ),
+      ),
   );
 });
 

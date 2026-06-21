@@ -7,6 +7,14 @@ const FREQ_DAYS: Record<string, number> = {
   weekly: 7, biweekly: 14, monthly: 30, quarterly: 90,
 };
 
+/** Resolve display names without PostgREST profiles embed (no FK required). */
+async function profileNameMap(userIds: string[]): Promise<Map<string, string>> {
+  const unique = [...new Set(userIds.filter(Boolean))];
+  if (!unique.length) return new Map();
+  const { data } = await getSupabase().from("profiles").select("id, full_name").in("id", unique);
+  return new Map((data ?? []).map((p: { id: string; full_name: string | null }) => [p.id, p.full_name ?? "—"]));
+}
+
 /* ── Basic CRUD ─────────────────────────────────────────────── */
 
 export async function listTontines() {
@@ -31,29 +39,36 @@ export async function getTontine(id: string) {
 
   const { data: members, error: membersErr } = await sb
     .from("tontine_members")
-    .select("*, profiles(full_name)")
-    .eq("tontine_id", id)
-    .order("rotation_position", { ascending: true });
+    .select("*")
+    .eq("tontine_id", id);
   throwSb(membersErr);
 
-  const { data: contributions } = await sb
+  const memberNames = await profileNameMap((members ?? []).map((m: { user_id: string }) => m.user_id));
+
+  const { data: contributions, error: contribErr } = await sb
     .from("tontine_contributions")
-    .select("*, profiles(full_name)")
+    .select("*")
     .eq("tontine_id", id)
     .order("created_at", { ascending: false })
     .limit(100);
+  throwSb(contribErr);
 
-  const membersList = (members ?? []).map((m: any) => ({
-    ...m,
-    full_name: m.profiles?.full_name ?? "—",
-    cycles_paid: m.cycles_paid ?? 0,
-    status: m.status ?? "a_jour",
-  }));
+  const contribNames = await profileNameMap((contributions ?? []).map((c: { user_id: string }) => c.user_id));
+
+  const membersList = (members ?? [])
+    .map((m: any) => ({
+      ...m,
+      full_name: memberNames.get(m.user_id) ?? "—",
+      cycles_paid: m.cycles_paid ?? 0,
+      status: m.status ?? "a_jour",
+    }))
+    .sort((a: { rotation_position?: number | null }, b: { rotation_position?: number | null }) =>
+      (a.rotation_position ?? 999) - (b.rotation_position ?? 999));
 
   const contributionsList = (contributions ?? []).map((c: any) => ({
     id: c.id,
     user_id: c.user_id,
-    full_name: c.profiles?.full_name ?? "—",
+    full_name: contribNames.get(c.user_id) ?? "—",
     amount: Number(c.amount ?? 0),
     created_at: c.created_at,
     cycle: c.cycle ?? null,
@@ -583,11 +598,14 @@ export async function getOverdueMembers(tontineId: string) {
   const now = new Date();
   const isOverdue = deadline && now > deadline;
   const { data: members } = await sb.from("tontine_members")
-    .select("user_id, last_paid_cycle, status, profiles(full_name)").eq("tontine_id", tontineId).neq("status", "exclu");
+    .select("user_id, last_paid_cycle, status")
+    .eq("tontine_id", tontineId)
+    .neq("status", "exclu");
+  const names = await profileNameMap((members ?? []).map((m: { user_id: string }) => m.user_id));
   return (members ?? [])
     .filter((m: any) => (m.last_paid_cycle ?? 0) < cycle)
     .map((m: any) => ({
-      user_id: m.user_id, name: m.profiles?.full_name ?? "Membre",
+      user_id: m.user_id, name: names.get(m.user_id) ?? "Membre",
       last_paid_cycle: m.last_paid_cycle ?? 0, cycles_late: cycle - (m.last_paid_cycle ?? 0),
       is_overdue: isOverdue, days_overdue: deadline && isOverdue ? Math.round((now.getTime() - deadline.getTime()) / 86400000) : 0,
     }));
