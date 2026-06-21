@@ -513,35 +513,51 @@ export async function adminHandlePromotion(userId: string, approve: boolean, req
   if (requestId) {
     const { data } = await sb.from("promotion_requests").select("*").eq("id", requestId).maybeSingle();
     req = data;
-  } else {
+  } else if (userId) {
     const { data } = await sb.from("promotion_requests")
       .select("*")
       .eq("user_id", userId)
-      .eq("status", "pending")
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
     req = data;
   }
-  if (!req || req.status !== "pending") {
-    throw { status: 404, detail: "Aucune demande en attente pour ce membre." };
+
+  if (!req) {
+    throw { status: 404, detail: "Demande introuvable." };
   }
 
   const targetUserId = req.user_id as string;
   const { data: profile } = await sb.from("profiles").select("kyc_status, role, full_name").eq("id", targetUserId).single();
   const now = new Date().toISOString();
 
+  if (req.status === "approved") {
+    if (approve && profile?.role === "tontine_manager") {
+      return { detail: "Promotion déjà accordée pour ce membre." };
+    }
+    if (!approve) {
+      throw { status: 400, detail: "Cette demande a déjà été approuvée." };
+    }
+  }
+  if (req.status === "rejected" && approve) {
+    throw { status: 400, detail: "Cette demande a déjà été refusée. Le membre doit en soumettre une nouvelle." };
+  }
+  if (req.status !== "pending") {
+    throw { status: 400, detail: "Cette demande a déjà été traitée." };
+  }
+
   if (approve) {
     if (profile?.role === "member") {
       const { error: roleErr } = await sb.from("profiles").update({ role: "tontine_manager" }).eq("id", targetUserId);
       throwSb(roleErr);
     }
-    await sb.from("promotion_requests").update({
+    const { error: reqErr } = await sb.from("promotion_requests").update({
       status: "approved",
       decided_by: me,
       decided_at: now,
       updated_at: now,
     }).eq("id", req.id);
+    throwSb(reqErr);
 
     await notifyUser({
       user_id: targetUserId,
@@ -555,13 +571,14 @@ export async function adminHandlePromotion(userId: string, approve: boolean, req
       ? "Votre demande de promotion Manager a été examinée et refusée. Vous pourrez soumettre une nouvelle demande depuis votre profil lorsque vous le souhaiterez."
       : "Votre demande de promotion Manager a été examinée. Pour devenir Tontine Manager, complétez d'abord la vérification d'identité (KYC) dans Profil → KYC, puis soumettez une nouvelle demande.";
 
-    await sb.from("promotion_requests").update({
+    const { error: reqErr } = await sb.from("promotion_requests").update({
       status: "rejected",
       decided_by: me,
       decided_at: now,
       decision_note: kycApproved ? "Refusée par l'admin" : "KYC requis avant nouvelle demande",
       updated_at: now,
     }).eq("id", req.id);
+    throwSb(reqErr);
 
     await notifyUser({
       user_id: targetUserId,

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { CheckCircle, Crown, Trash2, XCircle } from "lucide-react-native";
 import { api, ApiError } from "@/src/api";
@@ -34,7 +34,10 @@ export function AdminPromotionRequestsPanel({
   onError,
   onSuccess,
 }: Props) {
-  const pending = requests.filter((r) => r.status === "pending");
+  const [rows, setRows] = useState(requests);
+  useEffect(() => { setRows(requests); }, [requests]);
+
+  const pending = rows.filter((r) => r.status === "pending");
 
   const handle = async (req: PromotionRequestRow, approve: boolean) => {
     try {
@@ -42,16 +45,21 @@ export function AdminPromotionRequestsPanel({
         user_id: req.user_id,
         request_id: req.id,
       });
+      setRows((prev) => prev.map((r) => (
+        r.id === req.id ? { ...r, status: approve ? "approved" : "rejected" } : r
+      )));
       onSuccess(approve ? `${req.full_name} promu(e) Manager` : `Demande de ${req.full_name} refusée`);
       onChanged();
     } catch (e) {
       onError(e instanceof ApiError ? e.detail : "Erreur");
+      onChanged();
     }
   };
 
   const remove = async (req: PromotionRequestRow) => {
     try {
       await api.del(`/admin/promotion-requests/${req.id}`);
+      setRows((prev) => prev.filter((r) => r.id !== req.id));
       onSuccess("Demande supprimée");
       onChanged();
     } catch (e) {
