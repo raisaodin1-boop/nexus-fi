@@ -5,9 +5,9 @@
     ],
     "target": {
       "namespace": "android_app",
-      "package_name": "app.hodix.mobile",
+      "package_name": "com.hodix.app",
       "sha256_cert_fingerprints": [
-        "CD:A8:B0:EF:02:AA:43:1A:32:44:C0:12:CE:70:ED:DA:AC:A1:FB:2A:EC:72:B6:D0:4B:FF:12:9E:5A:80:AB:59"
+        "REMPLACER_PAR_LE_FINGERPRINT_PWABUILDER"
       ]
     }
   }
