@@ -1,6 +1,7 @@
 import { getSupabase } from "@/src/supabase";
 import { notifyUser } from "./notifications";
 import { uid, throwSb } from "./helpers";
+import { isKycVerified } from "@/src/profile-display";
 
 const ADMIN_ROLES = ["admin", "super_admin"] as const;
 const PAGE_SIZE = 100;
@@ -37,6 +38,7 @@ export interface ConversationItem {
 export interface RecipientSuggestion {
   id: string;
   full_name: string;
+  kyc_verified?: boolean;
   role: string;
   is_admin: boolean;
   subtitle: string;
@@ -79,7 +81,7 @@ export async function searchMessageRecipients(query: string): Promise<RecipientS
 
   let q = sb
     .from("profiles")
-    .select("id, full_name, role, phone")
+    .select("id, full_name, role, phone, kyc_status")
     .neq("id", me)
     .neq("role", "suspended")
     .order("full_name", { ascending: true })
@@ -98,6 +100,7 @@ export async function searchMessageRecipients(query: string): Promise<RecipientS
   return (data ?? []).map((p) => ({
     id: p.id,
     full_name: p.full_name ?? "—",
+    kyc_verified: isKycVerified(p.kyc_status),
     role: p.role ?? "member",
     is_admin: ADMIN_ROLES.includes(p.role as (typeof ADMIN_ROLES)[number]),
     subtitle: ADMIN_ROLES.includes(p.role as (typeof ADMIN_ROLES)[number]) ? "Administration HODIX" : "Membre",

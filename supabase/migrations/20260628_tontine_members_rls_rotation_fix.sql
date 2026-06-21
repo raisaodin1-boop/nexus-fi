@@ -33,7 +33,7 @@ begin
     for m in
       select id from public.tontine_members
       where tontine_id = r.tontine_id and coalesce(status, 'a_jour') <> 'exclu'
-      order by joined_at nulls last, created_at nulls last, id
+      order by joined_at nulls last, id
     loop
       i := i + 1;
       update public.tontine_members set rotation_position = i where id = m.id;

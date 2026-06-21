@@ -1,11 +1,13 @@
 import { getSupabase } from "@/src/supabase";
 import { uid, throwSb } from "./helpers";
+import { profileDisplayMap, profileFromMap } from "@/src/profile-display";
 
 export interface AuctionBid {
   id: string;
   tontine_id: string;
   user_id: string;
   full_name: string;
+  kyc_verified: boolean;
   bid_amount: number;
   cycle: number;
   created_at: string;
@@ -38,20 +40,26 @@ export async function getAuctionState(tontineId: string): Promise<AuctionState> 
 
   const { data: bids } = await sb
     .from("tontine_auction_bids")
-    .select("id, tontine_id, user_id, bid_amount, cycle, created_at, profiles(full_name)")
+    .select("id, tontine_id, user_id, bid_amount, cycle, created_at")
     .eq("tontine_id", tontineId)
     .eq("cycle", tontine.current_cycle ?? 1)
     .order("bid_amount", { ascending: false });
 
-  const mapped: AuctionBid[] = (bids ?? []).map((b: any) => ({
-    id: b.id,
-    tontine_id: b.tontine_id,
-    user_id: b.user_id,
-    full_name: b.profiles?.full_name ?? "Membre",
-    bid_amount: Number(b.bid_amount),
-    cycle: b.cycle,
-    created_at: b.created_at,
-  }));
+  const profiles = await profileDisplayMap((bids ?? []).map((b: { user_id: string }) => b.user_id));
+
+  const mapped: AuctionBid[] = (bids ?? []).map((b: any) => {
+    const prof = profileFromMap(profiles, b.user_id);
+    return {
+      id: b.id,
+      tontine_id: b.tontine_id,
+      user_id: b.user_id,
+      full_name: prof.full_name,
+      kyc_verified: prof.kyc_verified,
+      bid_amount: Number(b.bid_amount),
+      cycle: b.cycle,
+      created_at: b.created_at,
+    };
+  });
 
   return {
     tontine_id: tontineId,

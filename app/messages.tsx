@@ -30,6 +30,7 @@ import { Colors, Radius, Spacing } from "@/src/theme";
 import { api } from "@/src/api";
 import { supabase } from "@/src/supabase";
 import { useAuth } from "@/src/auth-context";
+import { VerifiedName } from "@/src/verified-name";
 
 interface Message {
   id: string;
@@ -60,6 +61,7 @@ interface ConversationItem {
 interface RecipientSuggestion {
   id: string;
   full_name: string;
+  kyc_verified?: boolean;
   role: string;
   is_admin: boolean;
   subtitle: string;
@@ -385,7 +387,7 @@ export default function MessagesScreen() {
                   {item.is_admin ? <Shield color={Colors.accent} size={20} /> : <MessageCircle color={Colors.primary} size={20} />}
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.convName}>{item.full_name}</Text>
+                  <VerifiedName name={item.full_name} kycVerified={item.kyc_verified} style={styles.convName} />
                   <Text style={styles.convSub}>{item.subtitle}</Text>
                 </View>
               </TouchableOpacity>

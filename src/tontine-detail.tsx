@@ -30,6 +30,7 @@ import { useAuth } from "@/src/auth-context";
 import { openPaymentScreen } from "@/src/payment-nav";
 import { supabase } from "@/src/supabase";
 import { Button, Card, Field, SkeletonBox, SkeletonCard } from "@/src/ui";
+import { VerifiedName } from "@/src/verified-name";
 import { DocumentButton } from "@/src/document-button";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 
@@ -39,6 +40,7 @@ interface Member {
   id: string;
   user_id: string;
   full_name: string;
+  kyc_verified?: boolean;
   role: "admin" | "member";
   rotation_position: number;
   has_received: boolean;
@@ -51,6 +53,7 @@ interface Contribution {
   id: string;
   user_id: string;
   full_name: string;
+  kyc_verified?: boolean;
   amount: number;
   created_at: string;
   cycle: number | null;
@@ -60,6 +63,7 @@ interface Disbursement {
   id: string;
   beneficiary_id: string;
   beneficiary_name: string;
+  beneficiary_kyc_verified?: boolean;
   amount: number;
   cycle: number;
   disbursed_at: string;
@@ -72,6 +76,8 @@ interface CycleInfo {
   current_beneficiary_id: string | null;
   current_beneficiary_name: string | null;
   next_beneficiary_name: string | null;
+  current_beneficiary_kyc_verified?: boolean;
+  next_beneficiary_kyc_verified?: boolean;
   rotation_mode: "rotation" | "random" | "custom";
   cycle_start_date: string | null;
   compliance_pct: number;
@@ -130,7 +136,9 @@ function CycleBanner({ cycle, tontine, isAdmin, onAdvance, busy }: {
   const cur = cycle?.current_cycle ?? tontine.current_cycle ?? 1;
   const tot = cycle?.total_cycles ?? tontine.total_cycles ?? tontine.members_count ?? 1;
   const beneficiary = cycle?.current_beneficiary_name ?? "—";
+  const beneficiaryKyc = cycle?.current_beneficiary_kyc_verified ?? false;
   const next = cycle?.next_beneficiary_name;
+  const nextKyc = cycle?.next_beneficiary_kyc_verified ?? false;
   const pct = Math.round((cur / tot) * 100);
 
   return (
@@ -163,12 +171,16 @@ function CycleBanner({ cycle, tontine, isAdmin, onAdvance, busy }: {
           <Text style={styles.beneficiaryLabel}>
             {beneficiary !== "—" ? "Bénéficiaire ce cycle" : "Aucun bénéficiaire assigné"}
           </Text>
-          <Text style={styles.beneficiaryName}>{beneficiary}</Text>
+          <VerifiedName
+            name={beneficiary}
+            kycVerified={beneficiaryKyc}
+            style={styles.beneficiaryName}
+          />
         </View>
         {next && (
           <View style={styles.nextBox}>
             <Text style={styles.nextLabel}>Prochain</Text>
-            <Text style={styles.nextName}>{next}</Text>
+            <VerifiedName name={next} kycVerified={nextKyc} style={styles.nextName} />
           </View>
         )}
       </View>
@@ -277,7 +289,7 @@ function RotationSection({ members, isAdmin, tontineId, onReload, rotationMode }
                 <Text style={styles.rotAvatarLetter}>{m.full_name?.[0]?.toUpperCase()}</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.rotName}>{m.full_name}</Text>
+                <VerifiedName name={m.full_name} kycVerified={m.kyc_verified} style={styles.rotName} />
                 <Text style={styles.rotStatus}>
                   {received ? "✓ A déjà reçu" : `Position ${i + 1}`}
                   {m.role === "admin" ? " · Admin" : ""}
@@ -361,9 +373,11 @@ function DisbursementModal({ visible, tontineId, members, currentCycle, currency
                       onPress={() => setBeneficiaryId(m.user_id)}
                       style={[styles.memberChip, beneficiaryId === m.user_id && styles.memberChipActive]}
                     >
-                      <Text style={[styles.memberChipText, beneficiaryId === m.user_id && { color: "#fff" }]}>
-                        {m.full_name}
-                      </Text>
+                      <VerifiedName
+                        name={m.full_name}
+                        kycVerified={m.kyc_verified}
+                        style={[styles.memberChipText, beneficiaryId === m.user_id && { color: "#fff" }]}
+                      />
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -401,7 +415,11 @@ function DisbursementHistory({ disbursements, currency }: { disbursements: Disbu
             <Text style={styles.disbCycleText}>C{d.cycle}</Text>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.disbName}>{d.beneficiary_name}</Text>
+            <VerifiedName
+              name={d.beneficiary_name}
+              kycVerified={d.beneficiary_kyc_verified}
+              style={styles.disbName}
+            />
             <Text style={styles.disbDate}>{formatDate(d.disbursed_at)}</Text>
             {d.note ? <Text style={styles.disbNote}>{d.note}</Text> : null}
           </View>
@@ -731,7 +749,7 @@ export function TontineDetailView({ id }: { id: string }) {
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                     {m.role === "admin" ? <Crown color={Colors.accent} size={12} /> : <UsersIcon color={Colors.textSubtle} size={12} />}
-                    <Text style={styles.rotName}>{m.full_name}</Text>
+                    <VerifiedName name={m.full_name} kycVerified={m.kyc_verified} style={styles.rotName} />
                     {m.status === "exclu" && (
                       <View style={{ backgroundColor: "#FEE2E2", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2 }}>
                         <Text style={{ color: "#EF4444", fontSize: 10, fontWeight: "700" }}>⛔ Exclu</Text>
@@ -765,7 +783,7 @@ export function TontineDetailView({ id }: { id: string }) {
               : contributions.map((c) => (
                   <Card key={c.id} style={styles.contribRow}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.disbName}>{c.full_name}</Text>
+                      <VerifiedName name={c.full_name} kycVerified={c.kyc_verified} style={styles.disbName} />
                       <Text style={styles.disbDate}>
                         {formatDate(c.created_at)}{c.cycle ? ` · Cycle ${c.cycle}` : ""}
                       </Text>

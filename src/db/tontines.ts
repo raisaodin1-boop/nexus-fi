@@ -2,18 +2,11 @@ import { getSupabase } from "@/src/supabase";
 import { uid, throwSb, inviteCode, invalidateCache, isUniqueViolation } from "./helpers";
 import { addIdentityEvent } from "./identity";
 import { notifyUser } from "./notifications";
+import { profileDisplayMap, profileFromMap } from "@/src/profile-display";
 
 const FREQ_DAYS: Record<string, number> = {
   weekly: 7, biweekly: 14, monthly: 30, quarterly: 90,
 };
-
-/** Resolve display names without PostgREST profiles embed (no FK required). */
-async function profileNameMap(userIds: string[]): Promise<Map<string, string>> {
-  const unique = [...new Set(userIds.filter(Boolean))];
-  if (!unique.length) return new Map();
-  const { data } = await getSupabase().from("profiles").select("id, full_name").in("id", unique);
-  return new Map((data ?? []).map((p: { id: string; full_name: string | null }) => [p.id, p.full_name ?? "—"]));
-}
 
 /* ── Basic CRUD ─────────────────────────────────────────────── */
 
@@ -43,7 +36,7 @@ export async function getTontine(id: string) {
     .eq("tontine_id", id);
   throwSb(membersErr);
 
-  const memberNames = await profileNameMap((members ?? []).map((m: { user_id: string }) => m.user_id));
+  const memberProfiles = await profileDisplayMap((members ?? []).map((m: { user_id: string }) => m.user_id));
 
   const { data: contributions, error: contribErr } = await sb
     .from("tontine_contributions")
@@ -53,27 +46,35 @@ export async function getTontine(id: string) {
     .limit(100);
   throwSb(contribErr);
 
-  const contribNames = await profileNameMap((contributions ?? []).map((c: { user_id: string }) => c.user_id));
+  const contribProfiles = await profileDisplayMap((contributions ?? []).map((c: { user_id: string }) => c.user_id));
 
   const membersList = (members ?? [])
-    .map((m: any) => ({
-      ...m,
-      full_name: memberNames.get(m.user_id) ?? "—",
-      cycles_paid: m.cycles_paid ?? 0,
-      status: m.status ?? "a_jour",
-    }))
+    .map((m: any) => {
+      const prof = profileFromMap(memberProfiles, m.user_id);
+      return {
+        ...m,
+        full_name: prof.full_name,
+        kyc_verified: prof.kyc_verified,
+        cycles_paid: m.cycles_paid ?? 0,
+        status: m.status ?? "a_jour",
+      };
+    })
     .sort((a: { rotation_position?: number | null }, b: { rotation_position?: number | null }) =>
       (a.rotation_position ?? 999) - (b.rotation_position ?? 999));
 
-  const contributionsList = (contributions ?? []).map((c: any) => ({
-    id: c.id,
-    user_id: c.user_id,
-    full_name: contribNames.get(c.user_id) ?? "—",
-    amount: Number(c.amount ?? 0),
-    created_at: c.created_at,
-    cycle: c.cycle ?? null,
-    payment_method: c.payment_method ?? null,
-  }));
+  const contributionsList = (contributions ?? []).map((c: any) => {
+    const prof = profileFromMap(contribProfiles, c.user_id);
+    return {
+      id: c.id,
+      user_id: c.user_id,
+      full_name: prof.full_name,
+      kyc_verified: prof.kyc_verified,
+      amount: Number(c.amount ?? 0),
+      created_at: c.created_at,
+      cycle: c.cycle ?? null,
+      payment_method: c.payment_method ?? null,
+    };
+  });
 
   const contributionAmount = Number(tontine.amount_per_cycle ?? tontine.contribution_amount ?? 0);
   const totalCollected = contributionsList.reduce((sum, c) => sum + c.amount, 0);
@@ -115,6 +116,8 @@ export async function getTontine(id: string) {
       current_beneficiary_id: currentBeneficiary?.user_id ?? null,
       current_beneficiary_name: currentBeneficiary?.full_name ?? null,
       next_beneficiary_name: nextBeneficiary?.full_name ?? null,
+      current_beneficiary_kyc_verified: currentBeneficiary?.kyc_verified ?? false,
+      next_beneficiary_kyc_verified: nextBeneficiary?.kyc_verified ?? false,
       rotation_mode: (tontine.rotation_mode ?? "rotation") as "rotation" | "random" | "custom",
       cycle_start_date: null,
       compliance_pct: compliancePct,
@@ -601,14 +604,22 @@ export async function getOverdueMembers(tontineId: string) {
     .select("user_id, last_paid_cycle, status")
     .eq("tontine_id", tontineId)
     .neq("status", "exclu");
-  const names = await profileNameMap((members ?? []).map((m: { user_id: string }) => m.user_id));
+  const profiles = await profileDisplayMap((members ?? []).map((m: { user_id: string }) => m.user_id));
   return (members ?? [])
     .filter((m: any) => (m.last_paid_cycle ?? 0) < cycle)
-    .map((m: any) => ({
-      user_id: m.user_id, name: names.get(m.user_id) ?? "Membre",
-      last_paid_cycle: m.last_paid_cycle ?? 0, cycles_late: cycle - (m.last_paid_cycle ?? 0),
-      is_overdue: isOverdue, days_overdue: deadline && isOverdue ? Math.round((now.getTime() - deadline.getTime()) / 86400000) : 0,
-    }));
+    .map((m: any) => {
+      const prof = profileFromMap(profiles, m.user_id);
+      return {
+        user_id: m.user_id,
+        full_name: prof.full_name,
+        name: prof.full_name,
+        kyc_verified: prof.kyc_verified,
+        last_paid_cycle: m.last_paid_cycle ?? 0,
+        cycles_late: cycle - (m.last_paid_cycle ?? 0),
+        is_overdue: isOverdue,
+        days_overdue: deadline && isOverdue ? Math.round((now.getTime() - deadline.getTime()) / 86400000) : 0,
+      };
+    });
 }
 
 /* ── Consent ────────────────────────────────────────────────── */

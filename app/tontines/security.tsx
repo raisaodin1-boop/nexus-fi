@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   Alert,
   ActivityIndicator,
@@ -24,8 +24,20 @@ import {
   Handshake,
 } from "lucide-react-native";
 import { api, formatXAF } from "@/src/api";
+import { useAuth } from "@/src/auth-context";
 import { Card, Button } from "@/src/ui";
+import { VerifiedName } from "@/src/verified-name";
 import { Colors, Spacing } from "@/src/theme";
+
+function normalizeSearch(value: string): string {
+  return value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+}
+
+interface TontineMemberOption {
+  user_id: string;
+  full_name: string;
+  kyc_verified?: boolean;
+}
 
 /* ── Types ─────────────────────────────────────────────────── */
 
@@ -48,6 +60,7 @@ interface ReserveData {
 interface OverdueMember {
   user_id: string;
   full_name: string;
+  kyc_verified?: boolean;
   cycles_late: number;
   days_overdue: number;
 }
@@ -70,13 +83,16 @@ interface GuarantorRow {
   id: string;
   member_id: string;
   member_name: string;
+  member_kyc_verified?: boolean;
   guarantor_name: string;
+  guarantor_kyc_verified?: boolean;
   status: string;
 }
 
 interface MyGuarantor {
   id: string;
   guarantor_name: string;
+  guarantor_kyc_verified?: boolean;
 }
 
 /* ── Helpers ─────────────────────────────────────────────────── */
@@ -98,6 +114,7 @@ const EXCLUSION_REASONS = ["Non-paiement", "Comportement frauduleux", "Absent"];
 export default function SecurityScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [escrow, setEscrow] = useState<EscrowData | null>(null);
@@ -126,8 +143,23 @@ export default function SecurityScreen() {
 
   const [guarantors, setGuarantors] = useState<GuarantorRow[]>([]);
   const [myGuarantors, setMyGuarantors] = useState<MyGuarantor[]>([]);
-  const [guarantorInput, setGuarantorInput] = useState("");
+  const [tontineMembers, setTontineMembers] = useState<TontineMemberOption[]>([]);
+  const [selectedGuarantors, setSelectedGuarantors] = useState<TontineMemberOption[]>([]);
+  const [guarantorSearch, setGuarantorSearch] = useState("");
   const [guarantorBusy, setGuarantorBusy] = useState(false);
+
+  const guarantorSuggestions = useMemo(() => {
+    const q = normalizeSearch(guarantorSearch.trim());
+    if (q.length < 2) return [];
+    const taken = new Set([
+      user?.id,
+      ...selectedGuarantors.map((g) => g.user_id),
+    ].filter(Boolean));
+    return tontineMembers
+      .filter((m) => !taken.has(m.user_id))
+      .filter((m) => normalizeSearch(m.full_name).includes(q))
+      .slice(0, 8);
+  }, [guarantorSearch, tontineMembers, selectedGuarantors, user?.id]);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -156,20 +188,29 @@ export default function SecurityScreen() {
 
       if (tontineRes) {
         setTontineName(tontineRes.tontine?.name ?? "");
-        const creatorId = tontineRes.tontine?.creator_id ?? null;
-        const currentUserId = tontineRes.current_user_id ?? null;
-        const isCreatorUser = creatorId && currentUserId && creatorId === currentUserId;
+        const ownerId = tontineRes.tontine?.owner_id ?? null;
+        const currentUserId = user?.id ?? null;
+        const isCreatorUser = ownerId && currentUserId && ownerId === currentUserId;
         setIsCreator(!!isCreatorUser);
 
-        if (creatorId && !isCreatorUser) {
-          const rep = await safe(() => api.get<CreatorReputation>(`/creator-reputation/${creatorId}`));
+        const members = (tontineRes.members ?? [])
+          .filter((m: { user_id?: string }) => m.user_id)
+          .map((m: { user_id: string; full_name?: string; kyc_verified?: boolean }) => ({
+            user_id: m.user_id,
+            full_name: m.full_name?.trim() || "Membre",
+            kyc_verified: m.kyc_verified ?? false,
+          }));
+        setTontineMembers(members);
+
+        if (ownerId && !isCreatorUser) {
+          const rep = await safe(() => api.get<CreatorReputation>(`/creator-reputation/${ownerId}`));
           if (rep) setReputation(rep);
         }
       }
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, user?.id]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -235,18 +276,30 @@ export default function SecurityScreen() {
     }
   };
 
+  const addGuarantor = (member: TontineMemberOption) => {
+    if (selectedGuarantors.length >= 2) return;
+    if (selectedGuarantors.some((g) => g.user_id === member.user_id)) return;
+    setSelectedGuarantors((prev) => [...prev, member]);
+    setGuarantorSearch("");
+  };
+
+  const removeGuarantor = (userId: string) => {
+    setSelectedGuarantors((prev) => prev.filter((g) => g.user_id !== userId));
+  };
+
   const submitGuarantors = async () => {
-    if (!guarantorInput.trim()) {
-      Alert.alert("Requis", "Indiquez le téléphone ou l'email de vos garants HODIX (max 2, séparés par une virgule).");
+    if (selectedGuarantors.length === 0) {
+      Alert.alert("Requis", "Choisissez au moins un garant parmi les membres (max 2).");
       return;
     }
     setGuarantorBusy(true);
     try {
       const res = await api.post<{ assigned: number }>(`/tontines/${id}/guarantors`, {
-        guarantors: guarantorInput.split(/[,;]/).map((s) => s.trim()).filter(Boolean),
+        guarantors: selectedGuarantors.map((g) => g.user_id),
       });
       Alert.alert("Giga-Garant", `${res.assigned} garant(s) enregistré(s).`);
-      setGuarantorInput("");
+      setSelectedGuarantors([]);
+      setGuarantorSearch("");
       load();
     } catch (e: any) {
       Alert.alert("Erreur", e?.detail ?? e?.message ?? "Impossible d'enregistrer les garants.");
@@ -480,27 +533,95 @@ export default function SecurityScreen() {
             <View style={{ gap: 6, marginTop: 8 }}>
               <Text style={styles.infoLabel}>Vos garants :</Text>
               {myGuarantors.map((g) => (
-                <Text key={g.id} style={styles.infoText}>• {g.guarantor_name}</Text>
+                <View key={g.id} style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Text style={styles.infoText}>• </Text>
+                  <VerifiedName
+                    name={g.guarantor_name}
+                    kycVerified={g.guarantor_kyc_verified}
+                    style={styles.infoText}
+                  />
+                </View>
               ))}
             </View>
           )}
 
-          <TextInput
-            style={[styles.textInput, { minHeight: 44, marginTop: 10 }]}
-            placeholder="Téléphone ou email garant (virgule pour 2e)"
-            placeholderTextColor={Colors.textSubtle}
-            value={guarantorInput}
-            onChangeText={setGuarantorInput}
+          {selectedGuarantors.length > 0 && (
+            <View style={styles.guarantorChips}>
+              {selectedGuarantors.map((g) => (
+                <View key={g.user_id} style={styles.guarantorChip}>
+                  <VerifiedName
+                    name={g.full_name}
+                    kycVerified={g.kyc_verified}
+                    style={styles.guarantorChipText}
+                    badgeSize={13}
+                  />
+                  <TouchableOpacity
+                    onPress={() => removeGuarantor(g.user_id)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityLabel={`Retirer ${g.full_name}`}
+                  >
+                    <Text style={styles.guarantorChipRemove}>×</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <View style={{ marginTop: 10 }}>
+            <TextInput
+              style={[styles.textInput, styles.guarantorSearchInput]}
+              placeholder={
+                selectedGuarantors.length >= 2
+                  ? "Maximum 2 garants atteint"
+                  : "Tapez au moins 2 lettres du nom…"
+              }
+              placeholderTextColor={Colors.textSubtle}
+              value={guarantorSearch}
+              onChangeText={setGuarantorSearch}
+              editable={selectedGuarantors.length < 2}
+              autoCapitalize="words"
+              autoCorrect={false}
+            />
+            {guarantorSuggestions.length > 0 && (
+              <View style={styles.suggestionList}>
+                {guarantorSuggestions.map((m) => (
+                  <TouchableOpacity
+                    key={m.user_id}
+                    style={styles.suggestionRow}
+                    onPress={() => addGuarantor(m)}
+                    activeOpacity={0.75}
+                  >
+                    <View style={styles.suggestionAvatar}>
+                      <Text style={styles.suggestionInitial}>{m.full_name[0]?.toUpperCase() ?? "?"}</Text>
+                    </View>
+                    <VerifiedName name={m.full_name} kycVerified={m.kyc_verified} style={styles.suggestionName} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+            {guarantorSearch.trim().length >= 2 && guarantorSuggestions.length === 0 && (
+              <Text style={styles.noSuggestion}>Aucun membre trouvé</Text>
+            )}
+          </View>
+
+          <Button
+            label="Enregistrer mes garants"
+            onPress={submitGuarantors}
+            loading={guarantorBusy}
+            disabled={selectedGuarantors.length === 0}
+            style={{ marginTop: 8 }}
           />
-          <Button label="Enregistrer mes garants" onPress={submitGuarantors} loading={guarantorBusy} style={{ marginTop: 8 }} />
 
           {guarantors.length > 0 && (
             <View style={{ gap: 8, marginTop: 12 }}>
               <Text style={styles.infoLabel}>Garants du groupe</Text>
               {guarantors.slice(0, 8).map((g) => (
-                <Text key={g.id} style={styles.infoText}>
-                  {g.member_name} → {g.guarantor_name} ({g.status})
-                </Text>
+                <View key={g.id} style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
+                  <VerifiedName name={g.member_name} kycVerified={g.member_kyc_verified} style={styles.infoText} />
+                  <Text style={styles.infoText}>→</Text>
+                  <VerifiedName name={g.guarantor_name} kycVerified={g.guarantor_kyc_verified} style={styles.infoText} />
+                  <Text style={styles.infoText}>({g.status})</Text>
+                </View>
               ))}
             </View>
           )}
@@ -528,7 +649,7 @@ export default function SecurityScreen() {
                     <Text style={styles.overdueInitial}>{m.full_name?.[0]?.toUpperCase()}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.overdueName}>{m.full_name}</Text>
+                    <VerifiedName name={m.full_name} kycVerified={m.kyc_verified} style={styles.overdueName} />
                     <Text style={styles.overdueDetail}>
                       {m.cycles_late} cycle(s) de retard · {m.days_overdue} jour(s)
                     </Text>
@@ -816,6 +937,64 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     minHeight: 70,
     textAlignVertical: "top",
+  },
+  guarantorSearchInput: {
+    minHeight: 44,
+    textAlignVertical: "center",
+  },
+  guarantorChips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 10,
+  },
+  guarantorChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Colors.primaryLight,
+    borderRadius: 20,
+    paddingVertical: 6,
+    paddingLeft: 12,
+    paddingRight: 8,
+    borderWidth: 1,
+    borderColor: Colors.primary + "33",
+  },
+  guarantorChipText: { fontSize: 13, fontWeight: "700", color: Colors.primary },
+  guarantorChipRemove: { fontSize: 18, fontWeight: "700", color: Colors.primary, lineHeight: 20 },
+  suggestionList: {
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    backgroundColor: Colors.surface,
+    overflow: "hidden",
+  },
+  suggestionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  suggestionAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.primaryLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  suggestionInitial: { fontSize: 13, fontWeight: "800", color: Colors.primary },
+  suggestionName: { flex: 1, fontSize: 14, fontWeight: "600", color: Colors.text },
+  noSuggestion: {
+    marginTop: 6,
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontStyle: "italic",
+    paddingHorizontal: 4,
   },
 
   chipBtn: {

@@ -11,6 +11,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { getAuctionState, placeBid, closeAuction, type AuctionState } from "@/src/db/tontine-auction";
 import { Colors, Radius, Spacing, Shadow } from "@/src/theme";
 import { Button, Field } from "@/src/ui";
+import { VerifiedName } from "@/src/verified-name";
 import { useToast } from "@/src/toast";
 import { formatXAFAmount } from "@/src/exchange-rates";
 
@@ -110,7 +111,11 @@ export default function TontineAuctionScreen() {
               <Trophy size={20} color={Colors.accent} />
               <Text style={s.cardTitle}>Meilleure offre</Text>
             </View>
-            <Text style={s.topBidder}>{state.top_bid.full_name}</Text>
+            <VerifiedName
+              name={state.top_bid.full_name}
+              kycVerified={state.top_bid.kyc_verified}
+              style={s.topBidder}
+            />
             <Text style={s.topBidAmt}>{formatXAFAmount(state.top_bid.bid_amount)}</Text>
             <Text style={s.topBidDesc}>Prime supplémentaire à payer</Text>
           </View>
@@ -159,7 +164,7 @@ export default function TontineAuctionScreen() {
                   <Text style={s.rankText}>{i + 1}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.bidderName}>{b.full_name}</Text>
+                  <VerifiedName name={b.full_name} kycVerified={b.kyc_verified} style={s.bidderName} />
                 </View>
                 <Text style={s.bidAmt}>{formatXAFAmount(b.bid_amount)}</Text>
               </View>

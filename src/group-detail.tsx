@@ -12,15 +12,16 @@ import { Copy, Crown, Users as UsersIcon, ChevronRight, CreditCard, MessageSquar
 import { api, ApiError, formatXAF } from "@/src/api";
 import { openPaymentScreen, type PaymentKind } from "@/src/payment-nav";
 import { Button, Card, Field } from "@/src/ui";
+import { VerifiedName } from "@/src/verified-name";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 
 interface Member {
-  id: string; user_id: string; full_name: string; role: string;
+  id: string; user_id: string; full_name: string; kyc_verified?: boolean; role: string;
   rotation_position?: number; has_received?: boolean;
   status?: "a_jour" | "en_retard" | "suspendu";
   cycles_paid?: number;
 }
-interface Contrib { id: string; user_id: string; full_name: string; amount: number; created_at: string; cycle?: number }
+interface Contrib { id: string; user_id: string; full_name: string; kyc_verified?: boolean; amount: number; created_at: string; cycle?: number }
 
 interface Props {
   endpoint: string; // "/tontines/<id>" etc.
@@ -238,7 +239,7 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
                     <Text style={styles.avatarLetter}>{m.full_name?.[0]?.toUpperCase()}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.memberName}>{m.full_name}</Text>
+                    <VerifiedName name={m.full_name} kycVerified={m.kyc_verified} style={styles.memberName} />
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
                       {m.role === "admin" ? <Crown color={Colors.accent} size={12} /> : <UsersIcon color={Colors.textSubtle} size={12} />}
                       <Text style={styles.memberRole}>{m.role === "admin" ? "Administrateur" : "Membre"}</Text>
@@ -265,7 +266,7 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
               {contribs.slice(0, 30).map((c) => (
                 <Card key={c.id} style={styles.contribRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.contribName}>{c.full_name}</Text>
+                    <VerifiedName name={c.full_name} kycVerified={c.kyc_verified} style={styles.contribName} />
                     <Text style={styles.contribDate}>{new Date(c.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })}{c.cycle ? ` · Cycle ${c.cycle}` : ""}</Text>
                   </View>
                   <Text style={styles.contribAmt}>+{formatXAF(c.amount, item.currency)}</Text>

@@ -4,6 +4,7 @@ import { getMe } from "./profiles";
 import { getReportHtml } from "./reports";
 import { notifyUser } from "./notifications";
 import { generateCertificateHtml } from "@/src/certificate-html";
+import { profileDisplayMap, profileFromMap } from "@/src/profile-display";
 
 const PAYMENT_CONFIG_DEFAULTS = {
   stripe_fee_rate: 0.029,
@@ -162,7 +163,15 @@ export async function listTontineDisbursements(tontineId: string) {
     .order("disbursed_at", { ascending: false })
     .limit(200);
   throwSb(error);
-  return data ?? [];
+  const rows = data ?? [];
+  const beneficiaryIds = rows.map((r: { beneficiary_id?: string }) => r.beneficiary_id).filter(Boolean) as string[];
+  const profiles = await profileDisplayMap(beneficiaryIds);
+  return rows.map((r: any) => ({
+    ...r,
+    beneficiary_kyc_verified: r.beneficiary_id
+      ? profileFromMap(profiles, r.beneficiary_id).kyc_verified
+      : false,
+  }));
 }
 
 export async function recordTontineDisbursement(

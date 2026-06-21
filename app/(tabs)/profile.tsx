@@ -31,6 +31,8 @@ import {
   SelectPicker, ChipSelector, DatePicker, NameField, ManualField,
 } from "@/src/profile-selectors";
 import { getBiometricInfo, authenticateBiometricDetailed, isBiometricEnabled, setBiometricEnabled } from "@/src/biometrics";
+import { VerifiedName } from "@/src/verified-name";
+import { isKycVerified } from "@/src/profile-display";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -273,9 +275,12 @@ export default function ProfileScreen() {
                 <Text style={styles.avatarLetter}>{user?.full_name?.[0]?.toUpperCase() ?? "?"}</Text>
               )}
             </View>
-            <Text style={styles.fullName}>
-              {[form.title, form.first_name, form.last_name].filter(Boolean).join(" ") || user?.full_name}
-            </Text>
+            <VerifiedName
+              name={[form.title, form.first_name, form.last_name].filter(Boolean).join(" ") || user?.full_name || ""}
+              kycVerified={isKycVerified(user?.kyc_status)}
+              style={styles.fullName}
+              containerStyle={{ justifyContent: "center" }}
+            />
             <Text style={styles.email}>{user?.email}</Text>
             <View style={styles.rolePill}>
               <Text style={styles.roleText}>{roleLabel(user?.role)}</Text>

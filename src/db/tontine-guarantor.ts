@@ -2,14 +2,17 @@ import { getSupabase } from "@/src/supabase";
 import { uid, throwSb } from "./helpers";
 import { addIdentityEvent } from "./identity";
 import { notifyUser } from "./notifications";
+import { profileDisplayMap, profileFromMap } from "@/src/profile-display";
 
 export interface TontineGuarantor {
   id: string;
   tontine_id: string;
   member_id: string;
   member_name: string;
+  member_kyc_verified: boolean;
   guarantor_id: string;
   guarantor_name: string;
+  guarantor_kyc_verified: boolean;
   status: "active" | "claimed" | "released";
   created_at: string;
 }
@@ -25,19 +28,24 @@ export async function listTontineGuarantors(tontineId: string): Promise<TontineG
   if (!data?.length) return [];
 
   const ids = [...new Set(data.flatMap((r) => [r.member_id, r.guarantor_id]))];
-  const { data: profiles } = await sb.from("profiles").select("id, full_name").in("id", ids);
-  const names = Object.fromEntries((profiles ?? []).map((p) => [p.id, p.full_name ?? "Membre"]));
+  const profiles = await profileDisplayMap(ids);
 
-  return data.map((row) => ({
-    id: row.id,
-    tontine_id: row.tontine_id,
-    member_id: row.member_id,
-    member_name: names[row.member_id] ?? "Membre",
-    guarantor_id: row.guarantor_id,
-    guarantor_name: names[row.guarantor_id] ?? "Garant",
-    status: row.status as TontineGuarantor["status"],
-    created_at: row.created_at,
-  }));
+  return data.map((row) => {
+    const member = profileFromMap(profiles, row.member_id);
+    const guarantor = profileFromMap(profiles, row.guarantor_id);
+    return {
+      id: row.id,
+      tontine_id: row.tontine_id,
+      member_id: row.member_id,
+      member_name: member.full_name,
+      member_kyc_verified: member.kyc_verified,
+      guarantor_id: row.guarantor_id,
+      guarantor_name: guarantor.full_name,
+      guarantor_kyc_verified: guarantor.kyc_verified,
+      status: row.status as TontineGuarantor["status"],
+      created_at: row.created_at,
+    };
+  });
 }
 
 export async function assignTontineGuarantors(
@@ -59,15 +67,24 @@ export async function assignTontineGuarantors(
   const refs = [...new Set(rawRefs.map((r) => r.trim()).filter(Boolean))].slice(0, 2);
   if (!refs.length) throw { status: 400, detail: "Indiquez au moins un garant (téléphone ou email HODIX)." };
 
+  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
   const guarantorIds: string[] = [];
   for (const ref of refs) {
-    const isEmail = ref.includes("@");
-    const { data: profile } = isEmail
-      ? await sb.from("profiles").select("id").eq("email", ref.toLowerCase()).maybeSingle()
-      : await sb.from("profiles").select("id").eq("phone", ref).maybeSingle();
-    if (!profile?.id) throw { status: 404, detail: `Garant introuvable : ${ref}` };
-    if (profile.id === me) throw { status: 400, detail: "Vous ne pouvez pas vous désigner comme garant." };
-    guarantorIds.push(profile.id);
+    let profileId: string | null = null;
+    if (uuidRe.test(ref)) {
+      const { data: profile } = await sb.from("profiles").select("id").eq("id", ref).maybeSingle();
+      profileId = profile?.id ?? null;
+    } else if (ref.includes("@")) {
+      const { data: profile } = await sb.from("profiles").select("id").eq("email", ref.toLowerCase()).maybeSingle();
+      profileId = profile?.id ?? null;
+    } else {
+      const { data: profile } = await sb.from("profiles").select("id").eq("phone", ref).maybeSingle();
+      profileId = profile?.id ?? null;
+    }
+    if (!profileId) throw { status: 404, detail: `Garant introuvable : ${ref}` };
+    if (profileId === me) throw { status: 400, detail: "Vous ne pouvez pas vous désigner comme garant." };
+    guarantorIds.push(profileId);
   }
 
   await sb.from("tontine_guarantors")
@@ -159,13 +176,16 @@ export async function getMyGuarantorAssignments(tontineId: string) {
   if (!data?.length) return [];
 
   const ids = data.map((g) => g.guarantor_id);
-  const { data: profiles } = await sb.from("profiles").select("id, full_name").in("id", ids);
-  const names = Object.fromEntries((profiles ?? []).map((p) => [p.id, p.full_name ?? "Garant"]));
+  const profiles = await profileDisplayMap(ids);
 
-  return data.map((g) => ({
-    id: g.id,
-    guarantor_id: g.guarantor_id,
-    guarantor_name: names[g.guarantor_id] ?? "Garant",
-    status: g.status,
-  }));
+  return data.map((g) => {
+    const prof = profileFromMap(profiles, g.guarantor_id);
+    return {
+      id: g.id,
+      guarantor_id: g.guarantor_id,
+      guarantor_name: prof.full_name,
+      guarantor_kyc_verified: prof.kyc_verified,
+      status: g.status,
+    };
+  });
 }
