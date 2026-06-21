@@ -53,7 +53,7 @@ export async function notifyUser(opts: NotifyPayload) {
         title: opts.title,
         body: opts.body,
         type: opts.type ?? "info",
-        notification_id: data.id,
+        notification_id: data?.id,
       },
     }).catch(() => {});
   }
