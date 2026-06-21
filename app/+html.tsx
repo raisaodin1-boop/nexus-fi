@@ -292,6 +292,10 @@ export default function Root({ children }: PropsWithChildren) {
         <link rel="alternate" type="text/html" href="https://www.hodix.app/seo.html" title="HODIX — Page SEO" />
 
         {/* ── Fonts ──────────────────────────────────────────────────── */}
+        <link rel="preconnect" href="https://xogkpvhbpqrhhyeiaqkr.supabase.co" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://xogkpvhbpqrhhyeiaqkr.supabase.co" />
+        <link rel="preconnect" href="https://api.cinetpay.com" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://api.cinetpay.com" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
