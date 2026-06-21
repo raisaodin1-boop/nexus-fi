@@ -14,6 +14,7 @@ export default function AuthCallback() {
     if (Platform.OS === "web" && redirectToCanonicalOriginIfNeeded()) return;
 
     let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     (async () => {
       try {
@@ -26,12 +27,14 @@ export default function AuthCallback() {
       } catch (e: any) {
         if (!cancelled) {
           setError(e?.message ?? "Connexion impossible");
-          setTimeout(() => router.replace("/(auth)/login" as any), 3000);
+          timeoutId = setTimeout(() => {
+            if (!cancelled) router.replace("/(auth)/login" as any);
+          }, 3000);
         }
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => { cancelled = true; if (timeoutId) clearTimeout(timeoutId); };
   }, [router]);
 
   return (

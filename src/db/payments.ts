@@ -92,7 +92,7 @@ async function resolveTontineAmount(tontineId: string, fallback: number) {
 
 async function validatePaymentTarget(me: string, payload: InitiatePayload): Promise<number> {
   let amount = Number(payload.amount_xaf);
-  if (!amount || amount <= 0) throw { status: 400, detail: "Montant invalide." };
+  if (!Number.isFinite(amount) || amount <= 0) throw { status: 400, detail: "Montant invalide." };
 
   switch (payload.kind) {
     case "tontine_contribution": {

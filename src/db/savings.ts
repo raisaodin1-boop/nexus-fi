@@ -66,7 +66,7 @@ export async function savingsGoalTransaction(
   const kind = body.kind ?? "deposit";
   if (amount <= 0) throw { status: 400, detail: "Montant invalide." };
 
-  const { data: goal } = await sb.from("savings_goals").select("current_amount").eq("id", goalId).eq("user_id", me).single();
+  const { data: goal } = await sb.from("savings_goals").select("current_amount").eq("id", goalId).eq("user_id", me).maybeSingle();
   if (!goal) throw { status: 404, detail: "Objectif introuvable." };
   if (kind === "withdraw" && Number(goal.current_amount) < amount) {
     throw { status: 400, detail: "Solde insuffisant sur cet objectif." };

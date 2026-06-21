@@ -35,7 +35,7 @@ export async function getReferralInfo() {
 }
 
 export async function applyReferralBonus(newUserId: string, referralCode: string) {
-  const { data: referrer } = await getSupabase().from("profiles").select("id, referral_bonus").eq("referral_code", referralCode).single();
+  const { data: referrer } = await getSupabase().from("profiles").select("id, referral_bonus").eq("referral_code", referralCode).maybeSingle();
   if (!referrer) return;
   await getSupabase().from("profiles").update({ referred_by: referralCode }).eq("id", newUserId);
   const current = Number(referrer.referral_bonus ?? 0);

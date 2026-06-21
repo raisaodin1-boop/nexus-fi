@@ -11,9 +11,14 @@ import { Colors, Spacing } from "@/src/theme";
 export default function QRReceiveScreen() {
   const router = useRouter();
   const [qrData, setQrData] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.get("/payments/qr-data").then(setQrData).catch(() => {});
+    let active = true;
+    api.get("/payments/qr-data")
+      .then((d) => { if (active) { setQrData(d); setError(null); } })
+      .catch((e: any) => { if (active) setError(e?.detail ?? "Impossible de charger votre QR code."); });
+    return () => { active = false; };
   }, []);
 
   const copyTag = () => {
@@ -45,6 +50,8 @@ export default function QRReceiveScreen() {
               <Text style={styles.btnText}>Copier mon tag</Text>
             </TouchableOpacity>
           </>
+        ) : error ? (
+          <Text style={{ color: Colors.danger, textAlign: "center", marginTop: 40 }}>{error}</Text>
         ) : (
           <Text style={{ color: Colors.textMuted, textAlign: "center", marginTop: 40 }}>Chargement...</Text>
         )}

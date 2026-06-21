@@ -117,7 +117,6 @@ export async function topupFromMobileMoney(payload: TopupPayload): Promise<Walle
   if (!Number.isFinite(payload.amount) || payload.amount <= 0) throw new Error("Montant invalide.");
   if (!/^\+?[\d\s\-]{8,15}$/.test(payload.phone)) throw new Error("Numéro de téléphone invalide.");
 
-  // Convert to XAF for the server-side balance update
   const rates = await getRates();
   const amountXaf = convert(payload.amount, payload.currency ?? "XAF", "XAF", rates);
 

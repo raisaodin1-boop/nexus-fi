@@ -74,9 +74,11 @@ function ShimmerText({ text, color }: { text: string; color: string }) {
   const shimmer = useRef(new Animated.Value(-1)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const loop = Animated.loop(
       Animated.timing(shimmer, { toValue: 1, duration: 2000, useNativeDriver: true, delay: 800 })
-    ).start();
+    );
+    loop.start();
+    return () => loop.stop();
   }, []);
 
   const translateX = shimmer.interpolate({ inputRange: [-1, 1], outputRange: [-80, 80] });
@@ -100,12 +102,14 @@ function BreathingScoreCard({ score, tier }: { score: number; tier: ScoreTier })
   const strokeDashoffset = CIRCUMFERENCE * (1 - Math.min(score / 1000, 1));
 
   useEffect(() => {
-    Animated.loop(
+    const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(breathe, { toValue: 1.025, duration: 2000, useNativeDriver: true }),
         Animated.timing(breathe, { toValue: 1, duration: 2000, useNativeDriver: true }),
       ])
-    ).start();
+    );
+    loop.start();
+    return () => loop.stop();
   }, []);
 
   return (

@@ -231,7 +231,7 @@ export async function getPublicTontineProfile(id: string) {
 
 export async function contributeTontine(id: string, amount: number) {
   const me = await uid();
-  const { data: tontine } = await getSupabase().from("tontines").select("current_cycle").eq("id", id).single();
+  const { data: tontine } = await getSupabase().from("tontines").select("current_cycle").eq("id", id).maybeSingle();
   const { error } = await getSupabase().from("tontine_contributions").insert({
     tontine_id: id, user_id: me, amount, cycle: tontine?.current_cycle ?? 1,
   });
@@ -354,9 +354,9 @@ export async function contributeTontineSecure(id: string, amount: number) {
   const me = await uid();
   const sb = getSupabase();
 
-  const { data: tontine } = await sb.from("tontines")
-    .select("current_cycle, amount_per_cycle, max_members, reserve_fund, owner_id, name").eq("id", id).single();
-  if (!tontine) throw { status: 404, detail: "Tontine introuvable" };
+  const { data: tontine, error: tontineErr } = await sb.from("tontines")
+    .select("current_cycle, amount_per_cycle, max_members, reserve_fund, owner_id, name").eq("id", id).maybeSingle();
+  if (tontineErr || !tontine) throw { status: 404, detail: "Tontine introuvable" };
 
   const cycle = tontine.current_cycle ?? 1;
   const reserveAmount = Math.round(amount * RESERVE_FUND_PCT);
@@ -366,8 +366,10 @@ export async function contributeTontineSecure(id: string, amount: number) {
   throwSb(error);
 
   const currentReserve = Number(tontine.reserve_fund ?? 0);
-  await sb.from("tontines").update({ reserve_fund: currentReserve + reserveAmount }).eq("id", id).then(() => {});
-  await sb.from("tontine_members").update({ status: "a_jour", last_paid_cycle: cycle }).eq("tontine_id", id).eq("user_id", me).then(() => {});
+  const { error: reserveErr } = await sb.from("tontines").update({ reserve_fund: currentReserve + reserveAmount }).eq("id", id);
+  if (reserveErr) console.warn("[tontines] reserve_fund update failed:", reserveErr.message);
+  const { error: memberErr } = await sb.from("tontine_members").update({ status: "a_jour", last_paid_cycle: cycle }).eq("tontine_id", id).eq("user_id", me);
+  if (memberErr) console.warn("[tontines] member status update failed:", memberErr.message);
 
   invalidateCache("tontines");
   invalidateCache(`identity-${me}`);
