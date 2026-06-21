@@ -281,7 +281,7 @@ export default function Onboarding() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
+  root: { flex: 1, backgroundColor: "#0B1F3A" },
   safe: { flex: 1 },
   circleTopRight: {
     position: "absolute", width: 280, height: 280, borderRadius: 140,
