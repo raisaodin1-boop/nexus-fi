@@ -45,7 +45,7 @@ export async function getIdentity() {
   const me = await uid();
   return cached(`identity-${me}`, 90_000, async () => {
     const { data: sbUser } = await getSupabase().auth.getSession();
-    const [profileRes, savingsRes, tontineRes, assocRes, coopRes, eventsRes, txRes] = await Promise.all([
+    const [profileRes, savingsRes, tontineRes, assocRes, coopRes] = await Promise.all([
       getSupabase().from("profiles").select("*").eq("id", me).maybeSingle(),
       getSupabase().from("savings_goals").select("current_amount").eq("user_id", me),
       getSupabase().from("tontine_members").select("tontine_id").eq("user_id", me),

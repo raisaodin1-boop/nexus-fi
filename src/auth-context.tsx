@@ -32,7 +32,6 @@ export interface User {
   push_consent?: boolean | null;
   kyc_status?: string | null;
   trust_score?: number | null;
-  push_consent?: boolean | null;
   marketing_consent?: boolean | null;
   created_at: string;
 }
