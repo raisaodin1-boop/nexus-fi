@@ -31,5 +31,8 @@ export async function registerFingerprint(): Promise<void> {
 }
 
 export function useDeviceFingerprint() {
-  useEffect(() => { registerFingerprint(); }, []);
+  useEffect(() => {
+    const t = setTimeout(() => { registerFingerprint(); }, 3000);
+    return () => clearTimeout(t);
+  }, []);
 }

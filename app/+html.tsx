@@ -349,6 +349,12 @@ export default function Root({ children }: PropsWithChildren) {
                 z-index: 9999; transition: opacity 0.4s ease;
               }
               #splash-screen.hidden { opacity: 0; pointer-events: none; }
+              @media (max-width: 767px) {
+                body {
+                  padding-left: env(safe-area-inset-left);
+                  padding-right: env(safe-area-inset-right);
+                }
+              }
               @media (min-width: 768px) {
                 body { background-color: #E8ECF4; }
                 html { background-color: #E8ECF4; }

@@ -41,57 +41,43 @@ if (Platform.OS !== "web") {
 function PushSetup() {
   const { user } = useAuth();
   const router = useRouter();
+  const [consentVisible, setConsentVisible] = useState(false);
 
   useEffect(() => {
     if (!user || Platform.OS === "web") return;
 
     const detach = attachPushNotificationListeners(router);
+    let cancelled = false;
 
     (async () => {
       try {
         const me = await api.get<{ push_consent?: boolean | null }>("/users/me");
+        if (cancelled) return;
         if (me.push_consent === true) {
           await requestPushPermissionAndRegister();
+        } else if (me.push_consent === null || me.push_consent === undefined) {
+          setConsentVisible(true);
         } else {
           await syncNotificationBadge();
         }
       } catch {}
-      try { await runDueAutoSavings(); } catch {}
+      setTimeout(() => { runDueAutoSavings().catch(() => {}); }, 4000);
     })();
 
-    return () => detach();
+    return () => { cancelled = true; detach(); };
   }, [user, router]);
 
-  return null;
-}
-
-function PushConsentGate() {
-  const { user } = useAuth();
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    if (!user || Platform.OS === "web") return;
-
-    (async () => {
-      try {
-        const me = await api.get<{ push_consent?: boolean | null }>("/users/me");
-        if (me.push_consent === true || me.push_consent === false) return;
-        setVisible(true);
-      } catch {}
-    })();
-  }, [user]);
-
-  if (!visible) return null;
+  if (!consentVisible) return null;
 
   return (
     <PushConsentModal
-      visible={visible}
+      visible={consentVisible}
       onAccept={async () => {
-        setVisible(false);
+        setConsentVisible(false);
         const { requestPushPermissionAndRegister } = await import("@/src/push-notifications");
         await requestPushPermissionAndRegister();
       }}
-      onDecline={() => setVisible(false)}
+      onDecline={() => setConsentVisible(false)}
     />
   );
 }
@@ -117,7 +103,8 @@ function FirstLaunchGuard() {
  */
 function BiometricGate({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const [locked, setLocked] = useState<boolean | null>(Platform.OS === "web" ? false : null);
+  const [locked, setLocked] = useState(false);
+  const [checking, setChecking] = useState(Platform.OS !== "web");
   const decidedRef = useRef(false);
 
   const tryUnlock = async () => {
@@ -131,15 +118,17 @@ function BiometricGate({ children }: { children: React.ReactNode }) {
     (async () => {
       if (!user || !(await isBiometricEnabled())) {
         setLocked(false);
+        setChecking(false);
         return;
       }
       setLocked(true);
+      setChecking(false);
       tryUnlock();
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, user]); // tryUnlock is intentionally excluded: it doesn't change and re-running would re-lock
 
-  if (locked === null) return null;
+  if (checking) return <>{children}</>;
   if (!locked) return <>{children}</>;
   return (
     <View style={gateStyles.container}>
@@ -183,7 +172,6 @@ function RootLayoutInner() {
       <PwaSetup />
       <DeepLinkHandler />
       <PushSetup />
-      <PushConsentGate />
       <FirstLaunchGuard />
       <StatusBar style="dark" />
       <OfflineBanner />

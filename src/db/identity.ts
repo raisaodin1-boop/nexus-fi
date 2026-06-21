@@ -175,8 +175,51 @@ export async function getIdentityProfile() {
 export async function getTrustScore() {
   const me = await uid();
   return cached(`trust-score-${me}`, 120_000, async () => {
-    const identity = await getIdentity();
-    return identity.trust_score;
+    const sb = getSupabase();
+    const [profileRes, savingsRes, tontineRes, assocRes, coopRes] = await Promise.all([
+      sb.from("profiles").select("trust_score, created_at").eq("id", me).single(),
+      sb.from("savings_goals").select("current_amount").eq("user_id", me),
+      sb.from("tontine_members").select("tontine_id").eq("user_id", me),
+      sb.from("association_members").select("association_id").eq("user_id", me),
+      sb.from("cooperative_members").select("cooperative_id").eq("user_id", me),
+    ]);
+
+    const profile = profileRes.data ?? {};
+    const tontineCount = tontineRes.data?.length ?? 0;
+    const assocCount = assocRes.data?.length ?? 0;
+    const coopCount = coopRes.data?.length ?? 0;
+    const totalSaved = (savingsRes.data ?? []).reduce((s: number, g: { current_amount?: number }) => s + Number(g.current_amount ?? 0), 0);
+
+    let score = Number((profile as { trust_score?: number }).trust_score ?? 0);
+    const levelConfig = trustLevelFromScore(score, false);
+
+    // Full progression only when profile score not yet synced (first visits / legacy rows).
+    if (!score) {
+      const identity = await getIdentity();
+      return identity.trust_score;
+    }
+
+    return {
+      score,
+      score_max: 1000,
+      level: levelConfig.level,
+      risk: levelConfig.risk,
+      color: levelConfig.color,
+      components: {},
+      tips: [],
+      stats: {
+        total_saved: totalSaved,
+        tontines: tontineCount,
+        associations: assocCount,
+        cooperatives: coopCount,
+        deposits_90d: 0,
+        contributions_made: 0,
+        account_age_days: Math.floor(
+          (Date.now() - new Date((profile as { created_at?: string }).created_at ?? Date.now()).getTime()) / 86400000,
+        ),
+        active_months: 0,
+      },
+    };
   });
 }
 

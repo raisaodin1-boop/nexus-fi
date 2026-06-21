@@ -40,19 +40,22 @@ export function AdminDashboard() {
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch { return null; }
     };
-    const [a, s, u, p, comp] = await Promise.all([
-      safe(() => api.get<Analytics>("/admin/analytics")),
+    const a = await safe(() => api.get<Analytics>("/admin/analytics"));
+    if (a) {
+      setAnalytics(a);
+      setLoading(false);
+    }
+    const [s, u, p, comp] = await Promise.all([
       safe(() => api.get<Series>("/analytics/platform/savings?days=14")),
       safe(() => api.get<Series>("/analytics/platform/users?days=14")),
       safe(() => api.get<any[]>("/admin/promotion-requests")),
       safe(() => api.get<{ open_fraud_alerts: number; critical_fraud_alerts: number }>("/admin/compliance/stats")),
     ]);
-    if (a) setAnalytics(a);
     if (s) setSavings(s);
     if (u) setUsersSeries(u);
     if (p) setPendingReqs(p.filter((r: any) => r.status === "pending").length);
     if (comp) setOpenFraudAlerts(comp.open_fraud_alerts);
-    setLoading(false);
+    if (!a) setLoading(false);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));

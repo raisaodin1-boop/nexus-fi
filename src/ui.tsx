@@ -155,9 +155,9 @@ export function Card({ children, style, dark, testID }: CardProps) {
   );
 }
 
-export function SectionTitle({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
+export function SectionTitle({ children, action, style }: { children: React.ReactNode; action?: React.ReactNode; style?: StyleProp<ViewStyle> }) {
   return (
-    <View style={styles.sectionRow}>
+    <View style={[styles.sectionRow, style]}>
       <Text style={styles.sectionTitle}>{children}</Text>
       {action}
     </View>
@@ -196,9 +196,16 @@ export function StatCard({
   return (
     <View style={[styles.stat, Shadow.card]} testID={testID}>
       <View style={[styles.statAccent, { backgroundColor: accent }]} />
-      <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue}>{value}</Text>
-      {hint ? <Text style={styles.statHint}>{hint}</Text> : null}
+      <Text style={styles.statLabel} numberOfLines={2}>{label}</Text>
+      <Text
+        style={[styles.statValue, Platform.OS === "web" && ({ whiteSpace: "nowrap", wordBreak: "keep-all" } as TextStyle)]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
+      >
+        {value}
+      </Text>
+      {hint ? <Text style={styles.statHint} numberOfLines={2}>{hint}</Text> : null}
     </View>
   );
 }
@@ -364,6 +371,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: Spacing.md,
     marginTop: Spacing.xl,
+    paddingHorizontal: Spacing.xl,
+    minWidth: 0,
   },
   sectionTitle: { fontSize: 18, fontWeight: "800", color: Colors.text, letterSpacing: -0.3 },
   pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radius.full },

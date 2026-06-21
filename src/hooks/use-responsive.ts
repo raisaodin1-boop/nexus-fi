@@ -20,6 +20,7 @@ export function shouldShowWebPhoneFrame(width: number): boolean {
 export function useResponsive() {
   const { width, height } = useWindowDimensions();
   const isCompact = width < 380;
+  const isNarrow = width < 420;
   const isMobile = width < 768;
   const horizontalPad = isCompact ? 16 : 20;
 
@@ -27,6 +28,7 @@ export function useResponsive() {
     width,
     height,
     isCompact,
+    isNarrow,
     isMobile,
     horizontalPad,
     minTouch: MIN_TOUCH,

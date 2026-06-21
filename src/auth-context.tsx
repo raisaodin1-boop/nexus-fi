@@ -57,7 +57,7 @@ function logAuthBestEffort(label: string, err: unknown) {
 
 async function fetchProfile(userId: string): Promise<Partial<User>> {
   try {
-    const timeout = new Promise<null>((res) => setTimeout(() => res(null), 8000));
+    const timeout = new Promise<null>((res) => setTimeout(() => res(null), 2500));
     const query = supabase
       .from("profiles")
       .select("full_name,role,phone,gender,country,city,occupation,date_of_birth,birth_place,neighborhood,address,kyc_status,trust_score,email,push_consent,marketing_consent")
@@ -69,6 +69,30 @@ async function fetchProfile(userId: string): Promise<Partial<User>> {
   } catch {
     return {};
   }
+}
+
+/** Instant user from JWT/session — no network wait. */
+function userFromSession(sbUser: {
+  id: string;
+  email?: string | null;
+  email_confirmed_at?: string | null;
+  phone?: string | null;
+  created_at?: string;
+  user_metadata?: Record<string, unknown>;
+}): User {
+  const meta = sbUser.user_metadata ?? {};
+  const rawRole = (meta.role as string) || "member";
+  const role = rawRole === "admin" || rawRole === "super_admin" ? "super_admin" : rawRole;
+  return {
+    id: sbUser.id,
+    email: sbUser.email ?? "",
+    full_name: (meta.full_name as string) || "",
+    role,
+    is_email_verified: !!sbUser.email_confirmed_at,
+    phone: sbUser.phone ?? null,
+    trust_score: typeof meta.trust_score === "number" ? meta.trust_score : null,
+    created_at: sbUser.created_at ?? new Date().toISOString(),
+  };
 }
 
 async function buildUser(sbUser: any): Promise<User> {
@@ -128,8 +152,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Listen to auth changes — this also fires immediately with current session
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
-        const u = await buildUser(session.user);
-        setUser(u);
+        // Show UI immediately from session metadata, enrich profile in background.
+        setUser(userFromSession(session.user));
+        setLoading(false);
+        buildUser(session.user).then((u) => setUser(u)).catch(() => {});
         resetInactivityTimer();
         if (event === "SIGNED_IN") {
           setTimeout(async () => {
