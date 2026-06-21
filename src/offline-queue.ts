@@ -123,12 +123,25 @@ async function submitQueuedTx(tx: QueuedTx): Promise<void> {
     case "wallet_transfer":
       await api.post("/wallet/transfer", tx.payload);
       break;
-    case "tontine_contribution":
-      await api.post("/tontines/contribute", tx.payload);
+    case "tontine_contribution": {
+      // Tontine contributions require a tontine_id and go through wallet payment
+      const tontineId = tx.payload.tontine_id as string;
+      if (!tontineId) throw new Error("tontine_id manquant dans la file hors-ligne.");
+      await api.post(`/savings/goals/${tontineId}/transactions`, {
+        amount: tx.payload.amount,
+        kind: "deposit",
+      });
       break;
-    case "savings_deposit":
-      await api.post("/savings/deposit", tx.payload);
+    }
+    case "savings_deposit": {
+      const goalId = tx.payload.goal_id as string;
+      if (!goalId) throw new Error("goal_id manquant dans la file hors-ligne.");
+      await api.post(`/savings/goals/${goalId}/transactions`, {
+        amount: tx.payload.amount,
+        kind: "deposit",
+      });
       break;
+    }
     default:
       throw new Error(`Unknown queued tx kind: ${(tx as any).kind}`);
   }

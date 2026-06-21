@@ -192,7 +192,7 @@ export async function getFinancialAnalytics() {
   const now = new Date();
   const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1).toISOString();
   const [savingsTxRes, tontineContribRes, savingsGoalsRes, identityEventsRes] = await Promise.all([
-    sb.from("savings_transactions").select("amount, type, created_at").eq("user_id", me).gte("created_at", twelveMonthsAgo),
+    sb.from("savings_transactions").select("amount, created_at").eq("user_id", me).gte("created_at", twelveMonthsAgo),
     sb.from("tontine_contributions").select("amount, created_at").eq("user_id", me).gte("created_at", twelveMonthsAgo),
     sb.from("savings_goals").select("current_amount, target_amount, created_at, name").eq("user_id", me),
     sb.from("identity_events").select("points_delta, event_type, created_at").eq("user_id", me).eq("event_type", "credit_score_snapshot").order("created_at", { ascending: true }).limit(24),
@@ -208,8 +208,9 @@ export async function getFinancialAnalytics() {
     const label = d.toLocaleDateString("fr-FR", { month: "short" });
     const monthTx = savingsTx.filter((t: any) => { const cd = new Date(t.created_at); return cd.getFullYear() === d.getFullYear() && cd.getMonth() === d.getMonth(); });
     const monthContribs = tontineContribs.filter((t: any) => { const cd = new Date(t.created_at); return cd.getFullYear() === d.getFullYear() && cd.getMonth() === d.getMonth(); });
-    const inflow = monthTx.filter((t: any) => t.type === "deposit").reduce((s: number, t: any) => s + Number(t.amount), 0);
-    const outflow = monthTx.filter((t: any) => t.type !== "deposit").reduce((s: number, t: any) => s + Number(t.amount), 0) + monthContribs.reduce((s: number, t: any) => s + Number(t.amount), 0);
+    // savings_transactions uses signed amounts: positive = deposit, negative = withdrawal
+    const inflow = monthTx.filter((t: any) => Number(t.amount) > 0).reduce((s: number, t: any) => s + Number(t.amount), 0);
+    const outflow = monthTx.filter((t: any) => Number(t.amount) < 0).reduce((s: number, t: any) => s + Math.abs(Number(t.amount)), 0) + monthContribs.reduce((s: number, t: any) => s + Number(t.amount), 0);
     cashFlow.push({ label, inflow, outflow });
   }
 
@@ -221,13 +222,13 @@ export async function getFinancialAnalytics() {
   }));
   const projections = goals.filter((g: any) => g.target_amount > 0).map((g: any) => {
     const pct = Math.min(100, (Number(g.current_amount) / Number(g.target_amount)) * 100);
-    const depositRate = savingsTx.filter((t: any) => t.type === "deposit").reduce((s: number, t: any) => s + Number(t.amount), 0) / 12;
+    const depositRate = savingsTx.filter((t: any) => Number(t.amount) > 0).reduce((s: number, t: any) => s + Number(t.amount), 0) / 12;
     const remaining = Number(g.target_amount) - Number(g.current_amount);
     const monthsToGo = depositRate > 0 ? Math.ceil(remaining / depositRate) : null;
     return { name: g.name, pct: Math.round(pct), months_to_go: monthsToGo, target: Number(g.target_amount), current: Number(g.current_amount) };
   });
   const rawRows = [
-    ...savingsTx.map((t: any) => ({ date: t.created_at, type: t.type, amount: t.amount, category: "Épargne" })),
+    ...savingsTx.map((t: any) => ({ date: t.created_at, type: Number(t.amount) >= 0 ? "deposit" : "withdrawal", amount: t.amount, category: "Épargne" })),
     ...tontineContribs.map((t: any) => ({ date: t.created_at, type: "contribution", amount: t.amount, category: "Tontine" })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 

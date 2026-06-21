@@ -158,7 +158,7 @@ export async function getSmartAlerts(): Promise<SmartAlert[]> {
   const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString();
 
   const [savingsTxRes, goalsRes, contribRes, dismissalsRes] = await Promise.all([
-    sb.from("savings_transactions").select("goal_id, amount, type, created_at").eq("user_id", me).gte("created_at", twoMonthsAgo),
+    sb.from("savings_transactions").select("goal_id, amount, created_at").eq("user_id", me).gte("created_at", twoMonthsAgo),
     sb.from("savings_goals").select("id, name, current_amount, target_amount, deadline, is_active").eq("user_id", me).eq("is_active", true),
     sb.from("tontine_contributions").select("created_at, tontine_id").eq("user_id", me).gte("created_at", twoMonthsAgo),
     sb.from("smart_alert_dismissals").select("alert_id").eq("user_id", me).gt("dismissed_until", now.toISOString()),
@@ -169,8 +169,9 @@ export async function getSmartAlerts(): Promise<SmartAlert[]> {
     : new Set((dismissalsRes.data ?? []).map((d: { alert_id: string }) => d.alert_id));
   const tx = savingsTxRes.data ?? [];
   const goals = goalsRes.data ?? [];
-  const thisMonthDeposits = tx.filter((t: any) => t.type !== "withdrawal" && t.created_at >= oneMonthAgo).reduce((s: number, t: any) => s + Number(t.amount), 0);
-  const prevMonthDeposits = tx.filter((t: any) => t.type !== "withdrawal" && t.created_at < oneMonthAgo).reduce((s: number, t: any) => s + Number(t.amount), 0);
+  // savings_transactions uses signed amounts: positive = deposit, negative = withdrawal
+  const thisMonthDeposits = tx.filter((t: any) => Number(t.amount) > 0 && t.created_at >= oneMonthAgo).reduce((s: number, t: any) => s + Number(t.amount), 0);
+  const prevMonthDeposits = tx.filter((t: any) => Number(t.amount) > 0 && t.created_at < oneMonthAgo).reduce((s: number, t: any) => s + Number(t.amount), 0);
 
   if (prevMonthDeposits > 0 && thisMonthDeposits < prevMonthDeposits * 0.6) {
     const dropPct = Math.round((1 - thisMonthDeposits / prevMonthDeposits) * 100);

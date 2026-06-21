@@ -117,12 +117,16 @@ export async function topupFromMobileMoney(payload: TopupPayload): Promise<Walle
   if (!Number.isFinite(payload.amount) || payload.amount <= 0) throw new Error("Montant invalide.");
   if (!/^\+?[\d\s\-]{8,15}$/.test(payload.phone)) throw new Error("Numéro de téléphone invalide.");
 
+  // Convert to XAF for the server-side balance update
+  const rates = await getRates();
+  const amountXaf = convert(payload.amount, payload.currency ?? "XAF", "XAF", rates);
+
   const { data, error } = await getSupabase().rpc("wallet_topup", {
     p_amount: payload.amount,
     p_currency: payload.currency ?? "XAF",
     p_provider: payload.provider,
     p_phone: payload.phone,
-    p_amount_xaf: payload.amount,
+    p_amount_xaf: amountXaf,
   });
   if (error) {
     const msg = error.message.includes("insufficient") ? "Solde insuffisant."
