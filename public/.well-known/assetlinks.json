@@ -1,13 +1,11 @@
 [
   {
-    "relation": [
-      "delegate_permission/common.handle_all_urls"
-    ],
+    "relation": ["delegate_permission/common.handle_all_urls"],
     "target": {
       "namespace": "android_app",
       "package_name": "com.hodix.app",
       "sha256_cert_fingerprints": [
-        "REMPLACER_PAR_LE_FINGERPRINT_PWABUILDER"
+        "B0:9C:FC:94:88:E4:CC:C6:D3:A7:20:3C:9F:52:CE:45:02:68:42:64:59:8D:18:2A:F0:45:9C:24:31:E2:B0:02"
       ]
     }
   }
