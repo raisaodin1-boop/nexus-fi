@@ -21,5 +21,6 @@ describe("compliance — API routes", () => {
     const api = readFileSync("src/api.ts", "utf8");
     expect(api).toContain('s[0] === "admin" && s[1] === "compliance" && s[2] === "audit"');
     expect(api).toContain("fraud-alerts");
+    expect(api).toContain('s[2] === "stats"');
   });
 });

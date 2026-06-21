@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -29,8 +29,9 @@ import { Colors, Radius, Spacing } from "@/src/theme";
 import { useToast } from "@/src/toast";
 import { MIN_TOUCH, useResponsive } from "@/src/hooks/use-responsive";
 import { KycReviewModal, type KycReviewTarget } from "@/src/admin-kyc-review-modal";
+import { AdminCompliancePanel } from "@/src/admin-compliance-panel";
 
-type Tab = "users" | "kyc" | "promotions" | "tontines" | "messages" | "broadcast";
+type Tab = "users" | "kyc" | "promotions" | "tontines" | "messages" | "broadcast" | "compliance";
 
 interface AdminUser {
   id: string; email: string; full_name: string; role: string;
@@ -129,10 +130,17 @@ function StatusBadge({ config }: { config: { label: string; bg: string; color: s
 
 export default function AdminConsole() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ tab?: string }>();
   const { user } = useAuth();
   const { show } = useToast();
   const { isCompact, horizontalPad } = useResponsive();
-  const [tab, setTab] = useState<Tab>("users");
+  const [tab, setTab] = useState<Tab>(() => {
+    const t = params.tab;
+    if (t === "compliance" || t === "kyc" || t === "users" || t === "promotions" || t === "tontines" || t === "messages" || t === "broadcast") {
+      return t;
+    }
+    return "users";
+  });
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -155,6 +163,7 @@ export default function AdminConsole() {
   const [adminReply, setAdminReply] = useState("");
   const [sendingReply, setSendingReply] = useState(false);
   const [kycReviewTarget, setKycReviewTarget] = useState<KycReviewTarget | null>(null);
+  const [openFraudAlerts, setOpenFraudAlerts] = useState(0);
 
   if (user?.role !== "super_admin") {
     return (
@@ -206,16 +215,18 @@ export default function AdminConsole() {
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch { return null; }
     };
-    const [statsData, kycData, promosData, tontinesData] = await Promise.all([
+    const [statsData, kycData, promosData, tontinesData, complianceStats] = await Promise.all([
       safe(() => api.get<AdminStats>("/admin/stats")),
       safe(() => api.get<KycEntry[]>("/admin/kyc")),
       safe(() => api.get<PromoRequest[]>("/admin/promotion-requests")),
       safe(() => api.get<AdminTontine[]>("/admin/tontines")),
+      safe(() => api.get<{ open_fraud_alerts: number }>("/admin/compliance/stats")),
     ]);
     if (statsData) setAdminStats(statsData);
     if (kycData) setKyc(kycData);
     if (promosData) setPromos(promosData);
     if (tontinesData) setTontines(tontinesData);
+    if (complianceStats) setOpenFraudAlerts(complianceStats.open_fraud_alerts);
     setLoading(false);
   }, []);
 
@@ -229,6 +240,7 @@ export default function AdminConsole() {
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => { load(); loadUsers(search, 0, false); })
       .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () => { load(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "tontines" }, () => { load(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "fraud_alerts" }, () => { load(); })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => {
         loadMessageThreads();
         if (activeMsgUser) loadAdminChat(activeMsgUser.user_id);
@@ -333,6 +345,7 @@ export default function AdminConsole() {
     { key: "promotions", label: "Promos", icon: Crown, count: promos.filter(p => p.status === "pending").length || undefined },
     { key: "tontines", label: "Tontines", icon: BarChart3 },
     { key: "messages", label: "Messages", icon: MessageCircle, count: msgUnreadTotal || undefined },
+    { key: "compliance", label: "Compliance", icon: ShieldAlert, count: openFraudAlerts || undefined },
     { key: "broadcast", label: "Annonces", icon: Bell },
   ];
 
@@ -414,7 +427,7 @@ export default function AdminConsole() {
       </View>
 
       {/* Content */}
-      {loading ? (
+      {loading && tab !== "compliance" ? (
         <ScrollView contentContainerStyle={{ padding: Spacing.xl, gap: 12 }}>
           <SkeletonCard /><SkeletonCard /><SkeletonCard />
         </ScrollView>
@@ -685,6 +698,8 @@ export default function AdminConsole() {
             />
           )}
         </View>
+      ) : tab === "compliance" ? (
+        <AdminCompliancePanel embedded />
       ) : (
         <ScrollView contentContainerStyle={{ padding: Spacing.xl, gap: 16, paddingBottom: 100 }}>
           <View style={styles.broadcastCard}>

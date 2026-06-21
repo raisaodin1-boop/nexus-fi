@@ -261,6 +261,7 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "POST"  && s[0] === "admin" && s[1] === "kyc" && s[2] === "approve")         return (await db.adminHandleKyc(body?.user_id, true)) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "kyc" && s[2] === "reject")          return (await db.adminHandleKyc(body?.user_id, false, body?.reason)) as T;
     if (method === "DELETE"&& s[0] === "admin" && s[1] === "kyc" && s[2])                      return (await db.adminDeleteKyc(s[2])) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "compliance" && s[2] === "stats")     return (await db.adminComplianceStats()) as T;
     if (method === "GET"   && s[0] === "admin" && s[1] === "compliance" && s[2] === "audit")    return (await db.adminListComplianceAudit(Number(query.get("limit") ?? 100), query.get("category") ?? undefined)) as T;
     if (method === "GET"   && s[0] === "admin" && s[1] === "compliance" && s[2] === "fraud-alerts") return (await db.adminListFraudAlerts(query.get("status") ?? "open")) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "compliance" && s[2] === "fraud-review") return (await db.adminReviewFraudAlert(body?.alert_id, body?.status)) as T;
