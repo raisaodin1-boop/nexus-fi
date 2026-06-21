@@ -1,14 +1,17 @@
 /**
- * Marketing landing — web-first, premium fintech storytelling.
+ * HODIX — Landing page premium. Vision émotionnelle, storytelling fort.
+ * Aucune logique métier modifiée. Uniquement visuel & UX.
  */
-import React, { useMemo } from "react";
+import React, { useEffect, useRef, useMemo } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
+  Animated,
+  Easing,
   Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
   useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -18,540 +21,522 @@ import { StatusBar } from "expo-status-bar";
 
 import {
   PremiumVisualStack,
+  TrustScoreHeroBlock,
+  TRUST_BLOCK_COPY,
   CommunityAvatars,
 } from "@/src/welcome-visuals";
-import {
-  AppShowcase,
-  CommunityEmotionalVisual,
-  LandingFadeIn,
-  PersonaStrip,
-  ScoreEvolutionIllustration,
-  TrustScoreTimeline,
-} from "@/src/landing-visuals";
-import {
-  CAROUSEL_SLIDES,
-  LANDING_I18N,
-  WELCOME_I18N,
-} from "@/src/welcome-content";
+import { CAROUSEL_SLIDES, LANDING_I18N, WELCOME_I18N } from "@/src/welcome-content";
 import { APP_MAX_WIDTH } from "@/src/hooks/use-responsive";
 
-const NAVY = "#0B1F3A";
+const NAVY    = "#0B1F3A";
 const EMERALD = "#10B981";
-const GOLD = "#C9A227";
+const GOLD    = "#C9A227";
+const SLATE   = "#64748B";
+const LIGHT   = "#F8FAFC";
 
 function detectLang(): "fr" | "en" {
   try {
-    const locale =
-      Platform.OS === "web"
-        ? (typeof navigator !== "undefined" ? navigator.language : "fr")
-        : "fr";
+    const locale = Platform.OS === "web"
+      ? (typeof navigator !== "undefined" ? navigator.language : "fr")
+      : "fr";
     return locale.toLowerCase().startsWith("en") ? "en" : "fr";
-  } catch {
-    return "fr";
-  }
+  } catch { return "fr"; }
 }
 
+// ── Animated fade-in wrapper ────────────────────────────────────────
+function FadeIn({ delay = 0, children }: { delay?: number; children: React.ReactNode }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  const slide = useRef(new Animated.Value(24)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(anim,  { toValue: 1, duration: 600, delay, useNativeDriver: true }),
+      Animated.timing(slide, { toValue: 0, duration: 600, delay, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]).start();
+  }, []);
+  return (
+    <Animated.View style={{ opacity: anim, transform: [{ translateY: slide }] }}>
+      {children}
+    </Animated.View>
+  );
+}
+
+// ── Stats strip ─────────────────────────────────────────────────────
+function StatPill({ value, label }: { value: string; label: string }) {
+  return (
+    <View style={ss.statPill}>
+      <Text style={ss.statValue}>{value}</Text>
+      <Text style={ss.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
+// ── Persona card ────────────────────────────────────────────────────
+const PERSONA_ICONS = ["👨‍👩‍👧‍👦", "🏪", "🚀", "🤝", "🎓", "🌍"];
+function PersonaCard({ icon, title, desc, accent }: { icon: string; title: string; desc: string; accent: string }) {
+  return (
+    <View style={[ss.personaCard, { borderTopColor: accent }]}>
+      <Text style={ss.personaIcon}>{icon}</Text>
+      <Text style={ss.personaTitle}>{title}</Text>
+      <Text style={ss.personaDesc}>{desc}</Text>
+    </View>
+  );
+}
+
+// ── Trust journey step ──────────────────────────────────────────────
+function JourneyStep({ num, icon, title, desc, accent, last }: {
+  num: number; icon: string; title: string; desc: string; accent: string; last?: boolean;
+}) {
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.08, duration: 1400 + num * 200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1,    duration: 1400 + num * 200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+  return (
+    <View style={ss.stepRow}>
+      <View style={ss.stepLeft}>
+        <Animated.View style={[ss.stepCircle, { backgroundColor: accent, transform: [{ scale: pulse }] }]}>
+          <Text style={ss.stepIcon}>{icon}</Text>
+        </Animated.View>
+        {!last && <View style={[ss.stepLine, { backgroundColor: accent + "44" }]} />}
+      </View>
+      <View style={ss.stepContent}>
+        <Text style={ss.stepNum}>Étape {num}</Text>
+        <Text style={ss.stepTitle}>{title}</Text>
+        <Text style={ss.stepDesc}>{desc}</Text>
+      </View>
+    </View>
+  );
+}
+
+// ── Feature card ────────────────────────────────────────────────────
+function FeatureCard({ icon, title, body, accent }: { icon: string; title: string; body: string; accent: string }) {
+  return (
+    <View style={[ss.featureCard, { borderTopColor: accent }]}>
+      <View style={[ss.featureIconBox, { backgroundColor: accent + "18" }]}>
+        <Text style={ss.featureIcon}>{icon}</Text>
+      </View>
+      <Text style={ss.featureTitle}>{title}</Text>
+      <Text style={ss.featureBody}>{body}</Text>
+    </View>
+  );
+}
+
+// ── Main component ──────────────────────────────────────────────────
 export default function LandingScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const lang = useMemo(() => detectLang(), []);
-  const copy = LANDING_I18N[lang];
+  const lang  = useMemo(() => detectLang(), []);
+  const copy  = LANDING_I18N[lang];
   const welcome = WELCOME_I18N[lang];
+  const trustCopy = TRUST_BLOCK_COPY[lang];
   const isWide = width >= 768;
 
+  const JOURNEY_STEPS = [
+    { icon: "📈", title: copy.journey_step1_title, desc: copy.journey_step1_desc, accent: EMERALD },
+    { icon: "⭐", title: copy.journey_step2_title, desc: copy.journey_step2_desc, accent: GOLD },
+    { icon: "🤝", title: copy.journey_step3_title, desc: copy.journey_step3_desc, accent: "#3B82F6" },
+    { icon: "🚀", title: copy.journey_step4_title, desc: copy.journey_step4_desc, accent: "#8B5CF6" },
+  ];
+
+  const PERSONA_DATA = [
+    { icon: PERSONA_ICONS[0], title: copy.persona_family,       desc: copy.persona_family_desc,       accent: EMERALD },
+    { icon: PERSONA_ICONS[1], title: copy.persona_merchant,     desc: copy.persona_merchant_desc,     accent: GOLD },
+    { icon: PERSONA_ICONS[2], title: copy.persona_entrepreneur, desc: copy.persona_entrepreneur_desc, accent: "#3B82F6" },
+    { icon: PERSONA_ICONS[3], title: copy.persona_association,  desc: copy.persona_association_desc,  accent: "#8B5CF6" },
+    { icon: PERSONA_ICONS[4], title: copy.persona_youth,        desc: copy.persona_youth_desc,        accent: "#F59E0B" },
+    { icon: PERSONA_ICONS[5], title: copy.persona_diaspora,     desc: copy.persona_diaspora_desc,     accent: "#EF4444" },
+  ];
+
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+    <SafeAreaView style={ss.safe} edges={["top", "bottom"]}>
       <StatusBar style="light" />
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={[styles.container, { maxWidth: APP_MAX_WIDTH }]}>
-          {/* Nav */}
-          <View style={styles.nav}>
-            <Text style={styles.logo}>HODIX</Text>
-            <View style={styles.navActions}>
+      <ScrollView contentContainerStyle={ss.scroll} showsVerticalScrollIndicator={false}>
+        <View style={[ss.container, { maxWidth: APP_MAX_WIDTH }]}>
+
+          {/* ── Nav ───────────────────────────────────────────── */}
+          <View style={ss.nav}>
+            <View style={ss.navBrand}>
+              <Text style={ss.logo}>HODIX</Text>
+              <View style={ss.navDot} />
+            </View>
+            <View style={ss.navActions}>
               <TouchableOpacity onPress={() => router.push("/login")}>
-                <Text style={styles.navLink}>
-                  {lang === "en" ? "Sign in" : "Connexion"}
-                </Text>
+                <Text style={ss.navLink}>Connexion</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.navCta}
-                onPress={() => router.push("/register")}
-              >
-                <Text style={styles.navCtaText}>{copy.nav_cta}</Text>
+              <TouchableOpacity style={ss.navCta} onPress={() => router.push("/register")}>
+                <Text style={ss.navCtaText}>{copy.nav_cta}</Text>
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* Hero */}
+          {/* ── Hero ──────────────────────────────────────────── */}
           <LinearGradient
-            colors={[NAVY, "#0F2847", "#134E4A"]}
+            colors={[NAVY, "#0D2340", "#0F4A3C"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.hero}
+            style={ss.hero}
           >
-            <View style={styles.heroGlowE} pointerEvents="none" />
-            <View style={styles.heroGlowG} pointerEvents="none" />
+            {/* Ambient glows */}
+            <View style={ss.glowE} pointerEvents="none" />
+            <View style={ss.glowG} pointerEvents="none" />
+            <View style={ss.glowB} pointerEvents="none" />
 
-            <View style={[styles.heroInner, isWide && styles.heroInnerWide]}>
-              <View style={styles.heroCopy}>
-                <View style={styles.chip}>
-                  <Text style={styles.chipText}>{copy.hero_chip}</Text>
-                </View>
-                <Text style={[styles.heroTitle, isWide && styles.heroTitleWide]}>
-                  {copy.hero_title}
-                </Text>
-                <Text style={styles.heroSub}>{copy.hero_sub}</Text>
-                <Text style={styles.slogan}>{copy.slogan}</Text>
+            <View style={[ss.heroInner, isWide && ss.heroInnerWide]}>
+              <View style={ss.heroCopy}>
+                <FadeIn delay={0}>
+                  <View style={ss.chip}>
+                    <Text style={ss.chipText}>{copy.hero_badge}</Text>
+                  </View>
+                </FadeIn>
 
-                <View style={styles.heroCtas}>
-                  <TouchableOpacity
-                    style={styles.ctaPrimary}
-                    onPress={() => router.push("/register")}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.ctaPrimaryText}>{copy.hero_cta}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.ctaGhost}
-                    onPress={() => router.push("/onboarding")}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.ctaGhostText}>{copy.hero_secondary}</Text>
-                  </TouchableOpacity>
-                </View>
+                <FadeIn delay={100}>
+                  <Text style={[ss.heroTitle, isWide && ss.heroTitleWide]}>
+                    {copy.hero_title}
+                  </Text>
+                </FadeIn>
 
-                <CommunityAvatars width={isWide ? 180 : 160} />
+                <FadeIn delay={200}>
+                  <Text style={ss.heroSub}>{copy.hero_sub}</Text>
+                </FadeIn>
+
+                <FadeIn delay={280}>
+                  <Text style={ss.heroTagline}>{copy.hero_tagline}</Text>
+                </FadeIn>
+
+                <FadeIn delay={360}>
+                  <View style={ss.heroCtas}>
+                    <TouchableOpacity style={ss.ctaPrimary} onPress={() => router.push("/register")}>
+                      <Text style={ss.ctaPrimaryText}>{copy.hero_cta}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={ss.ctaGhost} onPress={() => router.push("/onboarding")}>
+                      <Text style={ss.ctaGhostText}>{copy.hero_secondary}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </FadeIn>
+
+                <FadeIn delay={440}>
+                  <View style={ss.socialProofRow}>
+                    <CommunityAvatars width={isWide ? 180 : 160} />
+                    <Text style={ss.socialProofText}>{copy.hero_social}</Text>
+                  </View>
+                </FadeIn>
               </View>
 
-              <View style={styles.heroVisual}>
-                <PremiumVisualStack />
-              </View>
+              <FadeIn delay={200}>
+                <View style={ss.heroVisual}>
+                  <PremiumVisualStack />
+                </View>
+              </FadeIn>
             </View>
           </LinearGradient>
 
-          {/* Emotional community */}
-          <LandingFadeIn style={styles.emotionalSection}>
-            <Text style={styles.sectionHeading}>{copy.emotional_title}</Text>
-            <Text style={styles.emotionalSub}>{copy.emotional_sub}</Text>
-            <View style={styles.emotionalVisualWrap}>
-              <CommunityEmotionalVisual width={isWide ? 560 : Math.min(width - 40, 360)} />
+          {/* ── Stats strip ───────────────────────────────────── */}
+          <FadeIn delay={0}>
+            <View style={[ss.statsStrip, isWide && ss.statsStripWide]}>
+              <StatPill value={copy.stats_members}   label={copy.stats_members_label} />
+              <View style={ss.statDivider} />
+              <StatPill value={copy.stats_groups}    label={copy.stats_groups_label} />
+              <View style={ss.statDivider} />
+              <StatPill value={copy.stats_countries} label={copy.stats_countries_label} />
+              <View style={ss.statDivider} />
+              <StatPill value={copy.stats_collected} label={copy.stats_collected_label} />
             </View>
-            <PersonaStrip personas={copy.personas} />
-          </LandingFadeIn>
+          </FadeIn>
 
-          {/* Trust Score timeline */}
-          <LandingFadeIn delay={80} style={styles.section}>
-            <View style={styles.trustPremium}>
-              <View style={isWide ? styles.trustPremiumHeaderWide : undefined}>
-                <View style={styles.trustPremiumCopy}>
-                  <Text style={styles.sectionEyebrow}>Trust Score</Text>
-                  <Text style={styles.trustPremiumTitle}>
-                    {copy.trust_section_title}
-                  </Text>
-                  <Text style={styles.trustPremiumSub}>{copy.trust_section_sub}</Text>
-                  <ScoreEvolutionIllustration width={isWide ? 320 : 280} />
+          {/* ── Personas ──────────────────────────────────────── */}
+          <View style={ss.section}>
+            <FadeIn>
+              <View style={ss.sectionHeader}>
+                <View style={ss.sectionBadge}>
+                  <Text style={ss.sectionBadgeText}>POUR VOUS</Text>
                 </View>
+                <Text style={ss.sectionHeading}>{copy.personas_heading}</Text>
+                <Text style={ss.sectionSub}>{copy.personas_sub}</Text>
               </View>
-              <TrustScoreTimeline steps={copy.trust_steps} />
-            </View>
-          </LandingFadeIn>
-
-          {/* App showcase */}
-          <LandingFadeIn delay={120} style={styles.section}>
-            <View style={styles.appShowcaseSection}>
-              <Text style={styles.sectionEyebrow}>HODIX App</Text>
-              <Text style={styles.sectionHeading}>{copy.app_section_title}</Text>
-              <Text style={styles.sectionLead}>{copy.app_section_sub}</Text>
-              <AppShowcase screens={copy.app_screens} />
-            </View>
-          </LandingFadeIn>
-
-          {/* Features */}
-          <LandingFadeIn delay={160} style={styles.section}>
-            <Text style={styles.sectionHeading}>
-              {lang === "en" ? "Why HODIX" : "Pourquoi HODIX"}
-            </Text>
-            <View style={[styles.featureGrid, isWide && styles.featureGridWide]}>
-              <FeatureCard
-                title={copy.section_community_title}
-                body={copy.section_community_body}
-                accent={EMERALD}
-              />
-              <FeatureCard
-                title={copy.section_wallet_title}
-                body={copy.section_wallet_body}
-                accent={GOLD}
-              />
-              <FeatureCard
-                title={copy.section_trust_title}
-                body={copy.section_trust_body}
-                accent="#3B82F6"
-              />
-            </View>
-          </LandingFadeIn>
-
-          {/* Countries / tontines */}
-          <LandingFadeIn delay={200} style={styles.section}>
-            <Text style={styles.sectionHeading}>{welcome.unity_title}</Text>
-            <Text style={styles.unitySub}>
-              {welcome.unity_sub1} · {welcome.unity_sub2}
-            </Text>
-            <Text style={styles.unityBrand}>{welcome.unity_brand}</Text>
-            <View style={styles.countryRow}>
-              {CAROUSEL_SLIDES.map((slide) => (
-                <View key={slide.id} style={styles.countryChip}>
-                  <Text style={styles.countryFlag}>{slide.flag}</Text>
-                  <Text style={styles.countryName}>
-                    {lang === "en" ? slide.country_en : slide.country_fr}
-                  </Text>
-                  <Text style={styles.tontineName}>{slide.tontine_name}</Text>
-                </View>
+            </FadeIn>
+            <View style={[ss.personaGrid, isWide && ss.personaGridWide]}>
+              {PERSONA_DATA.map((p, i) => (
+                <FadeIn key={i} delay={i * 60}>
+                  <PersonaCard {...p} />
+                </FadeIn>
               ))}
             </View>
-          </LandingFadeIn>
+          </View>
 
-          {/* Final CTA */}
-          <LandingFadeIn delay={240}>
-            <LinearGradient
-              colors={[NAVY, "#134E4A"]}
-              style={styles.finalCta}
-            >
-              <Text style={styles.finalSlogan}>{copy.slogan}</Text>
-              <Text style={styles.finalTitle}>{copy.final_cta_title}</Text>
-              <Text style={styles.finalSub}>{copy.final_cta_sub}</Text>
-              <TouchableOpacity
-                style={styles.ctaPrimary}
-                onPress={() => router.push("/register")}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.ctaPrimaryText}>{copy.hero_cta}</Text>
+          {/* ── App showcase ──────────────────────────────────── */}
+          <LinearGradient colors={[NAVY, "#0D2340"]} style={ss.showcaseSection}>
+            <View style={ss.glowE2} pointerEvents="none" />
+            <FadeIn>
+              <View style={ss.sectionHeader}>
+                <View style={[ss.sectionBadge, { borderColor: "rgba(16,185,129,0.4)", backgroundColor: "rgba(16,185,129,0.1)" }]}>
+                  <Text style={[ss.sectionBadgeText, { color: EMERALD }]}>L'APPLICATION</Text>
+                </View>
+                <Text style={[ss.sectionHeading, { color: LIGHT }]}>{copy.showcase_heading}</Text>
+                <Text style={[ss.sectionSub, { color: "rgba(226,232,240,0.7)" }]}>{copy.showcase_sub}</Text>
+              </View>
+            </FadeIn>
+            <FadeIn delay={100}>
+              <View style={[ss.showcaseRow, isWide && ss.showcaseRowWide]}>
+                <PremiumVisualStack />
+                <View style={ss.showcaseFeatures}>
+                  {[
+                    { icon: "💰", label: "Wallet multi-devises", sub: "XAF · XOF · NGN · GHS · EUR · USD" },
+                    { icon: "📊", label: "Trust Score en temps réel", sub: "Votre réputation financière visible" },
+                    { icon: "👥", label: "Gestion de groupes", sub: "Tontines, associations, coopératives" },
+                    { icon: "📈", label: "Statistiques détaillées", sub: "Historique et évolution de vos cotisations" },
+                    { icon: "🔔", label: "Alertes & notifications", sub: "Rappels de paiement et événements du groupe" },
+                    { icon: "🔒", label: "Sécurité KYC intégrée", sub: "Vérification d'identité et transactions protégées" },
+                  ].map((f, i) => (
+                    <View key={i} style={ss.showcaseFeatureRow}>
+                      <View style={ss.showcaseFeatureIcon}>
+                        <Text style={{ fontSize: 18 }}>{f.icon}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={ss.showcaseFeatureLabel}>{f.label}</Text>
+                        <Text style={ss.showcaseFeatureSub}>{f.sub}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </FadeIn>
+          </LinearGradient>
+
+          {/* ── Trust Score Journey ───────────────────────────── */}
+          <View style={[ss.section, ss.journeySection]}>
+            <FadeIn>
+              <View style={ss.sectionHeader}>
+                <View style={ss.sectionBadge}>
+                  <Text style={ss.sectionBadgeText}>TRUST SCORE</Text>
+                </View>
+                <Text style={ss.sectionHeading}>{copy.journey_heading}</Text>
+                <Text style={ss.sectionSub}>{copy.journey_sub}</Text>
+              </View>
+            </FadeIn>
+            <View style={[ss.journeyInner, isWide && ss.journeyInnerWide]}>
+              <View style={ss.journeySteps}>
+                {JOURNEY_STEPS.map((s, i) => (
+                  <FadeIn key={i} delay={i * 100}>
+                    <JourneyStep
+                      num={i + 1}
+                      icon={s.icon}
+                      title={s.title}
+                      desc={s.desc}
+                      accent={s.accent}
+                      last={i === JOURNEY_STEPS.length - 1}
+                    />
+                  </FadeIn>
+                ))}
+              </View>
+              <FadeIn delay={200}>
+                <View style={ss.journeyVisual}>
+                  <TrustScoreHeroBlock lang={lang} />
+                  <View style={ss.trustDescBox}>
+                    <Text style={ss.trustDescTitle}>{trustCopy.title}</Text>
+                    <Text style={ss.trustDescSub}>{trustCopy.sub}</Text>
+                  </View>
+                </View>
+              </FadeIn>
+            </View>
+          </View>
+
+          {/* ── Features ──────────────────────────────────────── */}
+          <View style={ss.section}>
+            <FadeIn>
+              <View style={ss.sectionHeader}>
+                <View style={ss.sectionBadge}>
+                  <Text style={ss.sectionBadgeText}>POURQUOI HODIX</Text>
+                </View>
+                <Text style={ss.sectionHeading}>Une infrastructure financière complète</Text>
+              </View>
+            </FadeIn>
+            <View style={[ss.featureGrid, isWide && ss.featureGridWide]}>
+              <FadeIn delay={0}>
+                <FeatureCard icon="🌍" title={copy.section_community_title} body={copy.section_community_body} accent={EMERALD} />
+              </FadeIn>
+              <FadeIn delay={80}>
+                <FeatureCard icon="💳" title={copy.section_wallet_title} body={copy.section_wallet_body} accent={GOLD} />
+              </FadeIn>
+              <FadeIn delay={160}>
+                <FeatureCard icon="⭐" title={copy.section_trust_title} body={copy.section_trust_body} accent="#3B82F6" />
+              </FadeIn>
+              <FadeIn delay={240}>
+                <FeatureCard icon="🔒" title={copy.section_security_title} body={copy.section_security_body} accent="#8B5CF6" />
+              </FadeIn>
+            </View>
+          </View>
+
+          {/* ── Countries ─────────────────────────────────────── */}
+          <View style={ss.section}>
+            <FadeIn>
+              <View style={ss.sectionHeader}>
+                <View style={ss.sectionBadge}>
+                  <Text style={ss.sectionBadgeText}>AFRIQUE</Text>
+                </View>
+                <Text style={ss.sectionHeading}>{welcome.unity_title}</Text>
+                <Text style={ss.sectionSub}>{welcome.unity_sub1} · {welcome.unity_sub2}</Text>
+                <Text style={ss.unityBrand}>{welcome.unity_brand}</Text>
+              </View>
+            </FadeIn>
+            <View style={ss.countryRow}>
+              {CAROUSEL_SLIDES.map((slide, i) => (
+                <FadeIn key={slide.id} delay={i * 60}>
+                  <View style={ss.countryChip}>
+                    <Text style={ss.countryFlag}>{slide.flag}</Text>
+                    <Text style={ss.countryName}>{lang === "en" ? slide.country_en : slide.country_fr}</Text>
+                    <Text style={ss.tontineName}>{slide.tontine_name}</Text>
+                  </View>
+                </FadeIn>
+              ))}
+            </View>
+          </View>
+
+          {/* ── Final CTA ─────────────────────────────────────── */}
+          <LinearGradient colors={[NAVY, "#0A2E24", "#0F2847"]} style={ss.finalSection}>
+            <View style={ss.finalGlow} pointerEvents="none" />
+            <FadeIn>
+              <Text style={ss.finalEyebrow}>Cotisez aujourd'hui. Construisez votre avenir demain.</Text>
+              <Text style={ss.finalTitle}>{copy.final_title}</Text>
+              <Text style={ss.finalSub}>{copy.final_sub}</Text>
+              <TouchableOpacity style={ss.finalCta} onPress={() => router.push("/register")}>
+                <Text style={ss.finalCtaText}>{copy.final_cta}</Text>
               </TouchableOpacity>
-            </LinearGradient>
-          </LandingFadeIn>
+              <TouchableOpacity onPress={() => router.push("/login")} style={{ marginTop: 14 }}>
+                <Text style={ss.finalLogin}>J'ai déjà un compte → Connexion</Text>
+              </TouchableOpacity>
+            </FadeIn>
+          </LinearGradient>
 
-          <Text style={styles.footer}>{copy.footer}</Text>
+          <Text style={ss.footer}>{copy.footer}</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function FeatureCard({
-  title,
-  body,
-  accent,
-}: {
-  title: string;
-  body: string;
-  accent: string;
-}) {
-  return (
-    <View style={[styles.featureCard, { borderTopColor: accent }]}>
-      <Text style={styles.featureTitle}>{title}</Text>
-      <Text style={styles.featureBody}>{body}</Text>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#F1F5F9" },
-  scroll: { alignItems: "center", paddingBottom: 56 },
+// ── Styles ──────────────────────────────────────────────────────────
+const ss = StyleSheet.create({
+  safe:   { flex: 1, backgroundColor: LIGHT },
+  scroll: { alignItems: "center", paddingBottom: 48 },
   container: { width: "100%", paddingHorizontal: 20 },
-  nav: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 18,
-  },
-  logo: {
-    fontSize: 24,
-    fontWeight: "900",
-    color: NAVY,
-    letterSpacing: 2.5,
-  },
-  navActions: { flexDirection: "row", alignItems: "center", gap: 18 },
+
+  // Nav
+  nav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 18 },
+  navBrand: { flexDirection: "row", alignItems: "center", gap: 8 },
+  logo: { fontSize: 22, fontWeight: "900", color: NAVY, letterSpacing: 2 },
+  navDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: EMERALD },
+  navActions: { flexDirection: "row", alignItems: "center", gap: 16 },
   navLink: { color: NAVY, fontWeight: "600", fontSize: 14 },
-  navCta: {
-    backgroundColor: EMERALD,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 10,
-    shadowColor: EMERALD,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  navCtaText: { color: NAVY, fontWeight: "800", fontSize: 13 },
-  hero: {
-    borderRadius: 28,
-    padding: 28,
-    overflow: "hidden",
-    marginBottom: 40,
-    shadowColor: NAVY,
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.2,
-    shadowRadius: 40,
-    elevation: 12,
-  },
-  heroGlowE: {
-    position: "absolute",
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    backgroundColor: EMERALD,
-    opacity: 0.12,
-    top: -100,
-    right: -80,
-  },
-  heroGlowG: {
-    position: "absolute",
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: GOLD,
-    opacity: 0.1,
-    bottom: -60,
-    left: -40,
-  },
-  heroInner: { gap: 32 },
-  heroInnerWide: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
+  navCta: { backgroundColor: EMERALD, paddingHorizontal: 18, paddingVertical: 9, borderRadius: 10 },
+  navCtaText: { color: "#fff", fontWeight: "800", fontSize: 13 },
+
+  // Hero
+  hero: { borderRadius: 28, padding: 28, overflow: "hidden", marginBottom: 0 },
+  glowE: { position: "absolute", width: 320, height: 320, borderRadius: 160, backgroundColor: EMERALD, opacity: 0.09, top: -100, right: -80 },
+  glowG: { position: "absolute", width: 200, height: 200, borderRadius: 100, backgroundColor: GOLD, opacity: 0.07, bottom: -60, left: -40 },
+  glowB: { position: "absolute", width: 180, height: 180, borderRadius: 90, backgroundColor: "#3B82F6", opacity: 0.06, top: 40, left: -60 },
+  heroInner: { gap: 28 },
+  heroInnerWide: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   heroCopy: { flex: 1 },
-  heroVisual: { alignItems: "center", minWidth: 280 },
-  chip: {
-    alignSelf: "flex-start",
-    backgroundColor: "rgba(16,185,129,0.15)",
-    borderWidth: 1,
-    borderColor: "rgba(16,185,129,0.35)",
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    marginBottom: 18,
-  },
-  chipText: { color: EMERALD, fontSize: 11, fontWeight: "700", letterSpacing: 0.3 },
-  heroTitle: {
-    fontSize: 30,
-    fontWeight: "800",
-    color: "#F8FAFC",
-    lineHeight: 38,
-    letterSpacing: -0.6,
-    marginBottom: 14,
-  },
-  heroTitleWide: {
-    fontSize: 36,
-    lineHeight: 44,
-  },
-  heroSub: {
-    fontSize: 16,
-    color: "rgba(226,232,240,0.92)",
-    lineHeight: 24,
-    marginBottom: 12,
-  },
-  slogan: {
-    fontSize: 14,
-    color: GOLD,
-    fontWeight: "700",
-    lineHeight: 20,
-    marginBottom: 24,
-  },
-  heroCtas: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 24 },
-  ctaPrimary: {
-    backgroundColor: EMERALD,
-    paddingHorizontal: 22,
-    paddingVertical: 15,
-    borderRadius: 12,
-    shadowColor: EMERALD,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  ctaPrimaryText: { color: NAVY, fontWeight: "800", fontSize: 15 },
-  ctaGhost: {
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.35)",
-    paddingHorizontal: 22,
-    paddingVertical: 15,
-    borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.04)",
-  },
+  heroVisual: { alignItems: "center", minWidth: 300 },
+  chip: { alignSelf: "flex-start", backgroundColor: "rgba(16,185,129,0.14)", borderWidth: 1, borderColor: "rgba(16,185,129,0.3)", paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, marginBottom: 18 },
+  chipText: { color: EMERALD, fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
+  heroTitle: { fontSize: 30, fontWeight: "900", color: "#F8FAFC", lineHeight: 38, letterSpacing: -0.8, marginBottom: 14 },
+  heroTitleWide: { fontSize: 38, lineHeight: 46 },
+  heroSub: { fontSize: 15, color: "rgba(226,232,240,0.88)", lineHeight: 24, marginBottom: 10 },
+  heroTagline: { fontSize: 13, color: GOLD, fontWeight: "700", fontStyle: "italic", marginBottom: 22, letterSpacing: 0.3 },
+  heroCtas: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 22 },
+  ctaPrimary: { backgroundColor: EMERALD, paddingHorizontal: 22, paddingVertical: 14, borderRadius: 12 },
+  ctaPrimaryText: { color: "#fff", fontWeight: "800", fontSize: 15 },
+  ctaGhost: { borderWidth: 1.5, borderColor: "rgba(255,255,255,0.28)", paddingHorizontal: 22, paddingVertical: 14, borderRadius: 12 },
   ctaGhostText: { color: "#E2E8F0", fontWeight: "600", fontSize: 15 },
-  emotionalSection: {
-    marginBottom: 44,
-    gap: 12,
-  },
-  emotionalSub: {
-    fontSize: 15,
-    color: "#64748B",
-    lineHeight: 22,
-    marginBottom: 8,
-  },
-  emotionalVisualWrap: {
-    alignItems: "center",
-    marginVertical: 16,
-  },
-  section: { marginBottom: 44 },
-  sectionEyebrow: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: EMERALD,
-    textTransform: "uppercase",
-    letterSpacing: 1.5,
-    marginBottom: 8,
-  },
-  sectionHeading: {
-    fontSize: 26,
-    fontWeight: "800",
-    color: NAVY,
-    marginBottom: 12,
-    letterSpacing: -0.4,
-  },
-  sectionLead: {
-    fontSize: 15,
-    color: "#64748B",
-    lineHeight: 22,
-    marginBottom: 8,
-    maxWidth: 560,
-  },
-  trustPremium: {
-    backgroundColor: "#FFF",
-    borderRadius: 24,
-    padding: 28,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    gap: 28,
-    shadowColor: NAVY,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 24,
-    elevation: 4,
-  },
-  trustPremiumHeaderWide: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-  trustPremiumCopy: { marginBottom: 8 },
-  trustPremiumTitle: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: NAVY,
-    lineHeight: 30,
-    marginBottom: 10,
-    letterSpacing: -0.3,
-  },
-  trustPremiumSub: {
-    fontSize: 15,
-    color: "#64748B",
-    lineHeight: 22,
-    marginBottom: 16,
-    maxWidth: 520,
-  },
-  appShowcaseSection: {
-    backgroundColor: "#FFF",
-    borderRadius: 24,
-    padding: 28,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    shadowColor: NAVY,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 24,
-    elevation: 4,
-  },
-  featureGrid: { gap: 16 },
-  featureGridWide: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-  },
-  featureCard: {
-    flex: 1,
-    minWidth: 240,
-    backgroundColor: "#FFF",
-    borderRadius: 18,
-    padding: 22,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderTopWidth: 4,
-    shadowColor: NAVY,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  featureTitle: { fontSize: 17, fontWeight: "800", color: NAVY, marginBottom: 8 },
-  featureBody: { fontSize: 14, color: "#475569", lineHeight: 21 },
-  unitySub: { fontSize: 15, color: "#475569", marginBottom: 4 },
-  unityBrand: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: EMERALD,
-    marginBottom: 18,
-  },
-  countryRow: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
-  countryChip: {
-    backgroundColor: "#FFF",
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    minWidth: 124,
-    shadowColor: NAVY,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 1,
-  },
+  socialProofRow: { gap: 10 },
+  socialProofText: { color: "rgba(226,232,240,0.6)", fontSize: 12, fontWeight: "500", marginTop: 4 },
+
+  // Stats
+  statsStrip: { flexDirection: "row", flexWrap: "wrap", backgroundColor: "#fff", borderRadius: 18, padding: 20, marginTop: -1, marginBottom: 32, borderWidth: 1, borderColor: "#E2E8F0", shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 4, justifyContent: "space-around" },
+  statsStripWide: { flexWrap: "nowrap" },
+  statPill: { alignItems: "center", flex: 1, minWidth: 80, paddingVertical: 4 },
+  statValue: { fontSize: 20, fontWeight: "900", color: NAVY, marginBottom: 2 },
+  statLabel: { fontSize: 11, color: SLATE, fontWeight: "500", textAlign: "center" },
+  statDivider: { width: 1, backgroundColor: "#E2E8F0", marginHorizontal: 4 },
+
+  // Sections
+  section: { marginBottom: 40 },
+  sectionHeader: { marginBottom: 24, alignItems: "center" },
+  sectionBadge: { alignSelf: "center", borderWidth: 1, borderColor: "rgba(11,31,58,0.18)", backgroundColor: "rgba(11,31,58,0.05)", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, marginBottom: 12 },
+  sectionBadgeText: { fontSize: 10, fontWeight: "800", color: NAVY, letterSpacing: 1.5 },
+  sectionHeading: { fontSize: 24, fontWeight: "900", color: NAVY, textAlign: "center", marginBottom: 10, lineHeight: 32 },
+  sectionSub: { fontSize: 15, color: SLATE, textAlign: "center", lineHeight: 22, maxWidth: 520 },
+  unityBrand: { fontSize: 16, fontWeight: "700", color: EMERALD, textAlign: "center", marginTop: 6, marginBottom: 16 },
+
+  // Personas
+  personaGrid: { gap: 14 },
+  personaGridWide: { flexDirection: "row", flexWrap: "wrap" },
+  personaCard: { flex: 1, minWidth: 150, backgroundColor: "#fff", borderRadius: 18, padding: 20, borderWidth: 1, borderColor: "#E8EEF4", borderTopWidth: 4, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 },
+  personaIcon: { fontSize: 28, marginBottom: 10 },
+  personaTitle: { fontSize: 15, fontWeight: "800", color: NAVY, marginBottom: 6 },
+  personaDesc: { fontSize: 13, color: SLATE, lineHeight: 19 },
+
+  // App showcase
+  showcaseSection: { borderRadius: 28, padding: 28, marginBottom: 40, overflow: "hidden" },
+  glowE2: { position: "absolute", width: 200, height: 200, borderRadius: 100, backgroundColor: EMERALD, opacity: 0.07, bottom: -60, right: -40 },
+  showcaseRow: { gap: 24, alignItems: "center" },
+  showcaseRowWide: { flexDirection: "row", justifyContent: "space-between" },
+  showcaseFeatures: { flex: 1, gap: 16 },
+  showcaseFeatureRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  showcaseFeatureIcon: { width: 42, height: 42, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" },
+  showcaseFeatureLabel: { color: "#F8FAFC", fontSize: 14, fontWeight: "700", marginBottom: 2 },
+  showcaseFeatureSub: { color: "rgba(226,232,240,0.6)", fontSize: 12 },
+
+  // Trust Journey
+  journeySection: { backgroundColor: "#fff", borderRadius: 24, padding: 28, borderWidth: 1, borderColor: "#E2E8F0" },
+  journeyInner: { gap: 24 },
+  journeyInnerWide: { flexDirection: "row", alignItems: "flex-start" },
+  journeySteps: { flex: 1, gap: 0 },
+  journeyVisual: { alignItems: "center", gap: 20, paddingTop: 8 },
+  trustDescBox: { maxWidth: 260, alignItems: "center" },
+  trustDescTitle: { fontSize: 15, fontWeight: "700", color: NAVY, textAlign: "center", marginBottom: 6 },
+  trustDescSub: { fontSize: 13, color: SLATE, textAlign: "center", lineHeight: 19 },
+  stepRow: { flexDirection: "row", gap: 16, marginBottom: 0 },
+  stepLeft: { alignItems: "center", width: 48 },
+  stepCircle: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  stepIcon: { fontSize: 20 },
+  stepLine: { width: 2, flex: 1, minHeight: 24, marginBottom: 4 },
+  stepContent: { flex: 1, paddingTop: 4, paddingBottom: 20 },
+  stepNum: { fontSize: 10, fontWeight: "700", color: SLATE, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 },
+  stepTitle: { fontSize: 15, fontWeight: "800", color: NAVY, marginBottom: 4 },
+  stepDesc: { fontSize: 13, color: SLATE, lineHeight: 19 },
+
+  // Features
+  featureGrid: { gap: 14 },
+  featureGridWide: { flexDirection: "row", flexWrap: "wrap" },
+  featureCard: { flex: 1, minWidth: 220, backgroundColor: "#fff", borderRadius: 18, padding: 22, borderWidth: 1, borderColor: "#E8EEF4", borderTopWidth: 4 },
+  featureIconBox: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", marginBottom: 12 },
+  featureIcon: { fontSize: 22 },
+  featureTitle: { fontSize: 15, fontWeight: "800", color: NAVY, marginBottom: 8 },
+  featureBody: { fontSize: 13, color: SLATE, lineHeight: 20 },
+
+  // Countries
+  countryRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  countryChip: { backgroundColor: "#fff", borderRadius: 14, padding: 14, borderWidth: 1, borderColor: "#E2E8F0", minWidth: 110 },
   countryFlag: { fontSize: 22, marginBottom: 6 },
   countryName: { fontSize: 12, fontWeight: "700", color: NAVY },
   tontineName: { fontSize: 11, color: EMERALD, fontWeight: "600", marginTop: 2 },
-  finalCta: {
-    borderRadius: 24,
-    padding: 36,
-    alignItems: "center",
-    marginBottom: 28,
-    shadowColor: NAVY,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.15,
-    shadowRadius: 32,
-    elevation: 8,
-  },
-  finalSlogan: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: GOLD,
-    textAlign: "center",
-    marginBottom: 12,
-    letterSpacing: 0.2,
-  },
-  finalTitle: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#F8FAFC",
-    textAlign: "center",
-    marginBottom: 10,
-    lineHeight: 32,
-    maxWidth: 560,
-  },
-  finalSub: {
-    fontSize: 15,
-    color: "rgba(226,232,240,0.9)",
-    textAlign: "center",
-    marginBottom: 24,
-    maxWidth: 480,
-    lineHeight: 22,
-  },
-  footer: {
-    textAlign: "center",
-    color: "#94A3B8",
-    fontSize: 13,
-    paddingBottom: 20,
-    lineHeight: 20,
-  },
+
+  // Final CTA
+  finalSection: { borderRadius: 28, padding: 36, alignItems: "center", marginBottom: 28, overflow: "hidden" },
+  finalGlow: { position: "absolute", width: 300, height: 300, borderRadius: 150, backgroundColor: EMERALD, opacity: 0.06, top: -80 },
+  finalEyebrow: { color: GOLD, fontSize: 13, fontWeight: "700", fontStyle: "italic", textAlign: "center", marginBottom: 16, letterSpacing: 0.3 },
+  finalTitle: { fontSize: 30, fontWeight: "900", color: "#F8FAFC", textAlign: "center", lineHeight: 40, marginBottom: 14 },
+  finalSub: { fontSize: 15, color: "rgba(226,232,240,0.8)", textAlign: "center", marginBottom: 28, maxWidth: 420, lineHeight: 22 },
+  finalCta: { backgroundColor: EMERALD, paddingHorizontal: 32, paddingVertical: 16, borderRadius: 14 },
+  finalCtaText: { color: "#fff", fontWeight: "900", fontSize: 16 },
+  finalLogin: { color: "rgba(226,232,240,0.55)", fontSize: 13, textDecorationLine: "underline" },
+
+  footer: { textAlign: "center", color: "#94A3B8", fontSize: 12, paddingBottom: 16, lineHeight: 18 },
 });

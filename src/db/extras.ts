@@ -43,6 +43,7 @@ export async function getManagerOverview() {
     const me = await uid();
     const sb = getSupabase();
 
+
     const { data: profile } = await sb.from("profiles").select("role").eq("id", me).single();
     const role = profile?.role ?? "member";
     if (role !== "tontine_manager" && role !== "super_admin" && role !== "admin") {
@@ -67,21 +68,11 @@ export async function getManagerOverview() {
     const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString();
 
     const [tMembers, aMembers, cMembers, contribs, recentMembers] = await Promise.all([
-      tIds.length
-        ? safeSelect(sb.from("tontine_members").select("tontine_id").in("tontine_id", tIds))
-        : Promise.resolve([] as { tontine_id: string }[]),
-      aIds.length
-        ? safeSelect(sb.from("association_members").select("association_id").in("association_id", aIds))
-        : Promise.resolve([] as { association_id: string }[]),
-      cIds.length
-        ? safeSelect(sb.from("cooperative_members").select("cooperative_id").in("cooperative_id", cIds))
-        : Promise.resolve([] as { cooperative_id: string }[]),
-      tIds.length
-        ? safeSelect(sb.from("tontine_contributions").select("tontine_id, amount").in("tontine_id", tIds))
-        : Promise.resolve([] as { tontine_id: string; amount: number }[]),
-      tIds.length
-        ? safeSelect(sb.from("tontine_members").select("tontine_id").in("tontine_id", tIds).gte("joined_at", thirtyAgo))
-        : Promise.resolve([] as { tontine_id: string }[]),
+      tIds.length ? safeSelect(sb.from("tontine_members").select("tontine_id").in("tontine_id", tIds)) : Promise.resolve([] as { tontine_id: string }[]),
+      aIds.length ? safeSelect(sb.from("association_members").select("association_id").in("association_id", aIds)) : Promise.resolve([] as { association_id: string }[]),
+      cIds.length ? safeSelect(sb.from("cooperative_members").select("cooperative_id").in("cooperative_id", cIds)) : Promise.resolve([] as { cooperative_id: string }[]),
+      tIds.length ? safeSelect(sb.from("tontine_contributions").select("tontine_id, amount").in("tontine_id", tIds)) : Promise.resolve([] as { tontine_id: string; amount: number }[]),
+      tIds.length ? safeSelect(sb.from("tontine_members").select("tontine_id").in("tontine_id", tIds).gte("joined_at", thirtyAgo)) : Promise.resolve([] as { tontine_id: string }[]),
     ]);
 
     const tMemberCounts = new Map<string, number>();
@@ -96,7 +87,6 @@ export async function getManagerOverview() {
       contribByTontine.set(row.tontine_id, (contribByTontine.get(row.tontine_id) ?? 0) + Number(row.amount ?? 0));
     }
     const totalCollected = [...contribByTontine.values()].reduce((s, v) => s + v, 0);
-
     const complianceValues: number[] = [];
     for (const t of tList) {
       const members = tMemberCounts.get(t.id) ?? 0;
@@ -107,6 +97,7 @@ export async function getManagerOverview() {
     }
 
     const newMembers30d = recentMembers.length;
+
     const avgCompliance = complianceValues.length
       ? Math.round((complianceValues.reduce((a, b) => a + b, 0) / complianceValues.length) * 10) / 10
       : 0;
