@@ -260,6 +260,11 @@ function RotationSection({ members, isAdmin, tontineId, onReload, rotationMode }
       )}
       {error && <Text style={styles.errorText}>{error}</Text>}
 
+      {members.length === 0 ? (
+        <Card style={{ padding: 20 }}>
+          <Text style={styles.emptyText}>Aucun membre visible. Invitez des membres avec le code d'invitation.</Text>
+        </Card>
+      ) : (
       <View style={{ gap: 8 }}>
         {(editing ? order : [...members].sort((a, b) => a.rotation_position - b.rotation_position)).map((m, i) => {
           const received = m.has_received;
@@ -274,7 +279,7 @@ function RotationSection({ members, isAdmin, tontineId, onReload, rotationMode }
               <View style={{ flex: 1 }}>
                 <Text style={styles.rotName}>{m.full_name}</Text>
                 <Text style={styles.rotStatus}>
-                  {received ? "✓ A déjà reçu" : `Cycle ${m.rotation_position}`}
+                  {received ? "✓ A déjà reçu" : `Position ${i + 1}`}
                   {m.role === "admin" ? " · Admin" : ""}
                 </Text>
               </View>
@@ -293,6 +298,7 @@ function RotationSection({ members, isAdmin, tontineId, onReload, rotationMode }
           );
         })}
       </View>
+      )}
     </View>
   );
 }
@@ -690,6 +696,11 @@ export function TontineDetailView({ id }: { id: string }) {
         {/* ── TAB: MEMBERS ── */}
         {activeTab === "members" && (
           <View style={{ gap: 8 }}>
+            {members.length === 0 ? (
+              <Card style={{ padding: 20 }}>
+                <Text style={styles.emptyText}>Aucun membre affiché. Les co-membres apparaissent ici une fois la tontine rejointe.</Text>
+              </Card>
+            ) : null}
             {members.map((m) => (
               <Card key={m.id} style={styles.memberRow}>
                 <View style={styles.rotAvatar}>
@@ -776,8 +787,17 @@ const styles = StyleSheet.create({
   waBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#25D366", alignItems: "center", justifyContent: "center" },
 
   // Tabs
-  tabsRow: { paddingHorizontal: Spacing.xl, paddingVertical: 10, gap: 8, backgroundColor: Colors.surface, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  tabBtn: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surfaceAlt },
+  tabsRow: {
+    flexDirection: "row",
+    flexGrow: 0,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: 10,
+    gap: 8,
+    backgroundColor: Colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  tabBtn: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surfaceAlt, flexShrink: 0 },
   tabBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   tabLabel: { fontSize: 13, fontWeight: "700", color: Colors.textMuted },
   tabLabelActive: { color: "#fff" },

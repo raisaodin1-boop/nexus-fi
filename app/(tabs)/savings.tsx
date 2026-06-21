@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Plus, Target, Lock, Repeat, TrendingUp } from "lucide-react-native";
+import { Plus, Target, Lock, Repeat, TrendingUp, Coins } from "lucide-react-native";
 
 import { api, formatXAF } from "@/src/api";
 import { Card, EmptyState, Button } from "@/src/ui";
@@ -97,6 +97,23 @@ export default function SavingsList() {
               </View>
             ) : null}
           </Card>
+        </View>
+
+        <View style={{ paddingHorizontal: Spacing.xl, marginTop: 4 }}>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => router.push("/savings/roundup")}
+            style={styles.roundupBanner}
+          >
+            <View style={styles.roundupIcon}>
+              <Coins size={18} color={Colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.roundupTitle}>Arrondi MoMo</Text>
+              <Text style={styles.roundupSub}>Épargnez automatiquement après chaque recharge</Text>
+            </View>
+            <Text style={styles.roundupCta}>Configurer →</Text>
+          </TouchableOpacity>
         </View>
 
         {loading ? (
@@ -221,4 +238,26 @@ const styles = StyleSheet.create({
   goalProgressText: { color: Colors.textMuted, fontSize: 11, fontWeight: "600", marginTop: 4 },
   predChip: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", marginTop: 8, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, borderWidth: 1 },
   predChipText: { fontSize: 11, fontWeight: "700" },
+  roundupBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    borderRadius: Radius.xl,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.primary + "33",
+    marginBottom: 8,
+  },
+  roundupIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Colors.primaryLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  roundupTitle: { fontSize: 14, fontWeight: "800", color: Colors.text },
+  roundupSub: { fontSize: 11, color: Colors.textMuted, marginTop: 2 },
+  roundupCta: { fontSize: 11, fontWeight: "700", color: Colors.primary },
 });

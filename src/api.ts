@@ -133,6 +133,9 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     // ── Savings
     if (method === "GET"  && s[0] === "savings" && (!s[1] || s[1] === "goals"))          return (await db.listSavings()) as T;
     if (method === "GET"  && s[0] === "savings" && s[1] === "summary")                 return (await db.getSavingsSummary()) as T;
+    if (method === "GET"  && s[0] === "savings" && s[1] === "roundup" && s[2] === "events") return (await db.listMomoRoundUpEvents()) as T;
+    if (method === "GET"  && s[0] === "savings" && s[1] === "roundup")                   return (await db.getMomoRoundUpSettings()) as T;
+    if (method === "PATCH" && s[0] === "savings" && s[1] === "roundup")                  return (await db.updateMomoRoundUpSettings(body ?? {})) as T;
     if (method === "POST" && s[0] === "savings" && (!s[1] || s[1] === "goals"))         return (await db.createSaving(body)) as T;
     if (method === "GET"  && s[0] === "savings" && s[1] && !s[2])                      return (await db.getSaving(s[1])) as T;
     if (method === "POST" && s[0] === "savings" && s[1] && s[2] === "deposit")         return db.rejectDirectPayment() as T;
@@ -322,6 +325,13 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
       return (await db.sendCertificateEmail(body?.kind, body?.email, body?.payment_id)) as T;
     if (method === "POST" && s[0] === "loans" && s[1] === "apply")                       return (await db.submitLoanApplication(body)) as T;
     if (method === "GET"  && s[0] === "loans" && s[1] === "applications")                  return (await db.getLoanApplications()) as T;
+
+    // ── P3: Instant credit
+    if (method === "GET"  && s[0] === "instant-credit" && s[1] === "eligibility")         return (await db.getInstantCreditEligibility()) as T;
+    if (method === "GET"  && s[0] === "instant-credit" && s[1] === "loans")              return (await db.listInstantLoans()) as T;
+    if (method === "GET"  && s[0] === "instant-credit" && s[1] === "active")              return (await db.getActiveInstantLoan()) as T;
+    if (method === "POST" && s[0] === "instant-credit" && s[1] === "disburse")             return (await db.disburseInstantLoan(Number(body?.amount_xaf))) as T;
+    if (method === "POST" && s[0] === "instant-credit" && s[1] === "repay")                return (await db.repayInstantLoan(String(body?.loan_id))) as T;
 
     throw { status: 404, detail: `Route introuvable: ${method} /${s.join("/")}` };
 

@@ -9,6 +9,9 @@ import { openPaymentScreen } from "@/src/payment-nav";
 import { useDisplayCurrency } from "@/src/hooks/use-display-currency";
 import { Button, Field } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
+import { computeRoundUpSpare } from "@/src/momo-roundup";
+import type { MomoRoundUpSettings } from "@/src/db/momo-roundup";
+import { api, formatXAF } from "@/src/api";
 import type { MobileMoneyProvider } from "@/src/wallet-db";
 import { getRates, convert, formatAmount, type Currency, type Rates } from "@/src/exchange-rates";
 
@@ -23,8 +26,12 @@ export default function TopupScreen() {
   const [phone, setPhone]         = useState("");
   const [error, setError]         = useState<string | null>(null);
   const [rates, setRates]         = useState<Rates | null>(null);
+  const [roundup, setRoundup]     = useState<MomoRoundUpSettings | null>(null);
 
-  useEffect(() => { getRates().then(setRates).catch(() => {}); }, []);
+  useEffect(() => {
+    getRates().then(setRates).catch(() => {});
+    api.get<MomoRoundUpSettings>("/savings/roundup").then(setRoundup).catch(() => {});
+  }, []);
 
   const parsedAmt = parseFloat(amount.replace(/\s/g, "").replace(",", "."));
   const amountXAF = rates && currency !== "XAF" && parsedAmt > 0
@@ -74,6 +81,16 @@ export default function TopupScreen() {
             ≈ {new Intl.NumberFormat("fr-FR").format(amountXAF)} FCFA débités via CinetPay
           </Text>
         )}
+        {roundup?.enabled && parsedAmt > 0 && (() => {
+          const base = amountXAF ?? parsedAmt;
+          const spare = computeRoundUpSpare(base, roundup.increment);
+          if (spare <= 0) return null;
+          return (
+            <Text style={styles.roundupHint}>
+              Arrondi MoMo actif : +{formatXAF(spare)} épargnés sur « {roundup.goal_name ?? "votre objectif"} » après confirmation.
+            </Text>
+          );
+        })()}
 
         {/* Provider */}
         <Text style={styles.label}>Opérateur Mobile Money</Text>
@@ -126,6 +143,16 @@ const styles = StyleSheet.create({
   error: { fontSize: 13, color: Colors.danger, marginTop: 4 },
   note: { fontSize: 12, color: Colors.textMuted, textAlign: "center", lineHeight: 18, marginTop: 12 },
   conversion: { fontSize: 12, color: Colors.secondary, fontWeight: "600", marginTop: -8, marginBottom: 8 },
+  roundupHint: {
+    fontSize: 12,
+    color: Colors.primary,
+    fontWeight: "600",
+    backgroundColor: Colors.primaryLight,
+    padding: 10,
+    borderRadius: Radius.lg,
+    marginBottom: 8,
+    lineHeight: 18,
+  },
   successBox: { flex: 1, alignItems: "center", justifyContent: "center", padding: Spacing.xxxl, gap: 16 },
   successTitle: { fontSize: 24, fontWeight: "800", color: Colors.text },
   successSub: { fontSize: 14, color: Colors.textMuted, textAlign: "center" },

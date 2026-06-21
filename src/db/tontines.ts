@@ -29,10 +29,12 @@ export async function getTontine(id: string) {
   const { data: tontine, error } = await sb.from("tontines").select("*").eq("id", id).single();
   throwSb(error);
 
-  const { data: members } = await sb
+  const { data: members, error: membersErr } = await sb
     .from("tontine_members")
     .select("*, profiles(full_name)")
-    .eq("tontine_id", id);
+    .eq("tontine_id", id)
+    .order("rotation_position", { ascending: true });
+  throwSb(membersErr);
 
   const { data: contributions } = await sb
     .from("tontine_contributions")
@@ -290,9 +292,14 @@ export async function createTontineSecure(body: Record<string, any>) {
   }
 
   const maxMembers = Number(body.max_members ?? 12);
-  const memberRow: Record<string, any> = { tontine_id: data.id, user_id: me, role: "admin", rotation_position: maxMembers };
+  const memberRow: Record<string, any> = {
+    tontine_id: data.id,
+    user_id: me,
+    role: "admin",
+    rotation_position: 1,
+  };
   const { error: memErr } = await sb.from("tontine_members").insert(memberRow);
-  if (memErr) console.warn("tontine_members insert:", memErr.message);
+  if (memErr) throwSb(memErr);
 
   invalidateCache("tontines");
   invalidateCache(`identity-${me}`);

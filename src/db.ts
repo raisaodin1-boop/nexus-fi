@@ -22,6 +22,8 @@ export * from "./db/wallet-security";
 export * from "./db/compliance";
 export * from "./db/collective-goal";
 export * from "./db/tontine-guarantor";
+export * from "./db/momo-roundup";
+export * from "./db/instant-loan";
 export * from "./db/emoney-license";
 export { invalidateCache } from "./db/helpers";
 

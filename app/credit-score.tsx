@@ -1,23 +1,36 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator, Alert, Animated, Platform,
-  ScrollView, Share, StyleSheet, Text, TouchableOpacity, View,
+  ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   Award, CheckCircle2, ChevronLeft, Download, Share2,
-  TrendingUp, Users, Clock, Wallet, ShieldCheck,
+  TrendingUp, Users, Clock, Wallet, ShieldCheck, Zap,
 } from "lucide-react-native";
 import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop, Polyline, Line, Text as SvgText } from "react-native-svg";
 
-import { api } from "@/src/api";
+import { api, formatXAF } from "@/src/api";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { SkeletonBox } from "@/src/ui";
 import { getTier, getTierGradient, TIERS, type CreditScoreResult, type MonthlySnapshot, type ScoreTier } from "@/src/credit-score";
 import { generateCreditReportHtml } from "@/src/credit-report-html";
 import { Tooltip } from "@/src/tooltip";
+import type { InstantLoanRow } from "@/src/db/instant-loan";
+
+interface InstantEligibility {
+  score: number;
+  max_amount_xaf: number;
+  min_amount_xaf: number;
+  fee_pct: number;
+  duration_days: number;
+  kyc_approved: boolean;
+  is_eligible: boolean;
+  has_active_loan: boolean;
+  min_score: number;
+}
 
 // ─── Mini sparkline chart ──────────────────────────────────────────────────────
 
@@ -189,6 +202,24 @@ export default function CreditScoreScreen() {
   const [history, setHistory] = useState<MonthlySnapshot[]>([]);
   const [loading, setLoading] = useState(true);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [instantElig, setInstantElig] = useState<InstantEligibility | null>(null);
+  const [activeLoan, setActiveLoan] = useState<InstantLoanRow | null>(null);
+  const [loanAmount, setLoanAmount] = useState("25000");
+  const [loanBusy, setLoanBusy] = useState(false);
+
+  const loadInstantCredit = useCallback(async () => {
+    try {
+      const [elig, active] = await Promise.all([
+        api.get<InstantEligibility>("/instant-credit/eligibility"),
+        api.get<InstantLoanRow | null>("/instant-credit/active"),
+      ]);
+      setInstantElig(elig);
+      setActiveLoan(active);
+    } catch {
+      setInstantElig(null);
+      setActiveLoan(null);
+    }
+  }, []);
 
   useEffect(() => {
     Promise.all([
@@ -198,7 +229,8 @@ export default function CreditScoreScreen() {
       setData(score);
       setHistory(Array.isArray(hist) ? hist : []);
     }).finally(() => setLoading(false));
-  }, []);
+    loadInstantCredit();
+  }, [loadInstantCredit]);
 
   const handleExportPdf = useCallback(async () => {
     if (!data) return;
@@ -372,6 +404,126 @@ export default function CreditScoreScreen() {
           </View>
         )}
 
+        {/* ── Crédit instantané (P3) ── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Crédit instantané</Text>
+          <View style={[styles.card, Shadow.card]}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <Zap size={18} color="#F59E0B" />
+              <Text style={styles.instantBadge}>Trust Score → wallet en 30 s</Text>
+            </View>
+            <Text style={styles.partnerDesc}>
+              Basé sur votre réputation HODIX (score ≥ {instantElig?.min_score ?? 750}, KYC validé).
+              Frais {instantElig?.fee_pct ?? 2.5} % · échéance {instantElig?.duration_days ?? 30} jours.
+            </Text>
+
+            {activeLoan ? (
+              <View style={styles.activeLoanBox}>
+                <Text style={styles.activeLoanTitle}>Crédit actif</Text>
+                <Text style={styles.activeLoanLine}>
+                  Emprunté : {formatXAF(activeLoan.amount_xaf)} · Dû : {formatXAF(activeLoan.total_due_xaf - activeLoan.amount_repaid_xaf)}
+                </Text>
+                <Text style={styles.activeLoanDue}>
+                  Échéance : {new Date(activeLoan.due_at).toLocaleDateString("fr-FR")}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.partnerBtn, { marginTop: 12 }]}
+                  disabled={loanBusy}
+                  onPress={async () => {
+                    Alert.alert(
+                      "Rembourser",
+                      `Débiter ${formatXAF(activeLoan.total_due_xaf - activeLoan.amount_repaid_xaf)} de votre wallet ?`,
+                      [
+                        { text: "Annuler", style: "cancel" },
+                        {
+                          text: "Rembourser",
+                          onPress: async () => {
+                            setLoanBusy(true);
+                            try {
+                              await api.post("/instant-credit/repay", { loan_id: activeLoan.id });
+                              Alert.alert("Merci", "Crédit remboursé.");
+                              loadInstantCredit();
+                            } catch (e: any) {
+                              Alert.alert("Erreur", e?.detail ?? e?.message ?? "Remboursement impossible.");
+                            } finally {
+                              setLoanBusy(false);
+                            }
+                          },
+                        },
+                      ],
+                    );
+                  }}
+                >
+                  <LinearGradient colors={["#0B1F3A", "#1D4ED8"]} style={styles.partnerBtnGrad}>
+                    {loanBusy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.partnerBtnText}>Rembourser maintenant</Text>}
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            ) : instantElig?.is_eligible ? (
+              <>
+                <Text style={styles.instantLimit}>
+                  Plafond : {formatXAF(instantElig.max_amount_xaf)}
+                </Text>
+                <TextInput
+                  style={styles.loanInput}
+                  value={loanAmount}
+                  onChangeText={setLoanAmount}
+                  keyboardType="number-pad"
+                  placeholder="Montant en XAF"
+                  placeholderTextColor={Colors.textSubtle}
+                />
+                <TouchableOpacity
+                  style={styles.partnerBtn}
+                  disabled={loanBusy}
+                  onPress={async () => {
+                    const amt = parseInt(loanAmount.replace(/\s/g, ""), 10);
+                    if (!amt || amt < instantElig.min_amount_xaf) {
+                      Alert.alert("Montant invalide", `Minimum ${formatXAF(instantElig.min_amount_xaf)}.`);
+                      return;
+                    }
+                    const fee = Math.max(Math.round(amt * instantElig.fee_pct / 100), 100);
+                    Alert.alert(
+                      "Confirmer le crédit instantané",
+                      `${formatXAF(amt)} crédités sur votre wallet.\nRemboursement : ${formatXAF(amt + fee)} sous 30 jours.`,
+                      [
+                        { text: "Annuler", style: "cancel" },
+                        {
+                          text: "Confirmer",
+                          onPress: async () => {
+                            setLoanBusy(true);
+                            try {
+                              const r = await api.post<{ detail?: string }>("/instant-credit/disburse", { amount_xaf: amt });
+                              Alert.alert("Crédit accordé", r.detail ?? "Fonds disponibles sur votre wallet.");
+                              loadInstantCredit();
+                            } catch (e: any) {
+                              Alert.alert("Refusé", e?.detail ?? e?.message ?? "Crédit indisponible.");
+                            } finally {
+                              setLoanBusy(false);
+                            }
+                          },
+                        },
+                      ],
+                    );
+                  }}
+                >
+                  <LinearGradient colors={["#D97706", "#F59E0B"]} style={styles.partnerBtnGrad}>
+                    <Zap size={16} color="#fff" />
+                    <Text style={styles.partnerBtnText}>Obtenir le crédit instantané</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <Text style={styles.partnerHint}>
+                {!instantElig?.kyc_approved
+                  ? "Validez votre KYC pour débloquer le crédit instantané."
+                  : (instantElig?.score ?? data.score) < (instantElig?.min_score ?? 750)
+                    ? `Score minimum ${instantElig?.min_score ?? 750} requis (actuel : ${instantElig?.score ?? data.score}).`
+                    : "Crédit instantané indisponible pour le moment."}
+              </Text>
+            )}
+          </View>
+        </View>
+
         {/* ── Partage partenaires ── */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Partager avec un partenaire</Text>
@@ -494,4 +646,27 @@ const styles = StyleSheet.create({
   partnerBtnGrad: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14 },
   partnerBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
   partnerHint: { fontSize: 11, color: Colors.textMuted, textAlign: "center", marginTop: 8 },
+  instantBadge: { fontSize: 13, fontWeight: "800", color: "#B45309" },
+  instantLimit: { fontSize: 13, fontWeight: "700", color: Colors.text, marginBottom: 8 },
+  loanInput: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    fontWeight: "700",
+    color: Colors.text,
+    marginBottom: 12,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  activeLoanBox: {
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.lg,
+    padding: 14,
+    gap: 4,
+  },
+  activeLoanTitle: { fontSize: 14, fontWeight: "800", color: Colors.text },
+  activeLoanLine: { fontSize: 13, color: Colors.textMuted },
+  activeLoanDue: { fontSize: 12, color: Colors.warning, fontWeight: "600" },
 });
