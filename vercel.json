@@ -2,6 +2,14 @@
   "buildCommand": "npm install && npm run build:web",
   "outputDirectory": "dist",
   "framework": null,
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "hodix.app" }],
+      "destination": "https://www.hodix.app/$1",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     { "source": "/sitemap.xml", "destination": "/sitemap.xml" },
     { "source": "/sitemap-index.xml", "destination": "/sitemap-index.xml" },

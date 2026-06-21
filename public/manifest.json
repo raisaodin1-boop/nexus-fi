@@ -6,6 +6,7 @@
   "start_url": "https://www.hodix.app/?source=pwa",
   "scope": "https://www.hodix.app/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
   "theme_color": "#0F2847",
   "background_color": "#F5F8FC",
