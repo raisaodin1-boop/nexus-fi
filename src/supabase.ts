@@ -1,16 +1,18 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { publicEnv } from "@/src/public-env";
 
 let _client: SupabaseClient | null = null;
 
 export function getSupabase(): SupabaseClient {
   if (!_client) {
-    const url = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
-    const key = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
+    const url = publicEnv("EXPO_PUBLIC_SUPABASE_URL");
+    const key = publicEnv("EXPO_PUBLIC_SUPABASE_ANON_KEY");
     if (!url || !key) {
-      throw new Error(
-        "Configuration Supabase manquante dans l'APK. " +
-        "Ajoutez EXPO_PUBLIC_SUPABASE_ANON_KEY dans Expo → Project → Environment variables (preview/apk), puis reconstruisez l'APK.",
-      );
+      const hint =
+        typeof window !== "undefined"
+          ? "Rechargez la page ou réinstallez la PWA. Vérifiez hodix-env.js et les variables Vercel EXPO_PUBLIC_SUPABASE_*."
+          : "Ajoutez EXPO_PUBLIC_SUPABASE_ANON_KEY dans Expo → Environment variables, puis reconstruisez.";
+      throw new Error(`Configuration Supabase manquante. ${hint}`);
     }
     _client = createClient(url, key, {
       auth: {

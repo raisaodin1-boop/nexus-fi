@@ -212,6 +212,9 @@ export default function Root({ children }: PropsWithChildren) {
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
 
+        {/* Runtime Supabase/API config — must load before app bundle (PWA / Vercel) */}
+        <script src="/hodix-env.js" />
+
         {/* ── Titre & Description ─────────────────────────────────────── */}
         <title>HODIX – Tontines Digitales & Épargne Africaine | Wallet Mobile</title>
         <meta

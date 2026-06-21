@@ -1,7 +1,8 @@
 import { Platform } from "react-native";
+import { publicEnv } from "@/src/public-env";
 
 const CANONICAL_ORIGIN =
-  (process.env.EXPO_PUBLIC_SITE_URL ?? "https://www.hodix.app").replace(/\/$/, "");
+  (publicEnv("EXPO_PUBLIC_SITE_URL") || "https://www.hodix.app").replace(/\/$/, "");
 
 /** Canonical web origin — www required so PKCE verifier and callback share localStorage. */
 export function getWebOrigin(): string {

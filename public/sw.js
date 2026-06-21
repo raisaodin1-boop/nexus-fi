@@ -1,5 +1,5 @@
 /* HODIX — Service Worker: offline shell, asset cache, background sync, push */
-const CACHE_VERSION = "hodix-pwa-v3";
+const CACHE_VERSION = "hodix-pwa-v4";
 const PRECACHE = [
   "/",
   "/manifest.json",
@@ -52,6 +52,13 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+
+  /* Never cache runtime env — always fetch fresh Supabase config */
+  if (url.pathname === "/hodix-env.js") {
+    event.respondWith(fetch(request));
+    return;
+  }
+
   if (isApiRequest(url)) return;
 
   if (request.mode === "navigate") {
