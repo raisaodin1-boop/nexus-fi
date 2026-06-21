@@ -17,80 +17,129 @@ const PAYMENT_CONFIG_DEFAULTS = {
 
 /* ── Manager overview ─────────────────────────────────────── */
 
+export const EMPTY_MANAGER_OVERVIEW = {
+  groups: { tontines: 0, associations: 0, cooperatives: 0, funds: 0 },
+  total_members: 0,
+  total_collected: 0,
+  avg_compliance: 0,
+  health_score: 0,
+  new_members_30d: 0,
+  tontines: [] as Record<string, unknown>[],
+  currency: "XAF",
+};
+
+async function safeSelect<T>(query: PromiseLike<{ data: T | null; error: unknown }>): Promise<NonNullable<T>> {
+  try {
+    const { data, error } = await query;
+    if (error) return [] as NonNullable<T>;
+    return (data ?? []) as NonNullable<T>;
+  } catch {
+    return [] as NonNullable<T>;
+  }
+}
+
 export async function getManagerOverview() {
-  const me = await uid();
-  const sb = getSupabase();
+  try {
+    const me = await uid();
+    const sb = getSupabase();
 
-  const safeNum = async (fn: () => PromiseLike<number>): Promise<number> => {
-    try { return await fn(); } catch { return 0; }
-  };
-  const safeArr = async (fn: () => PromiseLike<any[]>): Promise<any[]> => {
-    try { return await fn(); } catch { return []; }
-  };
+    const { data: profile } = await sb.from("profiles").select("role").eq("id", me).single();
+    const role = profile?.role ?? "member";
+    if (role !== "tontine_manager" && role !== "super_admin" && role !== "admin") {
+      return { ...EMPTY_MANAGER_OVERVIEW };
+    }
 
-  // Toutes les requêtes en parallèle — une seule vague réseau
-  const [tontineRes, assocRes, coopRes, fundRes] = await Promise.all([
-    safeArr(async () => { const r = await sb.from("tontines").select("*").eq("owner_id", me); return r.data ?? []; }),
-    safeArr(async () => { const r = await sb.from("associations").select("*").eq("owner_id", me); return r.data ?? []; }),
-    safeArr(async () => { const r = await sb.from("cooperatives").select("*").eq("owner_id", me); return r.data ?? []; }),
-    safeArr(async () => { const r = await sb.from("community_funds").select("*").eq("owner_id", me); return r.data ?? []; }),
-  ]);
+    const [tontines, associations, cooperatives, funds] = await Promise.all([
+      sb.from("tontines").select("*").eq("owner_id", me),
+      sb.from("associations").select("*").eq("owner_id", me),
+      sb.from("cooperatives").select("*").eq("owner_id", me),
+      sb.from("community_funds").select("*").eq("owner_id", me),
+    ]);
 
-  const tList: any[] = tontineRes;
-  const aList: any[] = assocRes;
-  const cList: any[] = coopRes;
-  const fList: any[] = fundRes;
+    const tList = tontines.data ?? [];
+    const aList = associations.data ?? [];
+    const cList = cooperatives.data ?? [];
+    const fList = funds.data ?? [];
 
-  const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+    const tIds = tList.map((t) => t.id);
+    const aIds = aList.map((a) => a.id);
+    const cIds = cList.map((c) => c.id);
+    const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString();
 
-  // Tous les comptages en parallèle
-  const [tMemberCounts, aMemberCounts, cMemberCounts, contribResults, newMemberCounts] = await Promise.all([
-    Promise.all(tList.map(t => safeNum(async () => { const r = await sb.from("tontine_members").select("*", { count: "exact", head: true }).eq("tontine_id", t.id); return r.count ?? 0; }))),
-    Promise.all(aList.map(a => safeNum(async () => { const r = await sb.from("association_members").select("*", { count: "exact", head: true }).eq("association_id", a.id); return r.count ?? 0; }))),
-    Promise.all(cList.map(c => safeNum(async () => { const r = await sb.from("cooperative_members").select("*", { count: "exact", head: true }).eq("cooperative_id", c.id); return r.count ?? 0; }))),
-    Promise.all(tList.map(t => safeArr(async () => { const r = await sb.from("tontine_contributions").select("amount").eq("tontine_id", t.id); return r.data ?? []; }))),
-    Promise.all(tList.map(t => safeNum(async () => { const r = await sb.from("tontine_members").select("*", { count: "exact", head: true }).eq("tontine_id", t.id).gte("joined_at", thirtyAgo); return r.count ?? 0; }))),
-  ]);
+    const [tMembers, aMembers, cMembers, contribs, recentMembers] = await Promise.all([
+      tIds.length
+        ? safeSelect(sb.from("tontine_members").select("tontine_id").in("tontine_id", tIds))
+        : Promise.resolve([] as { tontine_id: string }[]),
+      aIds.length
+        ? safeSelect(sb.from("association_members").select("association_id").in("association_id", aIds))
+        : Promise.resolve([] as { association_id: string }[]),
+      cIds.length
+        ? safeSelect(sb.from("cooperative_members").select("cooperative_id").in("cooperative_id", cIds))
+        : Promise.resolve([] as { cooperative_id: string }[]),
+      tIds.length
+        ? safeSelect(sb.from("tontine_contributions").select("tontine_id, amount").in("tontine_id", tIds))
+        : Promise.resolve([] as { tontine_id: string; amount: number }[]),
+      tIds.length
+        ? safeSelect(sb.from("tontine_members").select("tontine_id").in("tontine_id", tIds).gte("joined_at", thirtyAgo))
+        : Promise.resolve([] as { tontine_id: string }[]),
+    ]);
 
-  const totalMembers =
-    (tMemberCounts as number[]).reduce((s, n) => s + n, 0) +
-    (aMemberCounts as number[]).reduce((s, n) => s + n, 0) +
-    (cMemberCounts as number[]).reduce((s, n) => s + n, 0);
+    const tMemberCounts = new Map<string, number>();
+    for (const row of tMembers) {
+      tMemberCounts.set(row.tontine_id, (tMemberCounts.get(row.tontine_id) ?? 0) + 1);
+    }
 
-  let totalCollected = 0;
-  const complianceValues: number[] = [];
-  tList.forEach((t, i) => {
-    const contribs = (contribResults[i] as any[]);
-    const collected = contribs.reduce((s: number, r: any) => s + Number(r.amount), 0);
-    totalCollected += collected;
-    const members = (tMemberCounts as number[])[i] ?? 0;
-    const perCycle = Number(t.amount_per_cycle ?? t.contribution_amount ?? 0);
-    const expected = perCycle * members;
-    if (expected > 0) complianceValues.push(Math.min(100, (collected / expected) * 100));
-  });
+    const totalMembers = tMembers.length + aMembers.length + cMembers.length;
 
-  const newMembers30d = (newMemberCounts as number[]).reduce((s, n) => s + n, 0);
-  const avgCompliance = complianceValues.length
-    ? Math.round((complianceValues.reduce((a, b) => a + b, 0) / complianceValues.length) * 10) / 10
-    : 0;
-  const growthScore = Math.min(100, (newMembers30d / Math.max(totalMembers, 1)) * 300);
-  const healthScore = Math.round(avgCompliance * 0.6 + growthScore * 0.4 * 10) / 10;
+    const contribByTontine = new Map<string, number>();
+    for (const row of contribs) {
+      contribByTontine.set(row.tontine_id, (contribByTontine.get(row.tontine_id) ?? 0) + Number(row.amount ?? 0));
+    }
+    const totalCollected = [...contribByTontine.values()].reduce((s, v) => s + v, 0);
 
-  return {
-    groups: {
-      tontines: tList.length,
-      associations: aList.length,
-      cooperatives: cList.length,
-      funds: fList.length,
-    },
-    total_members: totalMembers,
-    total_collected: totalCollected,
-    avg_compliance: avgCompliance,
-    health_score: healthScore,
-    new_members_30d: newMembers30d,
-    tontines: tList.slice(0, 5),
-    currency: "XAF",
-  };
+    const complianceValues: number[] = [];
+    for (const t of tList) {
+      const members = tMemberCounts.get(t.id) ?? 0;
+      const collected = contribByTontine.get(t.id) ?? 0;
+      const perCycle = Number(t.amount_per_cycle ?? t.contribution_amount ?? 0);
+      const expected = perCycle * members;
+      if (expected > 0) complianceValues.push(Math.min(100, (collected / expected) * 100));
+    }
+
+    const newMembers30d = recentMembers.length;
+    const avgCompliance = complianceValues.length
+      ? Math.round((complianceValues.reduce((a, b) => a + b, 0) / complianceValues.length) * 10) / 10
+      : 0;
+    const growthScore = Math.min(100, (newMembers30d / Math.max(totalMembers, 1)) * 300);
+    const healthScore = Math.round(avgCompliance * 0.6 + growthScore * 0.4 * 10) / 10;
+
+    const enrichedTontines = tList.slice(0, 5).map((t) => ({
+      ...t,
+      members_count: tMemberCounts.get(t.id) ?? 0,
+      max_members: Number(t.max_members ?? 12),
+      current_cycle: Number(t.current_cycle ?? 1),
+      total_collected: contribByTontine.get(t.id) ?? 0,
+      currency: t.currency ?? "XAF",
+    }));
+
+    return {
+      groups: {
+        tontines: tList.length,
+        associations: aList.length,
+        cooperatives: cList.length,
+        funds: fList.length,
+      },
+      total_members: totalMembers,
+      total_collected: totalCollected,
+      avg_compliance: avgCompliance,
+      health_score: healthScore,
+      new_members_30d: newMembers30d,
+      tontines: enrichedTontines,
+      currency: "XAF",
+    };
+  } catch {
+    return { ...EMPTY_MANAGER_OVERVIEW };
+  }
 }
 
 /* ── Tontine disbursements & rotation ─────────────────────── */

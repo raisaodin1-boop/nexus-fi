@@ -1,12 +1,17 @@
 // Manager dashboard component — used inside (tabs)/index.tsx when role is tontine_manager.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { Users, Building2, Network, Wallet, TrendingUp, Activity, Plus, Bell, ChevronRight } from "lucide-react-native";
+import {
+  Users, Building2, Network, Wallet, Bell, ChevronRight,
+  Gavel, Target, CreditCard, Store,
+} from "lucide-react-native";
 
 import { api, formatXAF } from "@/src/api";
+import { EMPTY_MANAGER_OVERVIEW } from "@/src/db/extras";
+import { DegradedDataBanner } from "@/src/degraded-banner";
 import { Card, SectionTitle, StatCard, SkeletonBox, SkeletonStatRow, SkeletonCard } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { LineChart } from "@/src/charts";
@@ -25,13 +30,16 @@ interface Overview {
 }
 interface Series { days: number; series: { date: string; value: number }[] }
 
+const DEFAULT_OVERVIEW: Overview = { ...EMPTY_MANAGER_OVERVIEW, tontines: [] };
+
 export function ManagerDashboard() {
   const router = useRouter();
   const { user } = useAuth();
-  const [overview, setOverview] = useState<Overview | null>(null);
+  const [overview, setOverview] = useState<Overview>(DEFAULT_OVERVIEW);
   const [series, setSeries] = useState<Series | null>(null);
   const [loading, setLoading] = useState(true);
   const [unread, setUnread] = useState(0);
+  const [overviewDegraded, setOverviewDegraded] = useState(false);
 
   const load = useCallback(async () => {
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
@@ -42,13 +50,19 @@ export function ManagerDashboard() {
       safe(() => api.get<Series>("/analytics/me/contributions?days=14")),
       safe(() => api.get<{ unread_count: number }>("/notifications")),
     ]);
-    if (o) setOverview(o);
+    setOverview(o ?? DEFAULT_OVERVIEW);
+    setOverviewDegraded(!o);
     if (s) setSeries(s);
     if (n) setUnread(n.unread_count ?? 0);
     setLoading(false);
   }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  const retry = () => { setLoading(true); load(); };
+
+  useFocusEffect(useCallback(() => {
+    setLoading(true);
+    load();
+  }, [load]));
 
   if (loading) {
     return (
@@ -58,19 +72,6 @@ export function ManagerDashboard() {
           <SkeletonStatRow />
           <SkeletonStatRow />
           <SkeletonCard />
-        </View>
-      </SafeAreaView>
-    );
-  }
-  if (!overview) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.center}>
-          <Text style={{ color: Colors.text, fontWeight: "800", fontSize: 16, marginBottom: 8 }}>Tableau de bord indisponible</Text>
-          <Text style={{ color: Colors.textMuted, fontSize: 13, textAlign: "center", marginBottom: 16 }}>Impossible de charger les statistiques manager.</Text>
-          <TouchableOpacity onPress={() => { setLoading(true); load(); }} style={{ paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12, backgroundColor: Colors.secondary }}>
-            <Text style={{ color: "#fff", fontWeight: "700" }}>Réessayer</Text>
-          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -99,7 +100,10 @@ export function ManagerDashboard() {
           </TouchableOpacity>
         </View>
 
-        {/* Hero: Community Health */}
+        {overviewDegraded ? (
+          <DegradedDataBanner onRetry={retry} testID="manager-retry-overview" />
+        ) : null}
+
         <View style={{ paddingHorizontal: Spacing.xl }}>
           <LinearGradient colors={[Colors.primary, Colors.gradMid, Colors.secondary]} style={[styles.hero, Shadow.cardDark]}>
             <Text style={styles.heroLbl}>Community Health Score</Text>
@@ -115,7 +119,6 @@ export function ManagerDashboard() {
           </LinearGradient>
         </View>
 
-        {/* Stats row */}
         <View style={styles.statsRow}>
           <StatCard label="Total collecté" value={formatXAF(overview.total_collected)} accent={Colors.accent} testID="manager-stat-collected" />
           <StatCard label="Membres" value={`${overview.total_members}`} hint={`+${overview.new_members_30d} ce mois`} accent={Colors.secondary} testID="manager-stat-members" />
@@ -126,7 +129,6 @@ export function ManagerDashboard() {
           <StatCard label="Coop." value={`${overview.groups.cooperatives}`} accent={Colors.warning} />
         </View>
 
-        {/* Chart: contributions */}
         <View style={{ paddingHorizontal: Spacing.xl, marginTop: Spacing.lg }}>
           <Card>
             <LineChart
@@ -138,7 +140,6 @@ export function ManagerDashboard() {
           </Card>
         </View>
 
-        {/* Quick actions */}
         <SectionTitle>Actions Manager</SectionTitle>
         <View style={styles.qaGrid}>
           <ManagerAction icon={<Users color={Colors.accent} size={20} />} label="Créer une tontine" onPress={() => router.push("/tontines/create")} testID="manager-create-tontine" />
@@ -147,7 +148,14 @@ export function ManagerDashboard() {
           <ManagerAction icon={<Wallet color={Colors.accentDark} size={20} />} label="Créer un fonds" onPress={() => router.push("/funds/create")} testID="manager-create-fund" />
         </View>
 
-        {/* My tontines list */}
+        <SectionTitle>Nouvelles fonctionnalités</SectionTitle>
+        <View style={styles.qaGrid}>
+          <ManagerAction icon={<Gavel color="#7C3AED" size={20} />} label="Enchères Tontine" onPress={() => router.push("/tontine-auction" as any)} testID="manager-action-auction" />
+          <ManagerAction icon={<Target color="#10B981" size={20} />} label="Objectif Collectif" onPress={() => router.push("/collective-goal" as any)} testID="manager-action-collective" />
+          <ManagerAction icon={<CreditCard color="#0B1F3A" size={20} />} label="Carte Virtuelle" onPress={() => router.push("/virtual-card" as any)} testID="manager-action-virtual-card" />
+          <ManagerAction icon={<Store color="#EF4444" size={20} />} label="HODIX Pay Pro" onPress={() => router.push("/merchant-qr" as any)} testID="manager-action-merchant" />
+        </View>
+
         <SectionTitle action={
           <TouchableOpacity onPress={() => router.push("/(tabs)/groups")} testID="manager-see-all-tontines">
             <Text style={styles.linkText}>Voir tout</Text>
@@ -159,7 +167,7 @@ export function ManagerDashboard() {
           {overview.tontines.length === 0 ? (
             <Card>
               <Text style={{ color: Colors.textMuted, textAlign: "center", padding: 16 }}>
-                Aucune tontine pour l'instant. Créez-en une !
+                Aucune tontine pour l&apos;instant. Créez-en une !
               </Text>
             </Card>
           ) : overview.tontines.map((t) => (
@@ -168,9 +176,9 @@ export function ManagerDashboard() {
                 <View style={[styles.tontineIcon, { backgroundColor: Colors.accent + "20" }]}>
                   <Users color={Colors.accent} size={18} />
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.tontineName}>{t.name}</Text>
-                  <Text style={styles.tontineMeta}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.tontineName} numberOfLines={1}>{t.name}</Text>
+                  <Text style={styles.tontineMeta} numberOfLines={2}>
                     {t.members_count}/{t.max_members} membres · Cycle {t.current_cycle} · {formatXAF(t.total_collected, t.currency)}
                   </Text>
                 </View>
@@ -188,14 +196,13 @@ function ManagerAction({ icon, label, onPress, testID }: { icon: React.ReactNode
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.85} testID={testID} style={[styles.qa, Shadow.card]}>
       <View style={styles.qaIcon}>{icon}</View>
-      <Text style={styles.qaLabel}>{label}</Text>
+      <Text style={styles.qaLabel} numberOfLines={2}>{label}</Text>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bg },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: Spacing.xl },
   rolePill: { backgroundColor: Colors.accent + "20", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, alignSelf: "flex-start", marginBottom: 6, borderWidth: 1, borderColor: Colors.accent + "40" },
   rolePillText: { color: Colors.accentDark, fontSize: 10, fontWeight: "900", letterSpacing: 1 },
@@ -215,7 +222,7 @@ const styles = StyleSheet.create({
   heroStVal: { color: "#fff", fontSize: 14, fontWeight: "800", marginTop: 2 },
   statsRow: { flexDirection: "row", paddingHorizontal: Spacing.xl, gap: 10, marginTop: 12, minWidth: 0 },
   qaGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: Spacing.xl, gap: 10 },
-  qa: { width: "48%", backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.lg, borderWidth: 1, borderColor: Colors.border, gap: 10 },
+  qa: { width: "48%", minWidth: 0, backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.lg, borderWidth: 1, borderColor: Colors.border, gap: 10 },
   qaIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: Colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
   qaLabel: { color: Colors.text, fontWeight: "700", fontSize: 13 },
   linkText: { color: Colors.secondary, fontWeight: "700", fontSize: 13 },

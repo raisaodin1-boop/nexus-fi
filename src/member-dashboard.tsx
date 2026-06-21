@@ -16,6 +16,7 @@ import { Bell, ChevronRight, PiggyBank, Trophy, Users, Wallet, TrendingUp, Spark
 import { useAuth } from "@/src/auth-context";
 import { api, formatXAF } from "@/src/api";
 import { supabase } from "@/src/supabase";
+import { DegradedDataBanner } from "@/src/degraded-banner";
 import { Card, SectionTitle, StatCard, SkeletonBox, SkeletonCard } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { EngagementStrip } from "@/src/engagement-strip";
@@ -33,6 +34,14 @@ interface TrustScore {
 interface Insight { text: string; kind: string; route?: string; action_label?: string }
 interface Series { days: number; series: { date: string; value: number }[] }
 
+const DEFAULT_SUMMARY: Summary = {
+  total_saved: 0,
+  total_target: 0,
+  active_goals: 0,
+  progress_pct: 0,
+  currency: "XAF",
+};
+
 export function MemberDashboard() {
   const router = useRouter();
   const { user } = useAuth();
@@ -48,6 +57,7 @@ export function MemberDashboard() {
   const [alertCount, setAlertCount] = useState(0);
   const [savingsSeries, setSavingsSeries] = useState<Series | null>(null);
   const [streakWeeks, setStreakWeeks] = useState(0);
+  const [primaryDegraded, setPrimaryDegraded] = useState(false);
 
   const load = useCallback(async (opts?: { secondaryOnly?: boolean }) => {
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
@@ -63,6 +73,7 @@ export function MemberDashboard() {
       if (s) setSummary(s);
       if (t) setTrust(t);
       if (n) setUnread(n.unread_count ?? 0);
+      setPrimaryDegraded(!s && !t);
       setLoading(false);
     }
 
@@ -115,6 +126,9 @@ export function MemberDashboard() {
 
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
+  const summaryData = summary ?? DEFAULT_SUMMARY;
+  const retryPrimary = () => { setLoading(true); load(); };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -151,11 +165,15 @@ export function MemberDashboard() {
             firstName={user?.full_name?.split(" ")[0]}
             trustScore={trust?.score ?? user?.trust_score ?? undefined}
             trustLevel={trust?.level}
-            totalSaved={summary?.total_saved}
-            currency={summary?.currency}
+            totalSaved={summaryData.total_saved}
+            currency={summaryData.currency}
             unread={unread}
           />
         </View>
+
+        {primaryDegraded ? (
+          <DegradedDataBanner onRetry={retryPrimary} testID="member-retry-primary" />
+        ) : null}
 
         {/* Alerts row */}
         <TouchableOpacity
@@ -178,14 +196,14 @@ export function MemberDashboard() {
 
         <EngagementStrip
           streakWeeks={streakWeeks}
-          savingsProgressPct={summary?.progress_pct ?? 0}
+          savingsProgressPct={summaryData.progress_pct}
           trustScore={trust?.score ?? user?.trust_score ?? undefined}
         />
 
         {/* Stats */}
         <View style={[styles.statsRow, { paddingHorizontal: horizontalPad }]}>
-          <StatCard label="Total épargné" value={formatXAF(summary?.total_saved ?? 0, summary?.currency)} hint={summary && summary.total_target > 0 ? `${summary.progress_pct}% de l'objectif` : "Aucun objectif"} accent={Colors.accent} testID="stat-total-saved" />
-          <StatCard label="Objectifs actifs" value={`${summary?.active_goals ?? 0}`} hint="Créez-en plus !" accent={Colors.secondary} testID="stat-active-goals" />
+          <StatCard label="Total épargné" value={formatXAF(summaryData.total_saved, summaryData.currency)} hint={summaryData.total_target > 0 ? `${summaryData.progress_pct}% de l'objectif` : "Aucun objectif"} accent={Colors.accent} testID="stat-total-saved" />
+          <StatCard label="Objectifs actifs" value={`${summaryData.active_goals}`} hint="Créez-en plus !" accent={Colors.secondary} testID="stat-active-goals" />
         </View>
         <View style={[styles.statsRow, { paddingHorizontal: horizontalPad }]}>
           <StatCard label="Tontines" value={`${trust?.stats.tontines ?? 0}`} hint="participations" accent={Colors.primary} />
@@ -234,13 +252,13 @@ export function MemberDashboard() {
           <QuickAction icon={<MessageCircle color={Colors.secondary} size={22} />} label="Messagerie" onPress={() => router.push("/messages")} testID="home-action-messages" badge={msgUnread} compact={isCompact} />
           <QuickAction icon={<Receipt color={Colors.accent} size={22} />} label="Partager facture" onPress={() => router.push("/split-expense")} testID="home-action-split" compact={isCompact} />
         </View>
-        <View style={styles.qaRow}>
-          <QuickAction icon={<Gavel color="#7C3AED" size={22} />} label="Enchères Tontine" onPress={() => router.push("/tontine-auction" as any)} testID="home-action-auction" />
-          <QuickAction icon={<Target color="#10B981" size={22} />} label="Objectif Collectif" onPress={() => router.push("/collective-goal" as any)} testID="home-action-collective" />
+        <View style={[styles.qaRow, contentPad]}>
+          <QuickAction icon={<Gavel color="#7C3AED" size={22} />} label="Enchères Tontine" onPress={() => router.push("/tontine-auction" as any)} testID="home-action-auction" compact={isCompact} />
+          <QuickAction icon={<Target color="#10B981" size={22} />} label="Objectif Collectif" onPress={() => router.push("/collective-goal" as any)} testID="home-action-collective" compact={isCompact} />
         </View>
-        <View style={styles.qaRow}>
-          <QuickAction icon={<CreditCard color="#0B1F3A" size={22} />} label="Carte Virtuelle" onPress={() => router.push("/virtual-card" as any)} testID="home-action-virtual-card" />
-          <QuickAction icon={<Store color="#EF4444" size={22} />} label="HODIX Pay Pro" onPress={() => router.push("/merchant-qr" as any)} testID="home-action-merchant" />
+        <View style={[styles.qaRow, contentPad]}>
+          <QuickAction icon={<CreditCard color="#0B1F3A" size={22} />} label="Carte Virtuelle" onPress={() => router.push("/virtual-card" as any)} testID="home-action-virtual-card" compact={isCompact} />
+          <QuickAction icon={<Store color="#EF4444" size={22} />} label="HODIX Pay Pro" onPress={() => router.push("/merchant-qr" as any)} testID="home-action-merchant" compact={isCompact} />
         </View>
 
         {/* Promotion CTA for members */}

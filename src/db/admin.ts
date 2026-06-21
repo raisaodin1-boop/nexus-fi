@@ -26,9 +26,34 @@ export function isKycPending(status?: string | null): boolean {
   return PENDING_KYC.includes((status ?? "") as (typeof PENDING_KYC)[number]);
 }
 
+export const EMPTY_ADMIN_ANALYTICS = {
+  users: { total: 0, active: 0, new_7d: 0, new_30d: 0, managers: 0, admins: 0 },
+  tontines: { total: 0, active: 0, closed: 0 },
+  associations: 0,
+  cooperatives: 0,
+  savings_volume: 0,
+  contributions_volume: 0,
+  kyc: { pending: 0, approved: 0, level1: 0, level2_approved: 0, pending_review: 0 },
+  user_series: [] as { date: string; value: number }[],
+  active_groups: { tontines: 0, tontines_active: 0, associations: 0, cooperatives: 0 },
+  score_distribution: { excellent: 0, very_good: 0, good: 0, emerging: 0, new: 0 },
+  tier_distribution: { bronze: 0, silver: 0, gold: 0, platinum: 0 },
+  avg_trust_score: 0,
+  savings_count: 0,
+  tontine_contributions_volume: 0,
+  tontine_contributions_count: 0,
+  funds: { count: 0, balance: 0, collected: 0 },
+  payments: { count: 0, amount_minor: 0, commission_minor: 0, currency: "XAF" },
+};
+
 export async function getAdminAnalytics() {
-  await requireAdmin();
+  try {
+    await requireAdmin();
+  } catch {
+    return { ...EMPTY_ADMIN_ANALYTICS };
+  }
   return cached("admin-analytics", 90_000, async () => {
+    try {
     const safe = async <T>(fn: () => PromiseLike<T>, fallback: T): Promise<T> => {
       try { return await fn(); } catch { return fallback; }
     };
@@ -58,17 +83,21 @@ export async function getAdminAnalytics() {
       userSeries.push({ date: d, value: (users as any[]).filter(u => (u.created_at ?? "").slice(0, 10) <= d).length });
     }
     return {
-      users: { total: (users as any[]).length, new_7d: new7d, new_30d: new30d, managers: (users as any[]).filter(u => u.role === "tontine_manager").length, admins: (users as any[]).filter(u => u.role === "super_admin" || u.role === "admin").length },
+      users: { total: (users as any[]).length, active: (users as any[]).length, new_7d: new7d, new_30d: new30d, managers: (users as any[]).filter(u => u.role === "tontine_manager").length, admins: (users as any[]).filter(u => u.role === "super_admin" || u.role === "admin").length },
       tontines: { total: (allTontines as any[]).length, active: (allTontines as any[]).length, closed: 0 },
       associations: assocCount as number, cooperatives: coopCount as number,
       savings_volume: savingsVol, contributions_volume: contribVol,
-      kyc: { pending: kycPending, approved: kycApproved }, user_series: userSeries,
+      kyc: { pending: kycPending, approved: kycApproved, level1: (users as any[]).length, level2_approved: kycApproved, pending_review: kycPending },
+      user_series: userSeries,
       active_groups: { tontines: (allTontines as any[]).length, tontines_active: (allTontines as any[]).length, associations: assocCount as number, cooperatives: coopCount as number },
       score_distribution: { excellent: 0, very_good: 0, good: 0, emerging: 0, new: (users as any[]).length },
       tier_distribution: { bronze: (users as any[]).length, silver: 0, gold: 0, platinum: 0 },
-      avg_trust_score: 0, savings_count: 0, tontine_contributions_volume: contribVol, tontine_contributions_count: 0,
+      avg_trust_score: 0, savings_count: (savingsData as any[]).length, tontine_contributions_volume: contribVol, tontine_contributions_count: (contribData as any[]).length,
       funds: { count: 0, balance: 0, collected: 0 }, payments: { count: 0, amount_minor: 0, commission_minor: 0, currency: "XAF" },
     };
+    } catch {
+      return { ...EMPTY_ADMIN_ANALYTICS };
+    }
   });
 }
 

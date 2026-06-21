@@ -7,60 +7,59 @@ import { LinearGradient } from "expo-linear-gradient";
 import { ShieldAlert, Users, Activity, ChevronRight, Crown, Sparkles, FileText } from "lucide-react-native";
 
 import { api, formatXAF } from "@/src/api";
+import { EMPTY_ADMIN_ANALYTICS } from "@/src/db/admin";
+import { DegradedDataBanner } from "@/src/degraded-banner";
 import { Card, StatCard, SkeletonBox, SkeletonCard } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { LineChart } from "@/src/charts";
 
-interface Analytics {
-  users: { total: number; active: number; new_7d: number; new_30d: number };
-  savings_volume: number;
-  savings_count: number;
-  tontine_contributions_volume: number;
-  tontine_contributions_count: number;
-  funds: { count: number; balance: number; collected: number };
-  payments: { count: number; amount_minor: number; commission_minor: number; currency: string };
-  active_groups: { tontines: number; tontines_active: number; associations: number; cooperatives: number };
-  score_distribution: { excellent: number; very_good: number; good: number; emerging: number; new: number };
-  avg_trust_score: number;
-  tier_distribution: { bronze: number; silver: number; gold: number; platinum: number };
-  kyc: { level1: number; level2_approved: number; pending_review: number };
-}
 interface Series { days: number; series: { date: string; value: number }[] }
+
+type Analytics = typeof EMPTY_ADMIN_ANALYTICS & {
+  users: { total: number; active: number; new_7d: number; new_30d: number };
+  kyc: { level1: number; level2_approved: number; pending_review: number };
+};
+
+const DEFAULT_ANALYTICS = EMPTY_ADMIN_ANALYTICS as Analytics;
 
 export function AdminDashboard() {
   const router = useRouter();
-  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [analytics, setAnalytics] = useState<Analytics>(DEFAULT_ANALYTICS);
   const [savings, setSavings] = useState<Series | null>(null);
   const [usersSeries, setUsersSeries] = useState<Series | null>(null);
   const [pendingReqs, setPendingReqs] = useState(0);
   const [openFraudAlerts, setOpenFraudAlerts] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [analyticsDegraded, setAnalyticsDegraded] = useState(false);
 
   const load = useCallback(async () => {
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch { return null; }
     };
-    const a = await safe(() => api.get<Analytics>("/admin/analytics"));
-    if (a) {
-      setAnalytics(a);
-      setLoading(false);
-    }
-    const [s, u, p, comp] = await Promise.all([
+    const [a, s, u, p, comp] = await Promise.all([
+      safe(() => api.get<Analytics>("/admin/analytics")),
       safe(() => api.get<Series>("/analytics/platform/savings?days=14")),
       safe(() => api.get<Series>("/analytics/platform/users?days=14")),
       safe(() => api.get<any[]>("/admin/promotion-requests")),
       safe(() => api.get<{ open_fraud_alerts: number; critical_fraud_alerts: number }>("/admin/compliance/stats")),
     ]);
+    setAnalytics(a ?? DEFAULT_ANALYTICS);
+    setAnalyticsDegraded(!a);
     if (s) setSavings(s);
     if (u) setUsersSeries(u);
     if (p) setPendingReqs(p.filter((r: any) => r.status === "pending").length);
     if (comp) setOpenFraudAlerts(comp.open_fraud_alerts);
-    if (!a) setLoading(false);
+    setLoading(false);
   }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  const retry = () => { setLoading(true); load(); };
 
-  if (loading || !analytics) {
+  useFocusEffect(useCallback(() => {
+    setLoading(true);
+    load();
+  }, [load]));
+
+  if (loading) {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
@@ -119,6 +118,10 @@ export function AdminDashboard() {
             <Activity color={Colors.primary} size={20} />
           </TouchableOpacity>
         </View>
+
+        {analyticsDegraded ? (
+          <DegradedDataBanner onRetry={retry} testID="admin-retry-analytics" />
+        ) : null}
 
         {/* Pending promotion requests banner */}
         {pendingReqs > 0 ? (

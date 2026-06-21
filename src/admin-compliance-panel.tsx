@@ -27,6 +27,7 @@ import {
 
 import { api, ApiError, formatXAF } from "@/src/api";
 import { supabase } from "@/src/supabase";
+import { DegradedDataBanner } from "@/src/degraded-banner";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { useToast } from "@/src/toast";
 import { SkeletonCard } from "@/src/ui";
@@ -63,6 +64,12 @@ interface ComplianceStats {
   critical_fraud_alerts: number;
   audit_24h: number;
 }
+
+const DEFAULT_COMPLIANCE_STATS: ComplianceStats = {
+  open_fraud_alerts: 0,
+  critical_fraud_alerts: 0,
+  audit_24h: 0,
+};
 
 const AUDIT_CATEGORIES = [
   { key: "", label: "Tous" },
@@ -119,13 +126,14 @@ export function AdminCompliancePanel({ embedded = false }: { embedded?: boolean 
   const [subTab, setSubTab] = useState<SubTab>("alerts");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [stats, setStats] = useState<ComplianceStats | null>(null);
+  const [stats, setStats] = useState<ComplianceStats>(DEFAULT_COMPLIANCE_STATS);
   const [audit, setAudit] = useState<ComplianceAuditEntry[]>([]);
   const [alerts, setAlerts] = useState<FraudAlertEntry[]>([]);
   const [auditCategory, setAuditCategory] = useState("");
   const [alertStatus, setAlertStatus] = useState("open");
   const [expandedAudit, setExpandedAudit] = useState<string | null>(null);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [loadDegraded, setLoadDegraded] = useState(false);
 
   const load = useCallback(async () => {
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
@@ -137,9 +145,12 @@ export function AdminCompliancePanel({ embedded = false }: { embedded?: boolean 
       safe(() => api.get<ComplianceAuditEntry[]>(`/admin/compliance/audit${auditQs}`)),
       safe(() => api.get<FraudAlertEntry[]>(`/admin/compliance/fraud-alerts?status=${alertStatus}`)),
     ]);
-    if (st) setStats(st);
+    setStats(st ?? DEFAULT_COMPLIANCE_STATS);
+    setLoadDegraded(!st && !au && !al);
     if (au) setAudit(au);
+    else setAudit([]);
     if (al) setAlerts(al);
+    else setAlerts([]);
     setLoading(false);
   }, [auditCategory, alertStatus]);
 
@@ -176,7 +187,7 @@ export function AdminCompliancePanel({ embedded = false }: { embedded?: boolean 
     }
   };
 
-  if (loading && !stats) {
+  if (loading) {
     return (
       <View style={{ padding: Spacing.xl, gap: 12 }}>
         <SkeletonCard /><SkeletonCard /><SkeletonCard />
@@ -186,6 +197,12 @@ export function AdminCompliancePanel({ embedded = false }: { embedded?: boolean 
 
   return (
     <View style={{ flex: 1 }}>
+      {loadDegraded ? (
+        <DegradedDataBanner
+          onRetry={() => { setLoading(true); load(); }}
+          testID="compliance-retry-load"
+        />
+      ) : null}
       {/* Stats strip */}
       <LinearGradient colors={["#0B1F3A", "#134E4A"]} style={styles.statsHero}>
         <View style={styles.statsRow}>
