@@ -1,8 +1,19 @@
 import { getSupabase } from "@/src/supabase";
 import { notifyUser } from "./notifications";
-import { uid, cached, throwSb, invalidateCache } from "./helpers";
+import { uid, cached, throwSb, invalidateCache, requireAdmin } from "./helpers";
 
 const PENDING_KYC = ["pending", "pending_review"] as const;
+const KYC_BUCKET = "kyc-documents";
+
+async function signedKycUrl(path?: string | null): Promise<string | null> {
+  if (!path) return null;
+  const { data, error } = await getSupabase().storage.from(KYC_BUCKET).createSignedUrl(path, 3600);
+  if (error) {
+    console.warn("signedKycUrl:", error.message);
+    return null;
+  }
+  return data.signedUrl;
+}
 
 export function normalizeKycStatus(submissionStatus?: string | null, profileStatus?: string | null): string {
   const raw = profileStatus || submissionStatus || "not_submitted";
@@ -16,6 +27,7 @@ export function isKycPending(status?: string | null): boolean {
 }
 
 export async function getAdminAnalytics() {
+  await requireAdmin();
   return cached("admin-analytics", 90_000, async () => {
     const safe = async <T>(fn: () => PromiseLike<T>, fallback: T): Promise<T> => {
       try { return await fn(); } catch { return fallback; }
@@ -61,6 +73,7 @@ export async function getAdminAnalytics() {
 }
 
 export async function getAdminStats() {
+  await requireAdmin();
   const [users, tontines, kyc] = await Promise.all([
     getSupabase().from("profiles").select("*", { count: "exact", head: true }),
     getSupabase().from("tontines").select("*", { count: "exact", head: true }),
@@ -70,6 +83,7 @@ export async function getAdminStats() {
 }
 
 export async function adminListUsers(search = "", offset = 0, limit = 50) {
+  await requireAdmin();
   const pageSize = Math.min(Math.max(limit, 1), 100);
   const from = Math.max(offset, 0);
   let q = getSupabase().from("profiles")
@@ -90,18 +104,21 @@ export async function adminListUsers(search = "", offset = 0, limit = 50) {
 }
 
 export async function adminUpdateUserRole(userId: string, role: string) {
+  await requireAdmin();
   const { error } = await getSupabase().from("profiles").update({ role }).eq("id", userId);
   throwSb(error);
   return { detail: "Rôle mis à jour" };
 }
 
 export async function adminDeactivateUser(userId: string) {
+  await requireAdmin();
   const { error } = await getSupabase().from("profiles").update({ role: "suspended" }).eq("id", userId);
   throwSb(error);
   return { detail: "Utilisateur suspendu" };
 }
 
 export async function adminListTontines(search = "") {
+  await requireAdmin();
   let q = getSupabase().from("tontines")
     .select("id, name, amount_per_cycle, frequency, max_members, invite_code, created_at, owner_id")
     .order("created_at", { ascending: false }).limit(100);
@@ -137,12 +154,14 @@ export async function adminListTontines(search = "") {
 }
 
 export async function adminUpdateTontine(id: string, updates: { status?: string; auto_close_date?: string | null }) {
+  await requireAdmin();
   const { error } = await getSupabase().from("tontines").update(updates).eq("id", id);
   if (error) throw { status: 400, detail: "Erreur mise à jour — exécutez d'abord le SQL d'initialisation dans Supabase." };
   return { detail: "Tontine mise à jour" };
 }
 
 export async function adminDeleteTontine(id: string) {
+  await requireAdmin();
   await getSupabase().from("tontine_contributions").delete().eq("tontine_id", id);
   await getSupabase().from("tontine_members").delete().eq("tontine_id", id);
   const { error } = await getSupabase().from("tontines").delete().eq("id", id);
@@ -151,6 +170,7 @@ export async function adminDeleteTontine(id: string) {
 }
 
 export async function adminListKyc() {
+  await requireAdmin();
   const sb = getSupabase();
   const { data: submissions, error } = await sb
     .from("kyc_submissions")
@@ -230,16 +250,88 @@ export async function adminListKyc() {
   );
 }
 
-export async function adminHandleKyc(userId: string, approve: boolean) {
+export async function adminGetKycDetail(userId: string) {
+  await requireAdmin();
+  const sb = getSupabase();
+  const [{ data: profile, error: profErr }, { data: submission, error: subErr }] = await Promise.all([
+    sb.from("profiles")
+      .select("id, full_name, phone, email, gender, country, city, neighborhood, address, date_of_birth, birth_place, occupation, kyc_status, created_at")
+      .eq("id", userId)
+      .maybeSingle(),
+    sb.from("kyc_submissions")
+      .select("id, user_id, status, submitted_at, reviewed_at, verification_mode, provider, id_type, country_code, id_front_path, id_back_path, selfie_path, rejection_reason")
+      .eq("user_id", userId)
+      .maybeSingle(),
+  ]);
+  if (profErr) throwSb(profErr);
+  if (subErr) throwSb(subErr);
+  if (!profile && !submission) throw { status: 404, detail: "Dossier KYC introuvable" };
+
+  const [idFrontUrl, idBackUrl, selfieUrl] = await Promise.all([
+    signedKycUrl(submission?.id_front_path),
+    signedKycUrl(submission?.id_back_path),
+    signedKycUrl(submission?.selfie_path),
+  ]);
+
+  const addressParts = [profile?.address, profile?.neighborhood, profile?.city, profile?.country].filter(Boolean);
+
+  return {
+    user_id: userId,
+    full_name: profile?.full_name ?? "—",
+    email: profile?.email ?? "—",
+    phone: profile?.phone ?? "—",
+    gender: profile?.gender ?? null,
+    country: profile?.country ?? submission?.country_code ?? "—",
+    city: profile?.city ?? "—",
+    neighborhood: profile?.neighborhood ?? null,
+    address: profile?.address ?? "—",
+    address_full: addressParts.join(", ") || "—",
+    date_of_birth: profile?.date_of_birth ?? null,
+    birth_place: profile?.birth_place ?? null,
+    occupation: profile?.occupation ?? null,
+    kyc_status: normalizeKycStatus(submission?.status, profile?.kyc_status),
+    submission_status: submission?.status ?? null,
+    submitted_at: submission?.submitted_at ?? null,
+    reviewed_at: submission?.reviewed_at ?? null,
+    verification_mode: submission?.verification_mode ?? "manual",
+    provider: submission?.provider ?? null,
+    id_type: submission?.id_type ?? null,
+    country_code: submission?.country_code ?? null,
+    rejection_reason: submission?.rejection_reason ?? null,
+    documents: {
+      id_front: submission?.id_front_path
+        ? { path: submission.id_front_path, url: idFrontUrl }
+        : null,
+      id_back: submission?.id_back_path
+        ? { path: submission.id_back_path, url: idBackUrl }
+        : null,
+      selfie: submission?.selfie_path
+        ? { path: submission.selfie_path, url: selfieUrl }
+        : null,
+    },
+  };
+}
+
+export async function adminHandleKyc(userId: string, approve: boolean, rejectionReason?: string) {
+  await requireAdmin();
   const submissionStatus = approve ? "approved" : "rejected";
   const profileStatus = approve ? "approved" : "rejected";
   const reviewedAt = new Date().toISOString();
   const sb = getSupabase();
+  const reason = rejectionReason?.trim() || null;
+
+  if (!approve && !reason) {
+    throw { status: 400, detail: "Indiquez ce que l'utilisateur doit corriger avant de rejeter le dossier." };
+  }
 
   const { data: existing } = await sb.from("kyc_submissions").select("id").eq("user_id", userId).maybeSingle();
   if (existing) {
     const { error } = await sb.from("kyc_submissions")
-      .update({ status: submissionStatus, reviewed_at: reviewedAt })
+      .update({
+        status: submissionStatus,
+        reviewed_at: reviewedAt,
+        rejection_reason: approve ? null : reason,
+      })
       .eq("user_id", userId);
     throwSb(error);
   } else {
@@ -249,6 +341,7 @@ export async function adminHandleKyc(userId: string, approve: boolean) {
       reviewed_at: reviewedAt,
       verification_mode: "manual",
       provider: "manual",
+      rejection_reason: approve ? null : reason,
     });
     throwSb(error);
   }
@@ -256,14 +349,30 @@ export async function adminHandleKyc(userId: string, approve: boolean) {
   const { error: profErr } = await sb.from("profiles").update({ kyc_status: profileStatus }).eq("id", userId);
   throwSb(profErr);
 
-  const title = approve ? "KYC approuvé ✅" : "KYC refusé";
-  const body = approve ? "Votre identité a été vérifiée avec succès." : "Votre dossier KYC a été refusé. Contactez le support.";
-  await notifyUser({ user_id: userId, title, body, type: "kyc" });
+  if (approve) {
+    await notifyUser({
+      user_id: userId,
+      title: "KYC approuvé ✅",
+      body: "Félicitations ! Votre identité a été vérifiée. Vous pouvez maintenant effectuer des retraits et accéder aux limites complètes.",
+      type: "kyc",
+      metadata: { action_url: "/kyc" },
+    });
+  } else {
+    await notifyUser({
+      user_id: userId,
+      title: "KYC refusé — action requise",
+      body: `Votre dossier n'a pas pu être validé. À corriger : ${reason}. Soumettez un nouveau dossier depuis votre profil.`,
+      type: "kyc_rejected",
+      metadata: { action_url: "/kyc", rejection_reason: reason },
+    });
+  }
+
   invalidateCache("admin");
   return { detail: `KYC ${approve ? "approuvé" : "refusé"}` };
 }
 
 export async function adminDeleteKyc(userId: string) {
+  await requireAdmin();
   const sb = getSupabase();
   const { error } = await sb.from("kyc_submissions").delete().eq("user_id", userId);
   throwSb(error);
@@ -296,6 +405,7 @@ export async function getMyPromotionRequest() {
 }
 
 export async function adminListPromotionRequests() {
+  await requireAdmin();
   const { data } = await getSupabase().from("notifications")
     .select("id, user_id, body, created_at, is_read").eq("type", "promotion_request").order("created_at", { ascending: false }).limit(50);
   const userIds = [...new Set((data ?? []).map((n: any) => n.user_id))];
@@ -312,6 +422,7 @@ export async function adminListPromotionRequests() {
 }
 
 export async function adminHandlePromotion(userId: string, approve: boolean) {
+  await requireAdmin();
   if (approve) {
     await getSupabase().from("profiles").update({ role: "tontine_manager" }).eq("id", userId);
     await getSupabase().from("notifications").insert({ user_id: userId, title: "Promotion accordée 🎉", body: "Félicitations ! Vous êtes maintenant Tontine Manager.", type: "promotion" });
@@ -326,6 +437,7 @@ let _lastBroadcastAt = 0;
 const BROADCAST_COOLDOWN_MS = 60 * 60 * 1000; // 1 broadcast max par heure
 
 export async function adminBroadcast(title: string, body: string) {
+  await requireAdmin();
   const now = Date.now();
   if (now - _lastBroadcastAt < BROADCAST_COOLDOWN_MS) {
     const waitMin = Math.ceil((BROADCAST_COOLDOWN_MS - (now - _lastBroadcastAt)) / 60000);
@@ -342,6 +454,7 @@ export async function adminBroadcast(title: string, body: string) {
 }
 
 export async function getUsersSeries(days = 14) {
+  await requireAdmin();
   return cached(`users-series`, 120_000, async () => {
     const since = new Date(Date.now() - days * 86400000).toISOString();
     const { data } = await getSupabase().from("profiles").select("created_at").gte("created_at", since).order("created_at", { ascending: true });

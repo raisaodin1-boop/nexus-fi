@@ -15,7 +15,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { FileText, Award, ShieldCheck, Share2, TrendingUp, Crown, Sparkles, Lock, CheckCircle2 } from "lucide-react-native";
 
-import { api, formatXAF } from "@/src/api";
+import { api, ApiError, formatXAF } from "@/src/api";
+import { openPaymentScreen } from "@/src/payment-nav";
+import { enrichTips, type InsightItem } from "@/src/insight-actions";
 import { Card, SectionTitle, SkeletonBox, SkeletonStatRow } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { TrustGauge } from "@/src/trust-gauge";
@@ -48,6 +50,10 @@ interface IdentityProfile {
     points_to_next: number;
     progress_within_level_pct: number;
     events_recorded: number;
+    platinum_eligible?: boolean;
+    platinum_requirements?: { label: string; met: boolean; current: string; required: string }[];
+    deposit_count?: number;
+    contribution_count?: number;
   };
   recent_events: { event_type: string; points_delta: number; created_at: string }[];
 }
@@ -55,20 +61,24 @@ interface IdentityProfile {
 export default function Identity() {
   const router = useRouter();
   const { user } = useAuth();
-  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfLoadingKind, setPdfLoadingKind] = useState<"identity" | "trust-score" | "savings" | null>(null);
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [profile, setProfile] = useState<IdentityProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [purchases, setPurchases] = useState<{ kind: string }[]>([]);
+
   const load = useCallback(async () => {
     try {
-      const [id, prof] = await Promise.all([
+      const [id, prof, paid] = await Promise.all([
         api.get<Identity>("/identity"),
         api.get<IdentityProfile>("/identity-profile/me").catch(() => null),
+        api.get<{ kind: string }[]>("/certificates/purchases").catch(() => []),
       ]);
       setIdentity(id);
       setProfile(prof);
+      setPurchases(paid ?? []);
       setError(null);
     } catch (e) {
       setError("Impossible de charger votre identité. Réessayez.");
@@ -78,38 +88,40 @@ export default function Identity() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const openPDF = async (kind: "identity" | "trust-score" | "savings") => {
-    setPdfLoading(true);
+    setPdfLoadingKind(kind);
     try {
       await sharePdfCertificate(kind);
     } catch (e: any) {
       Alert.alert("Erreur", e?.message ?? "Impossible de générer le document. Réessayez.");
     } finally {
-      setPdfLoading(false);
+      setPdfLoadingKind(null);
     }
   };
 
-  const downloadCertified = async (kind: "identity" | "trust-score" | "savings") => {
-    // Payment gate — always confirm before attempting download
-    Alert.alert(
-      "Certificat Authentifié VIP",
-      "Ce certificat officiel nécessite un paiement de 10 000 FCFA. Voulez-vous continuer vers le paiement ?",
-      [
-        { text: "Annuler", style: "cancel" },
-        {
-          text: "Payer 10 000 FCFA →",
-          onPress: () =>
-            router.push({
-              pathname: "/pay",
-              params: {
-                amount: "10000",
-                label: `Certificat authentifié - ${kind}`,
-                kind: "certified_report",
-                cert_kind: kind,
-              },
-            } as any),
-        },
-      ],
-    );
+  const downloadCertified = (kind: "identity" | "trust-score" | "savings") => {
+    const paid = purchases.some((p) => p.kind === kind);
+    if (paid) {
+      router.push({ pathname: "/certificate-delivery", params: { cert_kind: kind } } as any);
+      return;
+    }
+    openPaymentScreen(router, {
+      amount: 10000,
+      kind: "certified_report",
+      cert_kind: kind,
+      label: `Certificat authentifié — ${kind}`,
+    });
+  };
+
+  const openCertifiedPdf = async (kind: "identity" | "trust-score" | "savings") => {
+    setPdfLoadingKind(kind);
+    try {
+      const report = await api.get<{ filename: string; html: string }>(`/reports/certified/${kind}`);
+      await downloadOrSharePdf(report.html, report.filename);
+    } catch (e) {
+      Alert.alert("Erreur", e instanceof ApiError ? e.detail : "Téléchargement impossible.");
+    } finally {
+      setPdfLoadingKind(null);
+    }
   };
 
   if (loading || !identity) {
@@ -210,11 +222,15 @@ export default function Identity() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.tierLabel, { color: tier.level_color }]}>{tier.level}</Text>
-                    <Text style={styles.tierPoints}>{tier.points} points · {tier.events_recorded} action{tier.events_recorded > 1 ? "s" : ""}</Text>
+                    <Text style={styles.tierPoints}>
+                      {tier.points} pts d'activité · {tier.deposit_count ?? 0} dépôts · {tier.contribution_count ?? 0} cotisations
+                    </Text>
                     {tier.next_level ? (
                       <Text style={styles.tierNext}>+{tier.points_to_next} points pour atteindre {tier.next_level}</Text>
-                    ) : (
+                    ) : tier.platinum_eligible ? (
                       <Text style={styles.tierNext}>🏆 Niveau maximal atteint</Text>
+                    ) : (
+                      <Text style={styles.tierNext}>Platinum : 3 ans de cotisations régulières requises</Text>
                     )}
                   </View>
                 </View>
@@ -223,10 +239,10 @@ export default function Identity() {
                 </View>
                 <View style={styles.tierLegend}>
                   {[
-                    { k: "bronze", lbl: "Bronze", c: "#CD7F32", r: "0-30" },
-                    { k: "silver", lbl: "Silver", c: "#C0C0C0", r: "31-60" },
-                    { k: "gold", lbl: "Gold", c: "#D4AF37", r: "61-80" },
-                    { k: "platinum", lbl: "Platinum", c: "#8B5CF6", r: "81+" },
+                    { k: "bronze", lbl: "Bronze", c: "#CD7F32", r: "0-24" },
+                    { k: "silver", lbl: "Argent", c: "#8B9EB0", r: "25-74" },
+                    { k: "gold", lbl: "Or", c: "#D4AF37", r: "75-199" },
+                    { k: "platinum", lbl: "Platinum", c: "#8B5CF6", r: "200+ & 3 ans" },
                   ].map((t) => (
                     <View key={t.k} style={styles.tierLegendCol}>
                       <View style={[styles.tierLegendDot, { backgroundColor: t.c, opacity: tier.level_key === t.k ? 1 : 0.4 }]} />
@@ -235,6 +251,16 @@ export default function Identity() {
                     </View>
                   ))}
                 </View>
+                {tier.platinum_requirements && tier.level_key === "gold" ? (
+                  <View style={{ marginTop: 12, gap: 6 }}>
+                    <Text style={{ fontSize: 12, fontWeight: "800", color: Colors.textMuted }}>Conditions Platinum :</Text>
+                    {tier.platinum_requirements.map((req, i) => (
+                      <Text key={i} style={{ fontSize: 11, color: req.met ? Colors.accent : Colors.textMuted }}>
+                        {req.met ? "✓" : "○"} {req.label} — {req.current} / {req.required}
+                      </Text>
+                    ))}
+                  </View>
+                ) : null}
               </Card>
             </View>
           </>
@@ -296,9 +322,9 @@ export default function Identity() {
         {/* Components — /1000 system */}
         <SectionTitle>Composantes du score</SectionTitle>
         <View style={{ paddingHorizontal: Spacing.xl, gap: 10 }}>
-          <Component label="Bonus inscription" value={(ts.components as any).signup_bonus ?? 5} max={5} color={Colors.accent} hint="5 pts offerts à l'inscription" />
-          <Component label="Points transactions" value={(ts.components as any).transaction_points ?? 0} max={990} color={Colors.secondary} hint="0,5 pt (1k–50k XAF) · 1 pt (50k+ XAF)" />
-          <Component label="Bonus annuel" value={(ts.components as any).yearly_bonus ?? 0} max={50} color={Colors.primary} hint="5 pts/an d'activité régulière" />
+          <Component label="Points d'activité" value={(ts.components as any).activity_points ?? 0} max={300} color={Colors.accent} hint="1 pt par dépôt ou cotisation (retraits exclus)" />
+          <Component label="Régularité" value={(ts.components as any).regularity ?? 0} max={100} color={Colors.secondary} hint="Mois avec au moins une cotisation réelle" />
+          <Component label="Ancienneté" value={(ts.components as any).longevity ?? 0} max={100} color={Colors.primary} hint="Progression lente sur plusieurs années" />
         </View>
 
         {/* KYC card */}
@@ -323,11 +349,21 @@ export default function Identity() {
           <>
             <SectionTitle>Recommandations pour vous</SectionTitle>
             <View style={{ paddingHorizontal: Spacing.xl, gap: 8 }}>
-              {ts.tips.map((t, i) => (
-                <Card key={i} style={{ flexDirection: "row", gap: 12, padding: 14 }}>
-                  <TrendingUp color={Colors.accent} size={18} style={{ marginTop: 2 }} />
-                  <Text style={styles.tip}>{t}</Text>
-                </Card>
+              {enrichTips(ts.tips).map((it: InsightItem, i) => (
+                <TouchableOpacity
+                  key={i}
+                  activeOpacity={0.85}
+                  onPress={() => router.push(it.route as any)}
+                  testID={`identity-tip-${i}`}
+                >
+                  <Card style={{ flexDirection: "row", gap: 12, padding: 14, alignItems: "center" }}>
+                    <TrendingUp color={Colors.accent} size={18} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.tip}>{it.text}</Text>
+                      <Text style={{ color: Colors.accent, fontSize: 12, fontWeight: "700", marginTop: 4 }}>{it.action_label} →</Text>
+                    </View>
+                  </Card>
+                </TouchableOpacity>
               ))}
             </View>
           </>
@@ -336,8 +372,8 @@ export default function Identity() {
         {/* FREE certificates */}
         <SectionTitle>Documents gratuits</SectionTitle>
         <View style={{ paddingHorizontal: Spacing.xl, gap: 10 }}>
-          <PDFButton testID="pdf-identity" icon={<ShieldCheck color={Colors.accent} size={20} />} title="Identité Financière" subtitle="Profil complet et vérifié" onPress={() => openPDF("identity")} loading={pdfLoading} />
-          <PDFButton testID="pdf-savings" icon={<FileText color={Colors.primary} size={20} />} title="Résumé d'épargne" subtitle="Total et engagement" onPress={() => openPDF("savings")} loading={pdfLoading} />
+          <PDFButton testID="pdf-identity" icon={<ShieldCheck color={Colors.accent} size={20} />} title="Identité Financière" subtitle="Profil complet et vérifié" onPress={() => openPDF("identity")} loading={pdfLoadingKind === "identity"} />
+          <PDFButton testID="pdf-savings" icon={<FileText color={Colors.primary} size={20} />} title="Résumé d'épargne" subtitle="Total et engagement" onPress={() => openPDF("savings")} loading={pdfLoadingKind === "savings"} />
           <Text style={styles.shareHint}>📱 Partagez par WhatsApp, Email, ou enregistrez-les directement.</Text>
         </View>
 
@@ -384,30 +420,36 @@ export default function Identity() {
               testID="cert-identity"
               style={styles.certBtn}
               activeOpacity={0.8}
-              onPress={() => downloadCertified("identity")}
+              onPress={() => purchases.some((p) => p.kind === "identity") ? openCertifiedPdf("identity") : downloadCertified("identity")}
             >
               <Lock color={Colors.gradGold1} size={15} />
-              <Text style={styles.certBtnText}>Identité Certifiée</Text>
+              <Text style={styles.certBtnText}>
+                {purchases.some((p) => p.kind === "identity") ? "Télécharger Identité Certifiée" : "Identité Certifiée — 10 000 FCFA"}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               testID="cert-trust"
               style={[styles.certBtn, { marginTop: 8 }]}
               activeOpacity={0.8}
-              onPress={() => downloadCertified("trust-score")}
+              onPress={() => purchases.some((p) => p.kind === "trust-score") ? openCertifiedPdf("trust-score") : downloadCertified("trust-score")}
             >
               <CheckCircle2 color={Colors.gradGold1} size={15} />
-              <Text style={styles.certBtnText}>Trust Score Certifié</Text>
+              <Text style={styles.certBtnText}>
+                {purchases.some((p) => p.kind === "trust-score") ? "Télécharger Trust Score Certifié" : "Trust Score Certifié — 10 000 FCFA"}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               testID="cert-savings"
               style={[styles.certBtn, { marginTop: 8 }]}
               activeOpacity={0.8}
-              onPress={() => downloadCertified("savings")}
+              onPress={() => purchases.some((p) => p.kind === "savings") ? openCertifiedPdf("savings") : downloadCertified("savings")}
             >
               <Award color={Colors.gradGold1} size={15} />
-              <Text style={styles.certBtnText}>Épargne Certifiée</Text>
+              <Text style={styles.certBtnText}>
+                {purchases.some((p) => p.kind === "savings") ? "Télécharger Épargne Certifiée" : "Épargne Certifiée — 10 000 FCFA"}
+              </Text>
             </TouchableOpacity>
           </LinearGradient>
         </View>

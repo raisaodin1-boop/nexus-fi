@@ -1,39 +1,68 @@
-/** Generate and download/share a PDF from HTML — works on web (incl. mobile Safari) and native. */
+/** Generate and download/share a PDF from HTML — web (iframe) + native (expo-print). */
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
 import * as Print from "expo-print";
 
-async function downloadPdfOnWeb(uri: string, filename: string) {
-  const response = await fetch(uri);
-  const blob = await response.blob();
-  const file = new File([blob], filename, { type: "application/pdf" });
-
-  if (typeof navigator !== "undefined" && navigator.canShare?.({ files: [file] })) {
-    await navigator.share({ files: [file], title: filename });
-    return;
+/** Web/PWA: expo-print imprime la page entière — on utilise une iframe isolée. */
+async function printHtmlOnWeb(html: string, filename: string): Promise<void> {
+  if (typeof document === "undefined") {
+    throw new Error("Génération PDF indisponible sur cette plateforme.");
   }
 
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.rel = "noopener";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("title", filename);
+  iframe.style.cssText = "position:fixed;left:-10000px;top:0;width:210mm;height:297mm;border:0;opacity:0;pointer-events:none";
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentDocument ?? iframe.contentWindow?.document;
+  if (!doc) {
+    document.body.removeChild(iframe);
+    throw new Error("Impossible de préparer le document PDF.");
+  }
+
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  await new Promise<void>((resolve) => {
+    const done = () => {
+      setTimeout(resolve, 350);
+    };
+    if (iframe.contentWindow?.document?.readyState === "complete") {
+      done();
+    } else {
+      iframe.onload = done;
+      setTimeout(done, 1200);
+    }
+  });
+
+  try {
+    iframe.contentWindow?.focus();
+    iframe.contentWindow?.print();
+  } finally {
+    setTimeout(() => {
+      if (iframe.parentNode) document.body.removeChild(iframe);
+    }, 1500);
+  }
 }
 
+
 export async function downloadOrSharePdf(html: string, filename: string, dialogTitle = "Enregistrer le document") {
-  const { uri } = await Print.printToFileAsync({ html, base64: false });
+  const safeName = filename.endsWith(".pdf") ? filename : `${filename}.pdf`;
 
   if (Platform.OS === "web") {
-    await downloadPdfOnWeb(uri, filename.endsWith(".pdf") ? filename : `${filename}.pdf`);
+    await printHtmlOnWeb(html, safeName);
     return;
   }
 
-  const safeName = filename.endsWith(".pdf") ? filename : `${filename}.pdf`;
+  const { uri } = await Print.printToFileAsync({
+    html,
+    base64: false,
+    width: 595,
+    height: 842,
+  });
+
   const baseDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? "";
   const dest = `${baseDir}${safeName}`;
   await FileSystem.copyAsync({ from: uri, to: dest });

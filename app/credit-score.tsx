@@ -325,6 +325,25 @@ export default function CreditScoreScreen() {
           </View>
         </View>
 
+        {(data.alternative_score != null && data.alternative_score > 0) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Score alternatif ({data.regional_zone ?? "CEMAC"})</Text>
+            <View style={[styles.card, Shadow.card, { gap: 8 }]}>
+              <Text style={styles.altDesc}>
+                Signaux hors bureau de crédit : Mobile Money, réseau tontine, discipline de remboursement.
+                Devise locale : {data.local_currency ?? "XAF"}.
+              </Text>
+              <Text style={styles.altScore}>+{data.alternative_score} pts alternatifs · composite {data.composite_score ?? data.score}/1000</Text>
+              {data.alternative_signals && Object.entries(data.alternative_signals).map(([k, v]) => (
+                <View key={k} style={styles.altRow}>
+                  <Text style={styles.altKey}>{k.replace(/_/g, " ")}</Text>
+                  <Text style={styles.altVal}>{v}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
         {/* ── Historique ── */}
         {history.length >= 2 && (
           <View style={styles.section}>
@@ -462,6 +481,11 @@ const styles = StyleSheet.create({
   chartLabels: { flexDirection: "row", justifyContent: "space-between", width: 280, marginTop: 2 },
   chartLabel: { fontSize: 10, color: Colors.textMuted },
   chartNote: { fontSize: 11, color: Colors.textSubtle, textAlign: "center", marginTop: 4 },
+  altDesc: { fontSize: 13, color: Colors.textMuted, lineHeight: 18 },
+  altScore: { fontSize: 15, fontWeight: "800", color: Colors.secondary },
+  altRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
+  altKey: { fontSize: 12, color: Colors.textMuted, textTransform: "capitalize" },
+  altVal: { fontSize: 13, fontWeight: "700", color: Colors.text },
   tipRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
   tipDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: Colors.secondary, marginTop: 5 },
   tipText: { fontSize: 13, color: Colors.textMuted, lineHeight: 19, flex: 1 },

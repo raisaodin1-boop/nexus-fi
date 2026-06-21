@@ -54,22 +54,6 @@ async function fileToBase64(admin: ReturnType<typeof createClient>, path: string
   return btoa(binary);
 }
 
-async function triggerPush(admin: ReturnType<typeof createClient>, userId: string, title: string, body: string, type: string) {
-  const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-push`;
-  try {
-    await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ user_id: userId, title, body, type }),
-    });
-  } catch (e) {
-    console.error("push after kyc failed:", e);
-  }
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
@@ -189,14 +173,6 @@ Deno.serve(async (req) => {
     type: "kyc",
     is_read: false,
   });
-
-  await triggerPush(
-    admin,
-    user.id,
-    "Dossier KYC soumis",
-    mode === "automated" ? "Vérification en cours…" : "Revue manuelle en cours…",
-    "kyc",
-  );
 
   return json({
     ok: true,

@@ -6,6 +6,7 @@ import { Copy, Share2 } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import QRCode from "react-native-qrcode-svg";
 import { api } from "@/src/api";
+import { encodeQR } from "@/src/qr-payment";
 import { Colors, Spacing } from "@/src/theme";
 
 export default function QRReceiveScreen() {
@@ -41,7 +42,10 @@ export default function QRReceiveScreen() {
         {qrData ? (
           <>
             <View style={styles.qrBox}>
-              <QRCode value={JSON.stringify(qrData)} size={220} />
+              <QRCode
+                value={encodeQR({ to: qrData.user_id, name: qrData.full_name })}
+                size={220}
+              />
             </View>
             <Text style={styles.name}>{qrData.full_name}</Text>
             <Text style={styles.tag}>{qrData.hodix_tag}</Text>

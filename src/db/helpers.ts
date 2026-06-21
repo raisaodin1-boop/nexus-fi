@@ -42,3 +42,13 @@ export function isUniqueViolation(error: { code?: string; message?: string } | n
   if (!error) return false;
   return error.code === "23505" || /duplicate key|unique constraint/i.test(error.message ?? "");
 }
+
+const ADMIN_ROLES = ["admin", "super_admin"] as const;
+
+export async function requireAdmin() {
+  const me = await uid();
+  const { data } = await getSupabase().from("profiles").select("role").eq("id", me).single();
+  if (!data || !ADMIN_ROLES.includes(data.role as (typeof ADMIN_ROLES)[number])) {
+    throw { status: 403, detail: "Accès réservé aux administrateurs" };
+  }
+}

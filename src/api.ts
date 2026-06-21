@@ -163,12 +163,13 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
       await db.markNotifRead(s[1]);
       return { detail: "Lu" } as T;
     }
-    if (method === "POST" && s[0] === "notifications" && s[1] === "push-token")        return (await db.savePushToken(body?.token)) as T;
+    if (method === "POST" && s[0] === "notifications" && s[1] === "push-token")        return (await db.savePushToken(body?.token, body?.platform)) as T;
     if (method === "POST" && s[0] === "notifications" && s[1] === "consent")          return (await db.saveNotificationConsent(!!body?.push_consent, body?.marketing_consent)) as T;
 
     // ── Credit score
     if (method === "GET"  && s[0] === "credit-score" && !s[1])                         return (await db.getCreditScore()) as T;
     if (method === "GET"  && s[0] === "credit-score" && s[1] === "history")            return (await db.getCreditScoreHistory()) as T;
+    if (method === "GET"  && s[0] === "emoney" && s[1] === "license")                  return (await db.getEmoneyLicenseConfig()) as T;
 
     // ── Savings analytics
     if (method === "GET" && s[0] === "savings" && s[1] === "analytics" && !s[2])       return (await db.getAllSavingsAnalytics()) as T;
@@ -195,6 +196,7 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     // ── Payments
     if (method === "GET"  && s[0] === "payments" && s[1] === "history")                 return (await db.listPayments()) as T;
     if (method === "GET"  && s[0] === "payments" && s[1] && s[2] === "receipt")          return (await db.getPaymentReceipt(s[1])) as T;
+    if (method === "GET"  && s[0] === "withdrawals" && s[1] && s[2] === "receipt")        return (await db.getWithdrawalReceipt(s[1])) as T;
     if (method === "POST" && s[0] === "payments" && s[1] && s[2] === "receipt" && s[3] === "email")
       return (await db.sendPaymentReceiptEmail(s[1], !!body?.force)) as T;
     if (method === "GET"  && s[0] === "payments" && s[1] && s[2] === "status")          return (await db.getPaymentStatus(s[1])) as T;
@@ -222,7 +224,7 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
 
     // ── Leaderboard / Ranking
     if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "leaderboard")      return (await db.getTontineLeaderboard(s[1])) as T;
-    if (method === "GET"  && s[0] === "ranking" && s[1] === "regional")                  return (await db.getRegionalRanking(body?.country ?? "CM")) as T;
+    if (method === "GET"  && s[0] === "ranking" && s[1] === "regional")                  return (await db.getRegionalRanking(query.get("country") ?? "CM")) as T;
 
     // ── Family accounts
     if (method === "POST" && s[0] === "family" && s[1] === "link")                       return (await db.linkFamilyMember(body?.email, body?.relationship)) as T;
@@ -251,26 +253,38 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
       )) as T;
     if (method === "PATCH" && s[0] === "admin" && s[1] === "users" && s[2] === "role")          return (await db.adminUpdateUserRole(body?.user_id, body?.role)) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "users" && s[2] === "deactivate")    return (await db.adminDeactivateUser(body?.user_id)) as T;
-    if (method === "GET"   && s[0] === "admin" && s[1] === "tontines")                          return (await db.adminListTontines(body?.search)) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "tontines")                          return (await db.adminListTontines(query.get("search") ?? "")) as T;
     if (method === "PATCH" && s[0] === "admin" && s[1] === "tontines" && s[2])                  return (await db.adminUpdateTontine(s[2], body)) as T;
     if (method === "DELETE"&& s[0] === "admin" && s[1] === "tontines" && s[2])                  return (await db.adminDeleteTontine(s[2])) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "kyc" && s[2])                      return (await db.adminGetKycDetail(s[2])) as T;
     if (method === "GET"   && s[0] === "admin" && s[1] === "kyc")                               return (await db.adminListKyc()) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "kyc" && s[2] === "approve")         return (await db.adminHandleKyc(body?.user_id, true)) as T;
-    if (method === "POST"  && s[0] === "admin" && s[1] === "kyc" && s[2] === "reject")          return (await db.adminHandleKyc(body?.user_id, false)) as T;
+    if (method === "POST"  && s[0] === "admin" && s[1] === "kyc" && s[2] === "reject")          return (await db.adminHandleKyc(body?.user_id, false, body?.reason)) as T;
     if (method === "DELETE"&& s[0] === "admin" && s[1] === "kyc" && s[2])                      return (await db.adminDeleteKyc(s[2])) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "compliance" && s[2] === "stats")     return (await db.adminComplianceStats()) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "compliance" && s[2] === "audit")    return (await db.adminListComplianceAudit(Number(query.get("limit") ?? 100), query.get("category") ?? undefined)) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "compliance" && s[2] === "fraud-alerts") return (await db.adminListFraudAlerts(query.get("status") ?? "open")) as T;
+    if (method === "POST"  && s[0] === "admin" && s[1] === "compliance" && s[2] === "fraud-review") return (await db.adminReviewFraudAlert(body?.alert_id, body?.status)) as T;
     if (method === "POST" && s[0] === "promotion-requests" && !s[1])                            return (await db.createPromotionRequest(body?.reason)) as T;
     if (method === "GET"  && s[0] === "promotion-requests" && s[1] === "me")                   return (await db.getMyPromotionRequest()) as T;
     if (method === "GET"   && s[0] === "admin" && s[1] === "promotion-requests")                return (await db.adminListPromotionRequests()) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "promotion" && s[2] === "approve")   return (await db.adminHandlePromotion(body?.user_id, true)) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "promotion" && s[2] === "reject")    return (await db.adminHandlePromotion(body?.user_id, false)) as T;
-    if (method === "POST"  && s[0] === "admin" && s[1] === "broadcast")                         return (await db.adminBroadcast(body?.title, body?.body)) as T;
+    if (method === "POST"  && s[0] === "admin" && s[1] === "broadcast")                         return (await db.adminSendAdvertisement(body?.title, body?.body)) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "messages" && s[2] === "threads")     return (await db.adminListMessageThreads()) as T;
     if (method === "GET"   && s[0] === "admin" && s[1] === "messages")                          return (await db.adminListAllMessages()) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "messages")                          return (await db.adminSendMessageToUser(body?.user_id, body?.content)) as T;
+    if (method === "POST"  && s[0] === "admin" && s[1] === "advertisement")                     return (await db.adminSendAdvertisement(body?.title, body?.content)) as T;
 
     // ── Messages
     if (method === "GET"  && s[0] === "messages" && s[1] === "conversations")                   return (await db.listConversations()) as T;
+    if (method === "GET"  && s[0] === "messages" && s[1] === "search")                         return (await db.searchMessageRecipients(query.get("q") ?? "")) as T;
+    if (method === "GET"  && s[0] === "messages" && s[1] === "unread-count")                   return ({ unread_count: await db.getUnreadCount() }) as T;
     if (method === "GET"  && s[0] === "messages" && s[1] === "admin")                           return (await db.listMessages("admin")) as T;
-    if (method === "GET"  && s[0] === "messages" && s[1] === "tontine" && s[2])                 return (await db.listMessages("tontine", s[2])) as T;
+    if (method === "GET"  && s[0] === "messages" && s[1] === "broadcast")                      return (await db.listMessages("broadcast")) as T;
+    if (method === "GET"  && s[0] === "messages" && s[1] === "direct" && s[2])                 return (await db.listMessages("direct", s[2])) as T;
+    if (method === "GET"  && s[0] === "messages" && s[1] === "tontine" && s[2])                 return (await db.listMessages("tontine", undefined, s[2])) as T;
+    if (method === "POST" && s[0] === "messages" && s[1] === "thread" && s[2] === "read")       return (await db.markThreadRead(body?.thread_type, body?.peer_id, body?.tontine_id)) as T;
     if (method === "POST" && s[0] === "messages")                                               return (await db.sendMessage(body)) as T;
     if (method === "PATCH"&& s[0] === "messages" && s[1] && s[2] === "read")                   return (await db.markMessageRead(s[1])) as T;
 
@@ -294,6 +308,10 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"  && s[0] === "reports-b64" && s[1])                              return (await db.getReportHtml(s[1] as "identity" | "trust-score" | "savings")) as T;
     if (method === "GET"  && s[0] === "reports" && s[1] === "certified" && s[2])
       return (await db.getCertifiedReport(s[2] as "identity" | "trust-score" | "savings")) as T;
+    if (method === "GET"  && s[0] === "certificates" && s[1] === "purchases")
+      return (await db.listCertificatePurchases()) as T;
+    if (method === "POST" && s[0] === "certificates" && s[1] === "send-email")
+      return (await db.sendCertificateEmail(body?.kind, body?.email, body?.payment_id)) as T;
     if (method === "POST" && s[0] === "loans" && s[1] === "apply")                       return (await db.submitLoanApplication(body)) as T;
     if (method === "GET"  && s[0] === "loans" && s[1] === "applications")                  return (await db.getLoanApplications()) as T;
 

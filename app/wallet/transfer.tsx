@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { ChevronLeft, CheckCircle2, Info } from "lucide-react-native";
 
@@ -17,9 +17,10 @@ const CURRENCIES: Currency[] = ["XAF", "EUR", "USD"];
 
 export default function TransferScreen() {
   const router = useRouter();
+  const { to, name, amount: preAmount } = useLocalSearchParams<{ to?: string; name?: string; amount?: string }>();
   const { currency, setCurrency } = useDisplayCurrency();
   const [recipient, setRecipient] = useState("");
-  const [amount, setAmount]       = useState("");
+  const [amount, setAmount]       = useState(preAmount ?? "");
   const [note, setNote]           = useState("");
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
@@ -29,10 +30,18 @@ export default function TransferScreen() {
   const [pendingOtp, setPendingOtp] = useState(false);
   const [amountXaf, setAmountXaf] = useState(0);
   const [userId, setUserId]       = useState("");
+  const [recipientUserId, setRecipientUserId] = useState<string | undefined>();
 
   useEffect(() => {
     api.get<{ id: string }>("/users/me").then(me => setUserId(me.id)).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (to && typeof to === "string") {
+      setRecipientUserId(to);
+      if (name && typeof name === "string") setRecipient(name);
+    }
+  }, [to, name]);
 
   // Extract phone from recipient if it looks like a phone number
   const recipientPhone = /^\+?\d[\d\s]{7,}$/.test(recipient.trim()) ? recipient.trim() : undefined;
@@ -42,7 +51,7 @@ export default function TransferScreen() {
     setLoading(true);
     try {
       await api.post("/wallet/transfer", {
-        to_phone_or_email: recipient.trim(),
+        ...(recipientUserId ? { to_user_id: recipientUserId } : { to_phone_or_email: recipient.trim() }),
         amount: amt,
         currency,
         note: note.trim() || undefined,
@@ -56,7 +65,7 @@ export default function TransferScreen() {
   const submit = async () => {
     setError(null);
     const amt = parseFloat(amount.replace(/\s/g, "").replace(",", "."));
-    if (!recipient.trim()) { setError("Entrez l'email ou le téléphone du destinataire."); return; }
+    if (!recipientUserId && !recipient.trim()) { setError("Entrez l'email ou le téléphone du destinataire."); return; }
     if (!amt || amt <= 0) { setError("Entrez un montant valide."); return; }
     setLoading(true);
     try {

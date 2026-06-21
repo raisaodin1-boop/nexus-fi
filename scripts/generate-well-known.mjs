@@ -11,7 +11,7 @@ const root = path.join(__dirname, "..");
 const outDir = path.join(root, "public", ".well-known");
 
 const teamId = process.env.APPLE_TEAM_ID || process.env.EXPO_PUBLIC_APPLE_TEAM_ID || "REPLACE_WITH_APPLE_TEAM_ID";
-const sha256 = process.env.ANDROID_SHA256_FINGERPRINT || process.env.EXPO_PUBLIC_ANDROID_SHA256_FINGERPRINT || "REPLACE_WITH_ANDROID_SHA256_FINGERPRINT";
+const sha256 = process.env.ANDROID_SHA256_FINGERPRINT || process.env.EXPO_PUBLIC_ANDROID_SHA256_FINGERPRINT || "CD:A8:B0:EF:02:AA:43:1A:32:44:C0:12:CE:70:ED:DA:AC:A1:FB:2A:EC:72:B6:D0:4B:FF:12:9E:5A:80:AB:59";
 const bundleId = "app.hodix.mobile";
 const appId = `${teamId}.${bundleId}`;
 

@@ -17,7 +17,6 @@ import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { LogOut, Save, Shield, ShieldCheck, Bell, ChevronRight, Edit3, Mail, MapPin, Phone, Briefcase, Sparkles, CreditCard, Moon, Fingerprint, Globe } from "lucide-react-native";
-import * as SecureStore from "expo-secure-store";
 
 import { useAuth } from "@/src/auth-context";
 import { useI18n } from "@/src/i18n";
@@ -31,7 +30,7 @@ import {
 import {
   SelectPicker, ChipSelector, DatePicker, NameField, ManualField,
 } from "@/src/profile-selectors";
-import { getBiometricInfo, authenticateBiometric, setBiometricEnabled } from "@/src/biometrics";
+import { getBiometricInfo, authenticateBiometricDetailed, isBiometricEnabled, setBiometricEnabled } from "@/src/biometrics";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -42,6 +41,10 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bioEnabled, setBioEnabled] = useState(false);
+  const [bioBusy, setBioBusy] = useState(false);
+  const [bioLoaded, setBioLoaded] = useState(false);
+  const [bioAvailable, setBioAvailable] = useState(false);
+  const [bioLabel, setBioLabel] = useState("");
   const [pushEnabled, setPushEnabled] = useState(!!user?.push_consent);
   const [dobDate, setDobDate] = useState<Date | null>(
     user?.date_of_birth ? new Date(user.date_of_birth) : null,
@@ -124,9 +127,13 @@ export default function ProfileScreen() {
   }, [user]);
 
   useEffect(() => {
-    SecureStore.getItemAsync("bio_enabled")
-      .then((v) => setBioEnabled(v === "1"))
-      .catch(() => {});
+    (async () => {
+      const [info, enabled] = await Promise.all([getBiometricInfo(), isBiometricEnabled()]);
+      setBioAvailable(info.available);
+      setBioLabel(info.label);
+      setBioEnabled(enabled);
+      setBioLoaded(true);
+    })().catch(() => setBioLoaded(true));
   }, []);
 
   const handleSave = async () => {
@@ -178,6 +185,12 @@ export default function ProfileScreen() {
   };
 
   const handleBioToggle = async (value: boolean) => {
+    if (bioBusy) return;
+    if (Platform.OS === "web") {
+      Alert.alert("Biométrie indisponible", "Utilisez l'application mobile HODIX pour activer Face ID ou l'empreinte digitale.");
+      return;
+    }
+
     if (!value) {
       Alert.alert(
         "Désactiver la biométrie",
@@ -188,8 +201,17 @@ export default function ProfileScreen() {
             text: "Désactiver",
             style: "destructive",
             onPress: async () => {
-              await setBiometricEnabled(false);
-              setBioEnabled(false);
+              setBioBusy(true);
+              try {
+                const ok = await setBiometricEnabled(false);
+                if (!ok) {
+                  Alert.alert("Erreur", "Impossible de mettre à jour la préférence biométrique.");
+                  return;
+                }
+                setBioEnabled(false);
+              } finally {
+                setBioBusy(false);
+              }
             },
           },
         ],
@@ -197,22 +219,40 @@ export default function ProfileScreen() {
       return;
     }
 
-    const info = await getBiometricInfo();
-    if (!info.available) {
+    setBioBusy(true);
+    try {
+      const info = await getBiometricInfo();
+      setBioAvailable(info.available);
+      setBioLabel(info.label);
+      if (!info.available) {
+        Alert.alert(
+          "Biométrie indisponible",
+          "Aucune empreinte ou reconnaissance faciale n'est configurée sur cet appareil. Ajoutez-en une dans les réglages système, puis réessayez.",
+        );
+        return;
+      }
+
+      const auth = await authenticateBiometricDetailed(`Activer ${info.label} pour Hodix`);
+      if (!auth.success) {
+        if (auth.error !== "cancelled") {
+          Alert.alert("Échec", "La vérification biométrique a échoué. Réessayez.");
+        }
+        return;
+      }
+
+      const saved = await setBiometricEnabled(true);
+      if (!saved) {
+        Alert.alert("Erreur", "Impossible d'enregistrer la préférence sur cet appareil.");
+        return;
+      }
+      setBioEnabled(true);
       Alert.alert(
-        "Biométrie indisponible",
-        Platform.OS === "web"
-          ? "La biométrie n'est pas disponible sur le web. Utilisez l'application mobile."
-          : "Aucune biométrie configurée sur cet appareil. Activez Face ID ou l'empreinte dans les réglages de votre téléphone.",
+        "Biométrie activée",
+        `${info.label} sera demandé à l'ouverture de l'app et pour confirmer certaines actions sensibles.`,
       );
-      return;
+    } finally {
+      setBioBusy(false);
     }
-    // Verify the user's biometrics before turning the lock on.
-    const ok = await authenticateBiometric(`Activer ${info.label} pour Hodix`);
-    if (!ok) return;
-    await setBiometricEnabled(true);
-    setBioEnabled(true);
-    Alert.alert("Biométrie activée", `${info.label} sera demandé à l'ouverture de l'app et pour confirmer vos transactions.`);
   };
 
   const bg = isDark ? colors.bg : Colors.bg;
@@ -481,10 +521,22 @@ export default function ProfileScreen() {
               {/* Biometric toggle */}
               <View style={[styles.toggleRow, { borderTopWidth: 1, borderTopColor: borderColor }]}>
                 <Fingerprint color={bioEnabled ? Colors.accent : Colors.textMuted} size={18} />
-                <Text style={[styles.toggleLabel, { color: txt }]}>Connexion biométrique</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.toggleLabel, { color: txt }]}>Connexion biométrique</Text>
+                  {Platform.OS === "web" ? (
+                    <Text style={{ fontSize: 11, color: txtMuted, marginTop: 2 }}>Disponible sur l'app mobile</Text>
+                  ) : !bioLoaded ? (
+                    <Text style={{ fontSize: 11, color: txtMuted, marginTop: 2 }}>Vérification…</Text>
+                  ) : bioLabel && bioAvailable ? (
+                    <Text style={{ fontSize: 11, color: txtMuted, marginTop: 2 }}>{bioLabel}</Text>
+                  ) : !bioAvailable ? (
+                    <Text style={{ fontSize: 11, color: Colors.warning, marginTop: 2 }}>Non configurée sur l'appareil</Text>
+                  ) : null}
+                </View>
                 <Switch
                   value={bioEnabled}
                   onValueChange={handleBioToggle}
+                  disabled={bioBusy || Platform.OS === "web" || !bioLoaded}
                   trackColor={{ false: Colors.border, true: Colors.accent }}
                   thumbColor="#fff"
                   testID="profile-bio-toggle"

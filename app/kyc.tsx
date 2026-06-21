@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -9,12 +9,15 @@ import { api, ApiError } from "@/src/api";
 import { Button, Card } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { useToast } from "@/src/toast";
+import { KycConsentModal } from "@/src/consent-modal";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 interface KycStatus {
   kyc_status?: string;
   status?: string;
   submitted_at?: string;
   verification_mode?: string;
+  rejection_reason?: string | null;
   full_name?: string;
   phone?: string;
   date_of_birth?: string;
@@ -37,6 +40,8 @@ const DOC_LABELS: Record<DocSlot, { title: string; hint: string }> = {
   selfie: { title: "Selfie de vérification", hint: "Visage visible, fond neutre" },
 };
 
+const KYC_DRAFT_KEY = "hodix_kyc_draft_id_front";
+
 async function pickImage(): Promise<string | null> {
   const { launchImageLibraryAsync, MediaTypeOptions } = await import("expo-image-picker");
   const res = await launchImageLibraryAsync({
@@ -55,18 +60,25 @@ export default function KycScreen() {
   const [status, setStatus] = useState<KycStatus | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [docs, setDocs] = useState<Partial<Record<DocSlot, string>>>({});
+  const [showConsent, setShowConsent] = useState(false);
 
   const load = useCallback(() => {
     Promise.all([
       api.get<KycStatus>("/users/me"),
       api.get<any>("/users/me/kyc").catch(() => null),
-    ]).then(([profile, kyc]) => {
+      AsyncStorage.getItem(KYC_DRAFT_KEY).catch(() => null),
+    ]).then(([profile, kyc, draftFront]) => {
       setStatus({
         ...profile,
         kyc_status: profile?.kyc_status ?? kyc?.status ?? "not_submitted",
         verification_mode: kyc?.verification_mode,
         submitted_at: kyc?.submitted_at,
+        rejection_reason: kyc?.rejection_reason ?? null,
       });
+      if (draftFront) {
+        setDocs((d) => ({ ...d, id_front: draftFront }));
+        AsyncStorage.removeItem(KYC_DRAFT_KEY).catch(() => {});
+      }
     }).catch(() => {});
   }, []);
 
@@ -81,37 +93,32 @@ export default function KycScreen() {
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!docs.id_front || !docs.selfie) {
       show("Recto de la pièce d'identité et selfie requis", "error");
       return;
     }
-    const doSubmit = async () => {
-      setSubmitting(true);
-      try {
-        const r = await api.post<{ detail?: string; mode?: string }>("/kyc/submit", {
-          id_front_base64: docs.id_front,
-          id_back_base64: docs.id_back,
-          selfie_base64: docs.selfie,
-          id_type: "IDENTITY_CARD",
-          country: status?.country,
-        });
-        show(r.detail ?? "Dossier KYC soumis !", "success");
-        setStatus((s) => ({ ...s, kyc_status: "pending_review", verification_mode: r.mode }));
-        setDocs({});
-      } catch (e) {
-        show(e instanceof ApiError ? e.detail : "Erreur lors de la soumission", "error");
-      } finally {
-        setSubmitting(false);
-      }
-    };
-    if (Platform.OS === "web") {
-      if (window.confirm("Soumettre votre dossier KYC pour vérification ?")) doSubmit();
-    } else {
-      Alert.alert("Soumettre KYC", "Vos documents seront vérifiés automatiquement (Smile Identity) ou par notre équipe.", [
-        { text: "Annuler", style: "cancel" },
-        { text: "Soumettre", onPress: doSubmit },
-      ]);
+    setShowConsent(true);
+  };
+
+  const doSubmit = async () => {
+    setShowConsent(false);
+    setSubmitting(true);
+    try {
+      const r = await api.post<{ detail?: string; mode?: string }>("/kyc/submit", {
+        id_front_base64: docs.id_front,
+        id_back_base64: docs.id_back,
+        selfie_base64: docs.selfie,
+        id_type: "IDENTITY_CARD",
+        country: status?.country,
+      });
+      show(r.detail ?? "Dossier KYC soumis !", "success");
+      setStatus((s) => ({ ...s, kyc_status: "pending_review", verification_mode: r.mode }));
+      setDocs({});
+    } catch (e) {
+      show(e instanceof ApiError ? e.detail : "Erreur lors de la soumission", "error");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -140,6 +147,13 @@ export default function KycScreen() {
           {status?.verification_mode === "automated" && kycStatus === "pending_review" && (
             <Text style={styles.autoTag}>Vérification automatique Smile Identity en cours…</Text>
           )}
+          {kycStatus === "rejected" && status?.rejection_reason ? (
+            <View style={styles.rejectionBox}>
+              <Text style={styles.rejectionTitle}>Motif du rejet</Text>
+              <Text style={styles.rejectionText}>{status.rejection_reason}</Text>
+              <Text style={styles.rejectionHint}>Corrigez les points ci-dessus puis soumettez un nouveau dossier.</Text>
+            </View>
+          ) : null}
         </Card>
 
         {canSubmit && (
@@ -214,6 +228,11 @@ export default function KycScreen() {
           })()}
         </Card>
       </ScrollView>
+      <KycConsentModal
+        visible={showConsent}
+        onAccept={doSubmit}
+        onCancel={() => setShowConsent(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -230,6 +249,19 @@ const styles = StyleSheet.create({
   statusLabel: { fontSize: 20, fontWeight: "900" },
   statusDesc: { fontSize: 14, color: Colors.textMuted, textAlign: "center", lineHeight: 20 },
   autoTag: { fontSize: 12, color: Colors.secondary, fontWeight: "700", textAlign: "center" },
+  rejectionBox: {
+    marginTop: 8,
+    width: "100%",
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    borderRadius: Radius.md,
+    padding: 14,
+    gap: 6,
+  },
+  rejectionTitle: { fontSize: 12, fontWeight: "800", color: "#991B1B", textTransform: "uppercase" },
+  rejectionText: { fontSize: 14, color: "#7F1D1D", lineHeight: 20 },
+  rejectionHint: { fontSize: 12, color: Colors.textMuted, marginTop: 4 },
   sectionTitle: { fontSize: 15, fontWeight: "800", color: Colors.primary },
   hint: { fontSize: 12, color: Colors.textMuted, lineHeight: 18 },
   docRow: {

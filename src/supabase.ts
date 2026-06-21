@@ -6,6 +6,12 @@ export function getSupabase(): SupabaseClient {
   if (!_client) {
     const url = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
     const key = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
+    if (!url || !key) {
+      throw new Error(
+        "Configuration Supabase manquante dans l'APK. " +
+        "Ajoutez EXPO_PUBLIC_SUPABASE_ANON_KEY dans Expo → Project → Environment variables (preview/apk), puis reconstruisez l'APK.",
+      );
+    }
     _client = createClient(url, key, {
       auth: {
         persistSession: true,

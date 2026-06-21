@@ -1,22 +1,50 @@
 {
   "cli": {
-    "version": ">= 10.0.0"
+    "version": ">= 10.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://lrbhojxlofweotajnrhh.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxyYmhvanhsb2Z3ZW90YWpucmhoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3ODgzOTAsImV4cCI6MjA5NjM2NDM5MH0.b0ftbbS23W7_d0mdM5WYECvCQXzAazGdhZtbMGld7gA"
+      },
       "android": {
         "buildType": "apk"
       }
     },
     "preview": {
       "distribution": "internal",
+      "node": "20.18.0",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://lrbhojxlofweotajnrhh.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxyYmhvanhsb2Z3ZW90YWpucmhoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3ODgzOTAsImV4cCI6MjA5NjM2NDM5MH0.b0ftbbS23W7_d0mdM5WYECvCQXzAazGdhZtbMGld7gA"
+      },
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=armeabi-v7a,arm64-v8a"
+      }
+    },
+    "apk": {
+      "distribution": "internal",
+      "node": "20.18.0",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://lrbhojxlofweotajnrhh.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxyYmhvanhsb2Z3ZW90YWpucmhoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3ODgzOTAsImV4cCI6MjA5NjM2NDM5MH0.b0ftbbS23W7_d0mdM5WYECvCQXzAazGdhZtbMGld7gA"
+      },
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=armeabi-v7a,arm64-v8a"
       }
     },
     "production": {
+      "node": "20.18.0",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://lrbhojxlofweotajnrhh.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxyYmhvanhsb2Z3ZW90YWpucmhoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3ODgzOTAsImV4cCI6MjA5NjM2NDM5MH0.b0ftbbS23W7_d0mdM5WYECvCQXzAazGdhZtbMGld7gA"
+      },
       "android": {
         "buildType": "app-bundle"
       }

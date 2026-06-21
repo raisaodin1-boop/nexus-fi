@@ -10,7 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "..", "public");
 
 const BRAND = {
-  navy: "#0B1F3A",
+  navy: "#0F2847",
   blue: "#1D4ED8",
   green: "#10B981",
   white: "#FFFFFF",
@@ -41,6 +41,15 @@ function iconSvg(size) {
   const fontSize = Math.round(size * 0.28);
   return `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
   <rect width="${size}" height="${size}" rx="${Math.round(size * 0.18)}" fill="${BRAND.navy}"/>
+  <text x="50%" y="54%" fill="${BRAND.white}" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" font-weight="700" text-anchor="middle" dominant-baseline="middle">H</text>
+</svg>`;
+}
+
+/** Android maskable safe zone (~66% center) — required for PWABuilder / Play Store TWA */
+function maskableIconSvg(size) {
+  const fontSize = Math.round(size * 0.17);
+  return `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+  <rect width="${size}" height="${size}" fill="${BRAND.navy}"/>
   <text x="50%" y="54%" fill="${BRAND.white}" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" font-weight="700" text-anchor="middle" dominant-baseline="middle">H</text>
 </svg>`;
 }
@@ -80,6 +89,7 @@ async function main() {
     { svg: iconSvg(32), file: "favicon.png", w: 32, h: 32 },
     { svg: iconSvg(192), file: "icon-192.png", w: 192, h: 192 },
     { svg: iconSvg(512), file: "icon-512.png", w: 512, h: 512 },
+    { svg: maskableIconSvg(512), file: "icon-512-maskable.png", w: 512, h: 512 },
     { svg: iconSvg(512), file: "icon.png", w: 512, h: 512 },
     {
       svg: screenshotSvg("Accueil", "Tontines · Épargne · Wallet"),

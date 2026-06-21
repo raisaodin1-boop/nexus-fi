@@ -6,9 +6,10 @@ on:
       profile:
         description: 'Build profile'
         required: true
-        default: 'preview'
+        default: 'apk'
         type: choice
         options:
+          - apk
           - preview
           - development
 

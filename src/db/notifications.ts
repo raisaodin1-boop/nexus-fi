@@ -14,7 +14,7 @@ function mapNotificationKind(type?: string | null): string {
   const t = (type ?? "info").toLowerCase();
   if (["success", "payment", "promotion", "escrow_release", "tontine_cycle"].includes(t)) return "success";
   if (t === "approved" || t === "kyc") return "success";
-  if (["warning", "alert", "tontine_reminder"].includes(t) || t.includes("reject") || t.includes("retard")) return "alert";
+  if (t === "kyc_rejected" || ["warning", "alert", "tontine_reminder"].includes(t) || t.includes("reject") || t.includes("retard")) return "alert";
   return "info";
 }
 
@@ -33,7 +33,7 @@ function mapNotification(row: Record<string, unknown>) {
   };
 }
 
-/** Insère une notification in-app et déclenche le push Expo (best-effort). */
+/** Insère une notification in-app ; le push est dispatché côté serveur (trigger DB → send-push). */
 export async function notifyUser(opts: NotifyPayload) {
   const sb = getSupabase();
   const { data, error } = await sb.from("notifications").insert({
@@ -45,18 +45,6 @@ export async function notifyUser(opts: NotifyPayload) {
     metadata: opts.metadata ?? null,
   }).select("id").single();
   throwSb(error);
-
-  if (opts.push !== false) {
-    sb.functions.invoke("send-push", {
-      body: {
-        user_id: opts.user_id,
-        title: opts.title,
-        body: opts.body,
-        type: opts.type ?? "info",
-        notification_id: data?.id,
-      },
-    }).catch(() => {});
-  }
   return data;
 }
 
@@ -87,10 +75,18 @@ export async function markAllNotificationsRead() {
   return { detail: "Toutes les notifications marquées comme lues" };
 }
 
-export async function savePushToken(token: string) {
+export async function savePushToken(token: string, platform?: string) {
   const me = await uid();
   await getSupabase().from("push_tokens")
-    .upsert({ user_id: me, token, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+    .upsert(
+      {
+        user_id: me,
+        token,
+        platform: platform ?? null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id,token" },
+    );
   return { detail: "Token enregistré" };
 }
 

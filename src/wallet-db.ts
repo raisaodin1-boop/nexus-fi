@@ -22,6 +22,9 @@ async function currentUserId(): Promise<string> {
 
 export interface WalletBalance {
   balance_xaf: number;
+  balance_xof: number;
+  balance_ngn: number;
+  balance_ghs: number;
   balance_usd: number;
   balance_eur: number;
   user_id: string;
@@ -42,6 +45,9 @@ export async function getWallet(): Promise<WalletBalance> {
 
   return {
     balance_xaf: Number(data.balance_xaf ?? 0),
+    balance_xof: Number(data.balance_xof ?? 0),
+    balance_ngn: Number(data.balance_ngn ?? 0),
+    balance_ghs: Number(data.balance_ghs ?? 0),
     balance_usd: Number(data.balance_usd ?? 0),
     balance_eur: Number(data.balance_eur ?? 0),
     user_id: me,
@@ -113,27 +119,8 @@ export interface TopupPayload {
   phone: string;
 }
 
-export async function topupFromMobileMoney(payload: TopupPayload): Promise<WalletTx> {
-  if (!Number.isFinite(payload.amount) || payload.amount <= 0) throw new Error("Montant invalide.");
-  if (!/^\+?[\d\s\-]{8,15}$/.test(payload.phone)) throw new Error("Numéro de téléphone invalide.");
-
-  const rates = await getRates();
-  const amountXaf = convert(payload.amount, payload.currency ?? "XAF", "XAF", rates);
-
-  const { data, error } = await getSupabase().rpc("wallet_topup", {
-    p_amount: payload.amount,
-    p_currency: payload.currency ?? "XAF",
-    p_provider: payload.provider,
-    p_phone: payload.phone,
-    p_amount_xaf: amountXaf,
-  });
-  if (error) {
-    const msg = error.message.includes("insufficient") ? "Solde insuffisant."
-      : error.message.includes("not found") ? "Wallet introuvable — contactez le support."
-      : error.message;
-    throw new Error(msg);
-  }
-  return mapTx(data as Record<string, unknown>);
+export async function topupFromMobileMoney(_payload: TopupPayload): Promise<WalletTx> {
+  throw new Error("Recharge wallet via la page de paiement CinetPay uniquement.");
 }
 
 // ─── Withdrawal to Mobile Money ───────────────────────────────────────────────
@@ -151,8 +138,6 @@ export async function withdrawToMobileMoney(payload: WithdrawPayload): Promise<W
   const rates = await getRates();
   const amountXaf = convert(payload.amount, payload.currency, "XAF", rates);
 
-  // Atomic server-side debit with balance guard — concurrent withdrawals
-  // can never overdraw the wallet.
   const { data: tx, error } = await getSupabase().rpc("wallet_withdraw", {
     p_amount: payload.amount,
     p_currency: payload.currency,
@@ -168,13 +153,26 @@ export async function withdrawToMobileMoney(payload: WithdrawPayload): Promise<W
     throw new Error(msg);
   }
 
-  return { ...tx, amount: Number(tx.amount), amount_xaf: Number(tx.amount_xaf) };
+  const debited: WalletTx = { ...tx, amount: Number(tx.amount), amount_xaf: Number(tx.amount_xaf) };
+
+  try {
+    const { data, error: payoutErr } = await getSupabase().functions.invoke("cinetpay-payout", {
+      body: { wallet_tx_id: debited.id },
+    });
+    if (payoutErr) throw new Error(payoutErr.message ?? "Échec du virement Mobile Money.");
+    if (!data?.ok) throw new Error(data?.error ?? "Échec du virement Mobile Money.");
+    const paid = data.tx ?? debited;
+    return { ...paid, amount: Number(paid.amount), amount_xaf: Number(paid.amount_xaf) };
+  } catch (e: any) {
+    throw new Error(e?.message ?? "Retrait débité mais virement Mobile Money en échec — wallet recrédité.");
+  }
 }
 
 // ─── Peer-to-peer transfer ────────────────────────────────────────────────────
 
 export interface TransferPayload {
-  to_phone_or_email: string;   // lookup by phone or email
+  to_phone_or_email?: string;
+  to_user_id?: string;
   amount: number;
   currency: Currency;
   note?: string;
@@ -188,13 +186,23 @@ export async function transferToMember(payload: TransferPayload): Promise<Wallet
   const rates = await getRates();
   const amountXaf = convert(payload.amount, payload.currency, "XAF", rates);
 
-  // Resolve recipient
-  const search = payload.to_phone_or_email.trim();
-  const isEmail = search.includes("@");
-  const profileQuery = isEmail
-    ? sb.from("profiles").select("id, full_name").eq("email", search.toLowerCase()).maybeSingle()
-    : sb.from("profiles").select("id, full_name").eq("phone", search).maybeSingle();
-  const { data: recipient } = await profileQuery;
+  let recipient: { id: string; full_name: string | null } | null = null;
+
+  if (payload.to_user_id) {
+    const { data } = await sb.from("profiles").select("id, full_name").eq("id", payload.to_user_id).maybeSingle();
+    recipient = data;
+  } else if (payload.to_phone_or_email) {
+    const search = payload.to_phone_or_email.trim();
+    const isEmail = search.includes("@");
+    const profileQuery = isEmail
+      ? sb.from("profiles").select("id, full_name").eq("email", search.toLowerCase()).maybeSingle()
+      : sb.from("profiles").select("id, full_name").eq("phone", search).maybeSingle();
+    const { data } = await profileQuery;
+    recipient = data;
+  } else {
+    throw new Error("Destinataire requis.");
+  }
+
   if (!recipient) throw new Error("Membre introuvable. Vérifiez l'email ou le téléphone.");
   if (recipient.id === me) throw new Error("Impossible de vous transférer à vous-même.");
 

@@ -18,6 +18,17 @@ export function encodeQR(data: QRPaymentData): string {
 }
 
 export function decodeQR(url: string): QRPaymentData | null {
+  const raw = url.trim();
+  if (raw.startsWith("{")) {
+    try {
+      const j = JSON.parse(raw);
+      const to = j.user_id ?? j.to;
+      const name = j.full_name ?? j.name;
+      if (to && name) {
+        return { to: String(to), name: String(name), currency: j.currency ?? "XAF" };
+      }
+    } catch { /* fall through */ }
+  }
   try {
     const u = new URL(url);
     if (u.protocol !== "hodix:" || u.hostname !== "pay") return null;

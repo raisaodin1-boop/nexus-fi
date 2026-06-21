@@ -3,7 +3,7 @@
  * Les règles sont stockées localement (AsyncStorage) et exécutées au démarrage.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { depositSaving } from "./savings";
+import { getSupabase } from "@/src/supabase";
 
 const RULES_KEY = "hodix_auto_savings_rules";
 
@@ -124,7 +124,15 @@ export async function runDueAutoSavings(): Promise<{ executed: number; failed: n
 
   for (const rule of due) {
     try {
-      await depositSaving(rule.goal_id, rule.amount, `Auto-épargne ${rule.frequency}`);
+      const { error } = await getSupabase().rpc("auto_savings_execute", {
+        p_goal_id: rule.goal_id,
+        p_amount: rule.amount,
+        p_note: `Auto-épargne ${rule.frequency}`,
+      });
+      if (error) {
+        failed++;
+        continue;
+      }
       const idx = rules.findIndex(r => r.id === rule.id);
       if (idx >= 0) {
         rules[idx].last_run_at = now;

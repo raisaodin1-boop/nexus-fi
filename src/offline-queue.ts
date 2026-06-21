@@ -8,12 +8,10 @@ import { api } from "@/src/api";
 const QUEUE_KEY = "hodix_offline_tx_queue";
 const MAX_RETRIES = 3;
 
+/** Only wallet ops that do not require CinetPay confirmation can be replayed offline. */
 export type QueuedTxKind =
-  | "wallet_topup"
   | "wallet_withdraw"
-  | "wallet_transfer"
-  | "tontine_contribution"
-  | "savings_deposit";
+  | "wallet_transfer";
 
 export interface QueuedTx {
   id: string;
@@ -62,6 +60,7 @@ export async function enqueueTransaction(
   const queue = await readQueue();
   queue.push(tx);
   await writeQueue(queue);
+  requestOfflineSync();
   return tx;
 }
 
@@ -114,35 +113,20 @@ export async function clearFailedQueue(): Promise<void> {
 
 async function submitQueuedTx(tx: QueuedTx): Promise<void> {
   switch (tx.kind) {
-    case "wallet_topup":
-      await api.post("/wallet/topup", tx.payload);
-      break;
     case "wallet_withdraw":
       await api.post("/wallet/withdraw", tx.payload);
       break;
     case "wallet_transfer":
       await api.post("/wallet/transfer", tx.payload);
       break;
-    case "tontine_contribution": {
-      // Tontine contributions require a tontine_id and go through wallet payment
-      const tontineId = tx.payload.tontine_id as string;
-      if (!tontineId) throw new Error("tontine_id manquant dans la file hors-ligne.");
-      await api.post(`/savings/goals/${tontineId}/transactions`, {
-        amount: tx.payload.amount,
-        kind: "deposit",
-      });
-      break;
-    }
-    case "savings_deposit": {
-      const goalId = tx.payload.goal_id as string;
-      if (!goalId) throw new Error("goal_id manquant dans la file hors-ligne.");
-      await api.post(`/savings/goals/${goalId}/transactions`, {
-        amount: tx.payload.amount,
-        kind: "deposit",
-      });
-      break;
-    }
     default:
       throw new Error(`Unknown queued tx kind: ${(tx as any).kind}`);
   }
+}
+
+function requestOfflineSync() {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+  navigator.serviceWorker.ready
+    .then((reg) => reg.active?.postMessage({ type: "REGISTER_SYNC" }))
+    .catch(() => {});
 }

@@ -9,8 +9,6 @@ import { FileText } from "lucide-react-native";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { useDocument, DocKind } from "@/src/hooks/use-document";
 
-const _BASE = (process.env.EXPO_PUBLIC_BACKEND_URL ?? "").replace(/\/$/, "");
-
 interface Props {
   kind: DocKind;
   refId?: string;
@@ -32,7 +30,7 @@ export function DocumentButton({ kind, refId, label, compact = false }: Props) {
   const displayLabel = label ?? KIND_LABELS[kind];
 
   const handlePress = async () => {
-    await generateAndDownload({ kind, ref_id: refId }, _BASE);
+    await generateAndDownload({ kind, ref_id: refId });
   };
 
   if (compact) {
@@ -114,7 +112,7 @@ export function DocumentsPanel() {
           key={doc.id}
           style={[styles.docRow, Shadow.card]}
           activeOpacity={0.8}
-          onPress={() => refreshAndDownload(doc.id, doc.filename, doc.label, _BASE)}
+          onPress={() => refreshAndDownload(doc.id, doc.filename, doc.label)}
         >
           <View style={styles.docIconBox}>
             <FileText size={22} color={Colors.secondary} strokeWidth={2} />

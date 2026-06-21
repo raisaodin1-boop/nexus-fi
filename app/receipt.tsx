@@ -92,7 +92,10 @@ export default function ReceiptScreen() {
   const load = useCallback(async () => {
     if (!paymentId) { setError("Identifiant de paiement manquant"); setLoading(false); return; }
     try {
-      const r = await api.get<ReceiptData>(`/payments/${paymentId}/receipt`);
+      const path = type === "withdrawal"
+        ? `/withdrawals/${paymentId}/receipt`
+        : `/payments/${paymentId}/receipt`;
+      const r = await api.get<ReceiptData>(path);
       setReceipt(r);
       setError(null);
     } catch (e: any) {
@@ -101,7 +104,7 @@ export default function ReceiptScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [paymentId]);
+  }, [paymentId, type]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 

@@ -4,8 +4,8 @@ import { Platform } from "react-native";
 import { supabase } from "@/src/supabase";
 import { sendWelcomeMessage, applyReferralBonus } from "@/src/db";
 import { normalizeEmail } from "@/src/db/helpers";
+import { notifyUser } from "@/src/db/notifications";
 import { getOAuthRedirectUrl } from "@/src/oauth-redirect";
-import { api } from "@/src/api";
 
 // Complete auth session on mobile (no-op on web)
 if (Platform.OS !== "web") {
@@ -32,6 +32,8 @@ export interface User {
   push_consent?: boolean | null;
   kyc_status?: string | null;
   trust_score?: number | null;
+  push_consent?: boolean | null;
+  marketing_consent?: boolean | null;
   created_at: string;
 }
 
@@ -58,7 +60,7 @@ async function fetchProfile(userId: string): Promise<Partial<User>> {
     const timeout = new Promise<null>((res) => setTimeout(() => res(null), 8000));
     const query = supabase
       .from("profiles")
-      .select("full_name,role,phone,gender,country,city,occupation,date_of_birth,birth_place,neighborhood,address,kyc_status,trust_score,email")
+      .select("full_name,role,phone,gender,country,city,occupation,date_of_birth,birth_place,neighborhood,address,kyc_status,trust_score,email,push_consent,marketing_consent")
       .eq("id", userId)
       .single();
     const result = await Promise.race([query, timeout]);
@@ -97,6 +99,8 @@ async function buildUser(sbUser: any): Promise<User> {
     address: profile.address ?? null,
     kyc_status: profile.kyc_status ?? null,
     trust_score: profile.trust_score ?? null,
+    push_consent: (profile as any).push_consent ?? null,
+    marketing_consent: (profile as any).marketing_consent ?? null,
     created_at: sbUser.created_at ?? new Date().toISOString(),
   };
 }
@@ -141,12 +145,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 } catch (welcomeErr) {
                   logAuthBestEffort("welcome message", welcomeErr);
                   // Fallback: in-app notification so user gets a greeting even if email fails
-                  api.post("/notifications", {
+                  await notifyUser({
                     user_id: session.user!.id,
                     title: "Bienvenue sur HODIX 🎉",
                     body: `Bonjour ${name} ! Votre compte est prêt. Commencez par compléter votre profil.`,
                     type: "system",
-                  }).catch(() => {});
+                  });
                 }
               }
             } catch (err) { logAuthBestEffort("welcome message", err); }

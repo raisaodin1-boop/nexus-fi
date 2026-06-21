@@ -53,7 +53,7 @@ export function Button({
 }: BtnProps) {
   const bg =
     variant === "primary"
-      ? Colors.secondary
+      ? Colors.primary
       : variant === "accent"
       ? Colors.accent
       : variant === "danger"
@@ -62,7 +62,7 @@ export function Button({
       ? "transparent"
       : Colors.surface;
   const text =
-    variant === "secondary" ? Colors.primary : variant === "ghost" ? Colors.secondary : "#fff";
+    variant === "secondary" ? Colors.brandNavy : variant === "ghost" ? Colors.primary : "#fff";
   const border = variant === "secondary" ? Colors.border : "transparent";
   return (
     <TouchableOpacity

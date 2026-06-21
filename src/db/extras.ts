@@ -312,6 +312,38 @@ export async function requestWithdrawal(body: {
   };
 }
 
+export async function getWithdrawalReceipt(withdrawalId: string) {
+  const me = await uid();
+  const { data, error } = await getSupabase()
+    .from("withdrawal_requests")
+    .select("id, amount_xaf, commission_xaf, net_xaf, method, phone, status, created_at, reason")
+    .eq("id", withdrawalId)
+    .eq("user_id", me)
+    .maybeSingle();
+  throwSb(error);
+  if (!data) throw { status: 404, detail: "Demande de retrait introuvable." };
+
+  const methodLabel = data.method === "bank" ? "Virement bancaire"
+    : data.method === "orange" ? "Orange Money"
+    : data.method === "mtn" ? "MTN Money"
+    : String(data.method ?? "—");
+
+  return {
+    id: data.id,
+    receipt_id: data.id,
+    amount_xaf: Number(data.amount_xaf),
+    commission_xaf: Number(data.commission_xaf ?? 0),
+    method: methodLabel,
+    payment_method: methodLabel,
+    type: "withdrawal",
+    kind: "withdrawal",
+    status: data.status ?? "pending",
+    label: "Demande de retrait",
+    reference: data.id.slice(0, 8).toUpperCase(),
+    created_at: data.created_at,
+  };
+}
+
 /* ── Payment config (admin) ───────────────────────────────── */
 
 export async function getPaymentConfig() {
@@ -388,7 +420,17 @@ export async function getCertifiedReport(kind: "identity" | "trust-score" | "sav
 
 export async function markCertificatePaid(kind: string, paymentId: string) {
   const me = await uid();
-  await getSupabase().from("certificate_purchases").insert({
+  const sb = getSupabase();
+  const { data: existing } = await sb
+    .from("certificate_purchases")
+    .select("id")
+    .eq("user_id", me)
+    .eq("kind", kind)
+    .eq("status", "paid")
+    .maybeSingle();
+  if (existing) return;
+
+  await sb.from("certificate_purchases").insert({
     user_id: me,
     kind,
     amount_xaf: 10000,
@@ -396,4 +438,42 @@ export async function markCertificatePaid(kind: string, paymentId: string) {
     payment_id: paymentId,
     paid_at: new Date().toISOString(),
   });
+}
+
+export async function listCertificatePurchases() {
+  const me = await uid();
+  const { data } = await getSupabase()
+    .from("certificate_purchases")
+    .select("kind, status, paid_at")
+    .eq("user_id", me)
+    .eq("status", "paid");
+  return data ?? [];
+}
+
+export async function sendCertificateEmail(
+  kind: "identity" | "trust-score" | "savings",
+  email: string,
+  paymentId?: string,
+) {
+  const me = await uid();
+  const trimmed = email.trim().toLowerCase();
+  if (!trimmed.includes("@")) throw { status: 400, detail: "Adresse email invalide." };
+
+  const report = await getCertifiedReport(kind);
+  const { data, error } = await getSupabase().functions.invoke("send-certificate", {
+    body: { kind, email: trimmed, html: report.html, filename: report.filename, payment_id: paymentId },
+  });
+  if (error) throw { status: 502, detail: error.message ?? "Envoi du certificat impossible." };
+  if (!data?.ok) throw { status: 400, detail: data?.error ?? "Envoi du certificat impossible." };
+
+  try {
+    await getSupabase()
+      .from("certificate_purchases")
+      .update({ delivery_email: trimmed })
+      .eq("user_id", me)
+      .eq("kind", kind)
+      .eq("status", "paid");
+  } catch { /* column may be pending migration */ }
+
+  return { ok: true, email_masked: data.email_masked ?? trimmed.replace(/(.{2}).+(@.+)/, "$1***$2") };
 }

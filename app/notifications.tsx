@@ -93,17 +93,25 @@ export default function Notifications() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const markAll = async () => {
-    try {
-      await api.post("/notifications/read-all");
-      setItems((p) => p.map((n) => ({ ...n, is_read: true })));
-    } catch {}
-  };
-
   const markRead = async (id: string) => {
     try {
       await api.post(`/notifications/${id}/read`);
       setItems((p) => p.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
+      if (Platform.OS !== "web") {
+        const { syncNotificationBadge } = await import("@/src/push-notifications");
+        await syncNotificationBadge();
+      }
+    } catch {}
+  };
+
+  const markAll = async () => {
+    try {
+      await api.post("/notifications/read-all");
+      setItems((p) => p.map((n) => ({ ...n, is_read: true })));
+      if (Platform.OS !== "web") {
+        const { syncNotificationBadge } = await import("@/src/push-notifications");
+        await syncNotificationBadge();
+      }
     } catch {}
   };
 

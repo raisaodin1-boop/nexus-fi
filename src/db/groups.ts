@@ -47,10 +47,13 @@ export async function joinAssociation(invite_code: string) {
   return { association_id: assoc.id };
 }
 
-export async function contributeAssociation(id: string, amount: number) {
-  const me = await uid();
-  const { error } = await getSupabase().from("association_contributions")
-    .insert({ association_id: id, user_id: me, amount });
+export async function contributeAssociation(id: string, amount: number, paymentId?: string) {
+  if (!paymentId) throw { status: 403, detail: "Paiement électronique requis." };
+  const { error } = await getSupabase().rpc("contribute_association_paid", {
+    p_association_id: id,
+    p_amount: amount,
+    p_payment_id: paymentId,
+  });
   throwSb(error);
   return { detail: "Contribution enregistrée" };
 }
@@ -99,9 +102,14 @@ export async function joinCooperative(invite_code: string) {
   return { cooperative_id: coop.id };
 }
 
-export async function contributeCooperative(id: string, amount: number) {
-  const me = await uid();
-  await getSupabase().from("cooperative_contributions").insert({ cooperative_id: id, user_id: me, amount });
+export async function contributeCooperative(id: string, amount: number, paymentId?: string) {
+  if (!paymentId) throw { status: 403, detail: "Paiement électronique requis." };
+  const { error } = await getSupabase().rpc("contribute_cooperative_paid", {
+    p_cooperative_id: id,
+    p_amount: amount,
+    p_payment_id: paymentId,
+  });
+  throwSb(error);
   return { detail: "Contribution enregistrée" };
 }
 
@@ -131,11 +139,13 @@ export async function createFund(body: Record<string, any>) {
   return data;
 }
 
-export async function contributeFund(id: string, amount: number) {
-  const me = await uid();
-  await getSupabase().from("fund_contributions").insert({ fund_id: id, user_id: me, amount });
-  const { data: contribs } = await getSupabase().from("fund_contributions").select("amount").eq("fund_id", id);
-  const total = (contribs ?? []).reduce((s: number, c: any) => s + Number(c.amount), 0);
-  await getSupabase().from("community_funds").update({ current_balance: total }).eq("id", id);
+export async function contributeFund(id: string, amount: number, paymentId?: string) {
+  if (!paymentId) throw { status: 403, detail: "Paiement électronique requis." };
+  const { error } = await getSupabase().rpc("contribute_fund_paid", {
+    p_fund_id: id,
+    p_amount: amount,
+    p_payment_id: paymentId,
+  });
+  throwSb(error);
   return { detail: "Contribution enregistrée" };
 }

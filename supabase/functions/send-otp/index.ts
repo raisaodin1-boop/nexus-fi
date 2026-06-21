@@ -66,19 +66,6 @@ async function twilioVerifyCheck(serviceSid: string, sid: string, token: string,
   return data?.status === "approved";
 }
 
-async function triggerPush(supabaseUrl: string, userId: string, title: string, body: string) {
-  try {
-    await fetch(`${supabaseUrl}/functions/v1/send-push`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ user_id: userId, title, body, type: "otp" }),
-    });
-  } catch { /* best-effort */ }
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
@@ -173,7 +160,6 @@ Deno.serve(async (req) => {
       await admin.from("notifications").insert({
         user_id: user.id, title: otpTitle, body: otpBody, type: "otp", is_read: false,
       });
-      await triggerPush(supabaseUrl, user.id, otpTitle, otpBody);
     }
 
     const masked = phone.length >= 6 ? `${phone.slice(0, 4)}•••${phone.slice(-2)}` : null;

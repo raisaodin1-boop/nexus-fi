@@ -1,12 +1,8 @@
 // HODIX root layout — wraps app in AuthProvider + SafeArea + Stack.
 import { Platform } from "react-native";
+import { initObservability } from "@/src/observability";
 if (Platform.OS !== "web") {
-  const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN ?? "";
-  if (SENTRY_DSN) {
-    import("@sentry/react-native").then((Sentry) => {
-      Sentry.init({ dsn: SENTRY_DSN, tracesSampleRate: 0.1 });
-    });
-  }
+  initObservability();
 }
 
 import { Stack, useRouter } from "expo-router";
@@ -31,9 +27,12 @@ import { Colors } from "@/src/theme";
 import { APP_MAX_WIDTH, shouldShowWebPhoneFrame } from "@/src/hooks/use-responsive";
 import { DynamicSeo } from "@/src/dynamic-seo";
 import { DeepLinkHandler } from "@/src/deep-link-handler";
+import { PwaSetup } from "@/src/pwa-setup";
 import { PushConsentModal } from "@/src/consent-modal";
-import { attachPushNotificationListeners, registerExpoPushToken } from "@/src/push-notifications";
+import { attachPushNotificationListeners, requestPushPermissionAndRegister, syncNotificationBadge } from "@/src/push-notifications";
 import { runDueAutoSavings } from "@/src/db/auto-savings";
+import { FloatingBackButton } from "@/src/screen-back";
+import { WebShellChrome } from "@/src/web-shell";
 
 if (Platform.OS !== "web") {
   SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -52,10 +51,11 @@ function PushSetup() {
       try {
         const me = await api.get<{ push_consent?: boolean | null }>("/users/me");
         if (me.push_consent === true) {
-          await registerExpoPushToken();
+          await requestPushPermissionAndRegister();
+        } else {
+          await syncNotificationBadge();
         }
       } catch {}
-      // Exécute les auto-épargnes en retard au démarrage
       try { await runDueAutoSavings(); } catch {}
     })();
 
@@ -154,7 +154,7 @@ function BiometricGate({ children }: { children: React.ReactNode }) {
 }
 
 const gateStyles = StyleSheet.create({
-  container: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: Colors.bgDark, padding: 32 },
+  container: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: Colors.brandNavy, padding: 32 },
   emoji: { fontSize: 48, marginBottom: 16 },
   title: { color: "#FFFFFF", fontSize: 22, fontWeight: "700", marginBottom: 8 },
   sub: { color: "#9CA3AF", fontSize: 15, textAlign: "center", marginBottom: 28 },
@@ -180,12 +180,15 @@ function RootLayoutInner() {
   const stack = (
     <BiometricGate>
       <DynamicSeo />
+      <PwaSetup />
       <DeepLinkHandler />
       <PushSetup />
       <PushConsentGate />
       <FirstLaunchGuard />
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <OfflineBanner />
+      <WebShellChrome />
+      <FloatingBackButton />
       <Stack screenOptions={{ headerShown: false, animation: "fade" }} />
     </BiometricGate>
   );
@@ -207,7 +210,7 @@ function RootLayoutInner() {
 const webFrameStyles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#CBD5E1",
+    backgroundColor: "#E8ECF4",
     alignItems: "center",
   },
   frame: {
@@ -216,6 +219,13 @@ const webFrameStyles = StyleSheet.create({
     maxWidth: APP_MAX_WIDTH,
     backgroundColor: Colors.bg,
     overflow: "hidden",
+    borderRadius: 20,
+    marginVertical: 12,
+    ...(Platform.OS === "web"
+      ? {
+          boxShadow: "0 8px 32px rgba(15,23,42,0.12)",
+        }
+      : {}),
   },
 });
 

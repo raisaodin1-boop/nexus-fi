@@ -210,7 +210,7 @@ export default function Root({ children }: PropsWithChildren) {
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
 
         {/* ── Titre & Description ─────────────────────────────────────── */}
         <title>HODIX – Tontines Digitales & Épargne Africaine | Wallet Mobile</title>
@@ -227,13 +227,15 @@ export default function Root({ children }: PropsWithChildren) {
         <link rel="canonical" href="https://www.hodix.app/" />
 
         {/* ── PWA & App ──────────────────────────────────────────────── */}
-        <meta name="theme-color" content="#0B1F3A" />
+        <meta name="theme-color" content="#0F2847" />
+        <meta name="color-scheme" content="light" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="HODIX" />
         <meta name="application-name" content="HODIX" />
         <link rel="manifest" href="/manifest.json" />
+        <link rel="apple-touch-icon" href="/icon-192.png" />
 
         {/* ── Géolocalisation & Langue ────────────────────────────────── */}
         <meta name="geo.region" content="CM" />
@@ -319,14 +321,17 @@ export default function Root({ children }: PropsWithChildren) {
                 overflow-x: hidden;
                 display: flex;
                 flex-direction: column;
-                background-color: #F7F8FC;
+                background-color: #F5F8FC;
                 font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                 -webkit-font-smoothing: antialiased;
                 -moz-osx-font-smoothing: grayscale;
                 -webkit-text-size-adjust: 100%;
                 touch-action: manipulation;
                 -webkit-tap-highlight-color: transparent;
-                padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+              }
+              html { background-color: #F5F8FC; }
+              @media (display-mode: standalone), (display-mode: fullscreen) {
+                html, body { background-color: #F5F8FC; }
               }
               body > div:first-child { position: fixed !important; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; }
               input, textarea, select { font-size: 16px !important; }
@@ -345,7 +350,8 @@ export default function Root({ children }: PropsWithChildren) {
               }
               #splash-screen.hidden { opacity: 0; pointer-events: none; }
               @media (min-width: 768px) {
-                body { background-color: #CBD5E1; }
+                body { background-color: #E8ECF4; }
+                html { background-color: #E8ECF4; }
               }
             `,
           }}

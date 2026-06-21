@@ -4,7 +4,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-nati
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { ShieldAlert, Users, Activity, ChevronRight, Crown, Sparkles } from "lucide-react-native";
+import { ShieldAlert, Users, Activity, ChevronRight, Crown, Sparkles, FileText } from "lucide-react-native";
 
 import { api, formatXAF } from "@/src/api";
 import { Card, StatCard, SkeletonBox, SkeletonCard } from "@/src/ui";
@@ -33,22 +33,25 @@ export function AdminDashboard() {
   const [savings, setSavings] = useState<Series | null>(null);
   const [usersSeries, setUsersSeries] = useState<Series | null>(null);
   const [pendingReqs, setPendingReqs] = useState(0);
+  const [openFraudAlerts, setOpenFraudAlerts] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch { return null; }
     };
-    const [a, s, u, p] = await Promise.all([
+    const [a, s, u, p, comp] = await Promise.all([
       safe(() => api.get<Analytics>("/admin/analytics")),
       safe(() => api.get<Series>("/analytics/platform/savings?days=14")),
       safe(() => api.get<Series>("/analytics/platform/users?days=14")),
       safe(() => api.get<any[]>("/admin/promotion-requests")),
+      safe(() => api.get<{ open_fraud_alerts: number; critical_fraud_alerts: number }>("/admin/compliance/stats")),
     ]);
     if (a) setAnalytics(a);
     if (s) setSavings(s);
     if (u) setUsersSeries(u);
     if (p) setPendingReqs(p.filter((r: any) => r.status === "pending").length);
+    if (comp) setOpenFraudAlerts(comp.open_fraud_alerts);
     setLoading(false);
   }, []);
 
@@ -121,6 +124,27 @@ export function AdminDashboard() {
             <View style={{ flex: 1 }}>
               <Text style={styles.alertTitle}>{pendingReqs} demande{pendingReqs > 1 ? "s" : ""} de promotion en attente</Text>
               <Text style={styles.alertDesc}>Examinez les Membres qui veulent devenir Tontine Managers.</Text>
+            </View>
+            <ChevronRight color={Colors.text} size={18} />
+          </TouchableOpacity>
+        ) : null}
+
+        {openFraudAlerts > 0 ? (
+          <TouchableOpacity
+            onPress={() => router.push({ pathname: "/admin", params: { tab: "compliance" } } as any)}
+            style={[styles.alertCard, styles.fraudAlertCard, Shadow.card]}
+            testID="admin-fraud-banner"
+          >
+            <View style={[styles.alertIcon, { backgroundColor: "#DC2626" }]}>
+              <ShieldAlert color="#fff" size={20} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.alertTitle, { color: "#991B1B" }]}>
+                {openFraudAlerts} alerte{openFraudAlerts > 1 ? "s" : ""} fraude ouverte{openFraudAlerts > 1 ? "s" : ""}
+              </Text>
+              <Text style={[styles.alertDesc, { color: "#B45309" }]}>
+                Journal audit COBAC/CEMAC — examen requis dans Compliance.
+              </Text>
             </View>
             <ChevronRight color={Colors.text} size={18} />
           </TouchableOpacity>
@@ -236,6 +260,28 @@ export function AdminDashboard() {
           </Card>
         </View>
 
+        {/* Compliance shortcut */}
+        <View style={{ paddingHorizontal: Spacing.xl, marginTop: Spacing.lg }}>
+          <TouchableOpacity
+            onPress={() => router.push({ pathname: "/admin", params: { tab: "compliance" } } as any)}
+            testID="admin-open-compliance"
+          >
+            <Card style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14 }}>
+              <View style={[styles.linkIcon, { backgroundColor: "#0B1F3A" }]}>
+                <FileText color="#fff" size={18} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.linkTitle}>Compliance & LCB-FT</Text>
+                <Text style={styles.linkDesc}>
+                  Journal audit immuable · alertes fraude temps réel
+                  {openFraudAlerts > 0 ? ` · ${openFraudAlerts} ouverte(s)` : ""}
+                </Text>
+              </View>
+              <ChevronRight color={Colors.textMuted} size={20} />
+            </Card>
+          </TouchableOpacity>
+        </View>
+
         {/* Full admin link */}
         <View style={{ paddingHorizontal: Spacing.xl, marginTop: Spacing.lg }}>
           <TouchableOpacity onPress={() => router.push("/admin")} testID="admin-open-console">
@@ -277,6 +323,7 @@ const styles = StyleSheet.create({
   alertIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: Colors.warning, alignItems: "center", justifyContent: "center" },
   alertTitle: { color: "#92400E", fontSize: 13, fontWeight: "800" },
   alertDesc: { color: "#92400E", fontSize: 11, marginTop: 2, fontWeight: "600" },
+  fraudAlertCard: { backgroundColor: "#FEE2E2", borderColor: "#FECACA" },
   hero: { borderRadius: Radius.xxl, padding: 22 },
   heroLbl: { color: "rgba(255,255,255,0.7)", fontSize: 11, fontWeight: "700", letterSpacing: 1 },
   heroVal: { color: "#fff", fontSize: 36, fontWeight: "900", letterSpacing: -1, marginTop: 6 },

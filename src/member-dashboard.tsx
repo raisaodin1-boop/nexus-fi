@@ -1,7 +1,6 @@
 // Member dashboard — premium personal fintech home.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
-  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -12,16 +11,16 @@ import {
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { Bell, ChevronRight, PiggyBank, Trophy, Users, Wallet, TrendingUp, Sparkles, QrCode, BarChart2, Brain, Repeat, Receipt, PieChart, CreditCard, Store, Gavel, Target } from "lucide-react-native";
+import { Bell, ChevronRight, PiggyBank, Trophy, Users, Wallet, TrendingUp, Sparkles, QrCode, BarChart2, Brain, Repeat, Receipt, PieChart, MessageCircle, CreditCard, Store, Gavel, Target } from "lucide-react-native";
 
 import { useAuth } from "@/src/auth-context";
 import { api, formatXAF } from "@/src/api";
 import { supabase } from "@/src/supabase";
 import { Card, SectionTitle, StatCard, SkeletonBox, SkeletonCard } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
-import { TrustGauge } from "@/src/trust-gauge";
+import { EngagementStrip } from "@/src/engagement-strip";
+import { MemberDashboardHero } from "@/src/member-dashboard-hero";
 import { LineChart } from "@/src/charts";
-import { Tooltip } from "@/src/tooltip";
 
 interface Summary { total_saved: number; total_target: number; active_goals: number; progress_pct: number; currency: string }
 interface TrustScore {
@@ -29,7 +28,7 @@ interface TrustScore {
   components: Record<string, number>; tips: string[];
   stats: { total_saved: number; tontines: number; associations: number; cooperatives: number; deposits_90d: number; contributions_made: number; account_age_days: number };
 }
-interface Insight { text: string; kind: string }
+interface Insight { text: string; kind: string; route?: string; action_label?: string }
 interface Series { days: number; series: { date: string; value: number }[] }
 
 export function MemberDashboard() {
@@ -41,20 +40,24 @@ export function MemberDashboard() {
   const [trust, setTrust] = useState<TrustScore | null>(null);
   const [insights, setInsights] = useState<Insight[]>([]);
   const [unread, setUnread] = useState(0);
+  const [msgUnread, setMsgUnread] = useState(0);
   const [alertCount, setAlertCount] = useState(0);
   const [savingsSeries, setSavingsSeries] = useState<Series | null>(null);
+  const [streakWeeks, setStreakWeeks] = useState(0);
 
   const load = useCallback(async () => {
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch { return null; }
     };
-    const [s, t, i, n, ss, al] = await Promise.all([
+    const [s, t, i, n, ss, al, st, mu] = await Promise.all([
       safe(() => api.get<Summary>("/savings/summary")),
       safe(() => api.get<TrustScore>("/trust-score")),
       safe(() => api.get<{ items: Insight[] }>("/insights")),
       safe(() => api.get<{ unread_count: number }>("/notifications")),
       safe(() => api.get<Series>("/analytics/me/savings?days=14")),
       safe(() => api.get<any[]>("/alerts")),
+      safe(() => api.get<{ current_streak?: number }>("/streaks")),
+      safe(() => api.get<{ unread_count: number }>("/messages/unread-count")),
     ]);
     if (s) setSummary(s);
     if (t) setTrust(t);
@@ -62,6 +65,8 @@ export function MemberDashboard() {
     if (n) setUnread(n.unread_count ?? 0);
     if (ss) setSavingsSeries(ss);
     if (al) setAlertCount(Array.isArray(al) ? al.length : 0);
+    if (st) setStreakWeeks(st.current_streak ?? 0);
+    if (mu) setMsgUnread(mu.unread_count ?? 0);
     setLoading(false);
   }, []);
 
@@ -77,6 +82,7 @@ export function MemberDashboard() {
       .on("postgres_changes", { event: "*", schema: "public", table: "savings_transactions", filter: `user_id=eq.${userId}` }, () => { load(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "savings_goals", filter: `user_id=eq.${userId}` }, () => { load(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "tontine_contributions", filter: `user_id=eq.${userId}` }, () => { load(); })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => { load(); })
       .subscribe((status) => {
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
           // Real-time down — fall back to 30s polling
@@ -99,15 +105,8 @@ export function MemberDashboard() {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
-          <View style={styles.header}>
-            <View style={{ gap: 8 }}>
-              <SkeletonBox width={80} height={14} />
-              <SkeletonBox width={140} height={26} />
-            </View>
-            <SkeletonBox width={44} height={44} borderRadius={22} />
-          </View>
-          <View style={{ paddingHorizontal: Spacing.xl }}>
-            <SkeletonBox height={200} borderRadius={20} />
+          <View style={{ paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg }}>
+            <SkeletonBox height={280} borderRadius={20} />
           </View>
           <View style={styles.statsRow}>
             <SkeletonBox height={80} borderRadius={16} style={{ flex: 1 }} />
@@ -130,19 +129,18 @@ export function MemberDashboard() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScrollView
         contentContainerStyle={{ paddingBottom: 100 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.secondary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.hello}>Bienvenue,</Text>
-            <Text style={styles.name}>{user?.full_name?.split(" ")[0] ?? "User"}</Text>
-          </View>
-          <TouchableOpacity onPress={() => router.push("/notifications")} testID="home-notif-btn" style={styles.bellWrap}>
-            <Bell color={Colors.primary} size={22} />
-            {unread > 0 ? <View style={styles.bellDot}><Text style={styles.bellDotText}>{unread > 9 ? "9+" : unread}</Text></View> : null}
-          </TouchableOpacity>
+        <View style={{ paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg }}>
+          <MemberDashboardHero
+            firstName={user?.full_name?.split(" ")[0]}
+            trustScore={trust?.score}
+            trustLevel={trust?.level}
+            totalSaved={summary?.total_saved}
+            currency={summary?.currency}
+            unread={unread}
+          />
         </View>
 
         {/* Alerts row */}
@@ -164,29 +162,11 @@ export function MemberDashboard() {
           <Text style={{ color: Colors.textMuted, fontSize: 14, marginLeft: "auto" }}>›</Text>
         </TouchableOpacity>
 
-        {/* Trust Score card */}
-        <View style={{ paddingHorizontal: Spacing.xl }}>
-          <TouchableOpacity activeOpacity={0.9} onPress={() => router.push("/(tabs)/identity")} testID="home-trust-card">
-            <LinearGradient
-              colors={[Colors.primary, Colors.gradMid, Colors.secondary]}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={[styles.scoreCard, Shadow.cardDark]}
-            >
-              <View style={styles.scoreHeader}>
-                <View>
-                  <Text style={styles.scoreLabel}>Score Hodix</Text>
-                  <Text style={styles.scoreRisk}>Risque {trust?.risk}</Text>
-                </View>
-                <View style={[styles.glow, { backgroundColor: trust?.color ?? Colors.accent }]} />
-              </View>
-              {trust ? <TrustGauge score={trust.score} level={trust.level} color={trust.color} size={220} /> : null}
-              <View style={styles.scoreFooter}>
-                <Text style={styles.scoreFooterText}>Voir mon identité financière</Text>
-                <ChevronRight color="rgba(255,255,255,0.7)" size={16} />
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
+        <EngagementStrip
+          streakWeeks={streakWeeks}
+          savingsProgressPct={summary?.progress_pct ?? 0}
+          trustScore={trust?.score}
+        />
 
         {/* Stats */}
         <View style={styles.statsRow}>
@@ -221,8 +201,8 @@ export function MemberDashboard() {
           <QuickAction icon={<TrendingUp color={Colors.accentDark} size={22} />} label="Mon Identité" onPress={() => router.push("/(tabs)/identity")} testID="home-action-identity" />
         </View>
         <View style={styles.qaRow}>
-          <QuickAction icon={<QrCode color="#7C3AED" size={22} />} label="Recevoir" onPress={() => router.push("/qr-receive")} testID="home-action-qr-receive" />
-          <QuickAction icon={<Wallet color="#10B981" size={22} />} label="Mon Wallet" onPress={() => router.push("/wallet")} testID="home-action-wallet" />
+          <QuickAction icon={<QrCode color={Colors.secondary} size={22} />} label="Recevoir" onPress={() => router.push("/qr-receive")} testID="home-action-qr-receive" />
+          <QuickAction icon={<Wallet color={Colors.primary} size={22} />} label="Mon Wallet" onPress={() => router.push("/wallet")} testID="home-action-wallet" />
         </View>
         <View style={styles.qaRow}>
           <QuickAction icon={<BarChart2 color={Colors.secondary} size={22} />} label="Tableau de bord" onPress={() => router.push("/analytics")} testID="home-action-analytics" />
@@ -230,19 +210,23 @@ export function MemberDashboard() {
         </View>
         <View style={styles.qaRow}>
           <QuickAction icon={<Trophy color={Colors.accent} size={22} />} label="Classement" onPress={() => router.push("/ranking")} testID="home-action-ranking" />
-          <QuickAction icon={<Brain color="#8B5CF6" size={22} />} label="Conseiller IA" onPress={() => router.push("/advisor")} testID="home-action-advisor" />
+          <QuickAction icon={<Brain color={Colors.brandNavyLight} size={22} />} label="Conseiller IA" onPress={() => router.push("/advisor")} testID="home-action-advisor" />
         </View>
         <View style={styles.qaRow}>
-          <QuickAction icon={<Repeat color="#10B981" size={22} />} label="Auto-épargne" onPress={() => router.push("/auto-savings")} testID="home-action-auto-savings" />
-          <QuickAction icon={<PieChart color="#EF4444" size={22} />} label="Mon budget" onPress={() => router.push("/budget")} testID="home-action-budget" />
+          <QuickAction icon={<Repeat color={Colors.primary} size={22} />} label="Auto-épargne" onPress={() => router.push("/auto-savings")} testID="home-action-auto-savings" />
+          <QuickAction icon={<PieChart color={Colors.warning} size={22} />} label="Mon budget" onPress={() => router.push("/budget")} testID="home-action-budget" />
         </View>
         <View style={styles.qaRow}>
-          <QuickAction icon={<Receipt color="#F59E0B" size={22} />} label="Partager facture" onPress={() => router.push("/split-expense")} testID="home-action-split" />
+          <QuickAction icon={<MessageCircle color={Colors.secondary} size={22} />} label="Messagerie" onPress={() => router.push("/messages")} testID="home-action-messages" badge={msgUnread} />
+          <QuickAction icon={<Receipt color={Colors.accent} size={22} />} label="Partager facture" onPress={() => router.push("/split-expense")} testID="home-action-split" />
+        </View>
+        <View style={styles.qaRow}>
           <QuickAction icon={<Gavel color="#7C3AED" size={22} />} label="Enchères Tontine" onPress={() => router.push("/tontine-auction" as any)} testID="home-action-auction" />
           <QuickAction icon={<Target color="#10B981" size={22} />} label="Objectif Collectif" onPress={() => router.push("/collective-goal" as any)} testID="home-action-collective" />
+        </View>
+        <View style={styles.qaRow}>
           <QuickAction icon={<CreditCard color="#0B1F3A" size={22} />} label="Carte Virtuelle" onPress={() => router.push("/virtual-card" as any)} testID="home-action-virtual-card" />
           <QuickAction icon={<Store color="#EF4444" size={22} />} label="HODIX Pay Pro" onPress={() => router.push("/merchant-qr" as any)} testID="home-action-merchant" />
-          <View style={{ flex: 1 }} />
         </View>
 
         {/* Promotion CTA for members */}
@@ -265,36 +249,37 @@ export function MemberDashboard() {
         <SectionTitle>Vos insights</SectionTitle>
         <View style={{ paddingHorizontal: Spacing.xl }}>
           {insights.slice(0, 4).map((it, i) => (
-            <Card key={i} style={{ marginBottom: 10, padding: 16 }}>
-              <Text style={styles.insightText}>{it.text}</Text>
-            </Card>
+            <TouchableOpacity
+              key={i}
+              activeOpacity={0.85}
+              onPress={() => it.route && router.push(it.route as any)}
+              testID={`home-insight-${i}`}
+            >
+              <Card style={{ marginBottom: 10, padding: 16 }}>
+                <Text style={styles.insightText}>{it.text}</Text>
+                {it.action_label ? (
+                  <Text style={styles.insightAction}>{it.action_label} →</Text>
+                ) : null}
+              </Card>
+            </TouchableOpacity>
           ))}
-        </View>
-
-        {/* Hero image */}
-        <View style={{ paddingHorizontal: Spacing.xl, marginTop: Spacing.lg }}>
-          <View style={[styles.heroCard, Shadow.card]}>
-            <Image
-              source={{ uri: "https://images.unsplash.com/photo-1694286066858-462538cd9886?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njl8MHwxfHNlYXJjaHwzfHxhZnJpY2FuJTIwcGVvcGxlJTIwc2F2aW5nJTIwbW9uZXklMjBzbWlsaW5nfGVufDB8fHx8MTc4MDE3MTQ5N3ww&ixlib=rb-4.1.0&q=85" }}
-              style={styles.heroImg}
-              resizeMode="cover"
-            />
-            <LinearGradient colors={["transparent", "rgba(11,31,58,0.95)"]} style={styles.heroOverlay} />
-            <View style={styles.heroContent}>
-              <Text style={styles.heroTitle}>Bâtir ensemble, durablement.</Text>
-              <Text style={styles.heroSub}>Hodix transforme votre épargne en histoire financière reconnue.</Text>
-            </View>
-          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function QuickAction({ icon, label, onPress, testID }: { icon: React.ReactNode; label: string; onPress: () => void; testID?: string }) {
+function QuickAction({ icon, label, onPress, testID, badge }: { icon: React.ReactNode; label: string; onPress: () => void; testID?: string; badge?: number }) {
   return (
     <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={[styles.qa, Shadow.card]} testID={testID}>
-      <View style={styles.qaIconBox}>{icon}</View>
+      <View style={styles.qaIconBox}>
+        {icon}
+        {badge && badge > 0 ? (
+          <View style={styles.qaBadge}>
+            <Text style={styles.qaBadgeText}>{badge > 9 ? "9+" : badge}</Text>
+          </View>
+        ) : null}
+      </View>
       <Text style={styles.qaLabel}>{label}</Text>
     </TouchableOpacity>
   );
@@ -303,12 +288,6 @@ function QuickAction({ icon, label, onPress, testID }: { icon: React.ReactNode; 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: Spacing.xl, paddingVertical: Spacing.lg },
-  hello: { color: Colors.textMuted, fontSize: 14, fontWeight: "600" },
-  name: { color: Colors.primary, fontSize: 26, fontWeight: "900", letterSpacing: -0.5 },
-  bellWrap: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border },
-  bellDot: { position: "absolute", top: 6, right: 6, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: Colors.danger, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
-  bellDotText: { color: "#fff", fontSize: 10, fontWeight: "800" },
   alertsRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -332,26 +311,29 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   alertsBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800" },
-  scoreCard: { borderRadius: Radius.xxl, padding: 24, overflow: "hidden" },
-  scoreHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-  scoreLabel: { color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: "700", letterSpacing: 1 },
-  scoreRisk: { color: "#fff", fontSize: 18, fontWeight: "800", marginTop: 4 },
-  glow: { width: 18, height: 18, borderRadius: 9 },
-  scoreFooter: { marginTop: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
-  scoreFooterText: { color: "rgba(255,255,255,0.8)", fontSize: 13, fontWeight: "600" },
   statsRow: { flexDirection: "row", paddingHorizontal: Spacing.xl, gap: 10, marginTop: 12, minWidth: 0 },
   qaRow: { flexDirection: "row", paddingHorizontal: Spacing.xl, gap: 10, marginBottom: 10 },
   qa: { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.lg, borderWidth: 1, borderColor: Colors.border, flexDirection: "row", alignItems: "center", gap: 12 },
-  qaIconBox: { width: 44, height: 44, borderRadius: 12, backgroundColor: Colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
+  qaIconBox: { width: 44, height: 44, borderRadius: 12, backgroundColor: Colors.surfaceAlt, alignItems: "center", justifyContent: "center", position: "relative" },
+  qaBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: Colors.surface,
+  },
+  qaBadgeText: { color: "#fff", fontSize: 9, fontWeight: "800" },
   qaLabel: { color: Colors.text, fontWeight: "700", fontSize: 13, flex: 1 },
   promoCta: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16, borderRadius: Radius.xl },
   promoTitle: { color: "#fff", fontWeight: "900", fontSize: 14 },
   promoDesc: { color: "rgba(255,255,255,0.85)", fontSize: 11, marginTop: 2, fontWeight: "600" },
   insightText: { color: Colors.text, fontSize: 14, lineHeight: 20, fontWeight: "500" },
-  heroCard: { borderRadius: Radius.xxl, overflow: "hidden", height: 180, position: "relative" },
-  heroImg: { width: "100%", height: "100%" },
-  heroOverlay: { position: "absolute", left: 0, right: 0, bottom: 0, top: "30%" },
-  heroContent: { position: "absolute", left: 20, right: 20, bottom: 20 },
-  heroTitle: { color: "#fff", fontSize: 20, fontWeight: "900", letterSpacing: -0.5 },
-  heroSub: { color: "rgba(255,255,255,0.85)", fontSize: 13, marginTop: 4 },
+  insightAction: { color: Colors.primary, fontSize: 12, fontWeight: "700", marginTop: 8 },
 });

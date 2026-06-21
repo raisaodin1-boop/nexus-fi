@@ -118,9 +118,7 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
-          <TouchableOpacity onPress={() => router.back()} testID={`${testIDPrefix}-back`}><Text style={styles.back}>← Retour</Text></TouchableOpacity>
-
+        <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 60, paddingTop: 4 }} keyboardShouldPersistTaps="handled">
           <LinearGradient colors={[Colors.primary, Colors.gradMid]} style={[styles.hero, Shadow.cardDark]}>
             <Text style={styles.heroName}>{item.name}</Text>
             {item.description ? <Text style={styles.heroDesc}>{item.description}</Text> : null}
