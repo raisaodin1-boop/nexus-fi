@@ -447,6 +447,10 @@ export default function WelcomeScreen() {
   const btnScale = useRef(new Animated.Value(0.88)).current;
   const btnPulse = useRef(new Animated.Value(1)).current;
   const bgOpacity = useRef(new Animated.Value(1)).current;
+  const pulseLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+
+  // Stop the infinite pulse loop on unmount to avoid leaking the animation.
+  useEffect(() => () => { pulseLoopRef.current?.stop(); }, []);
 
   // Entrance animation
   useEffect(() => {
@@ -472,12 +476,14 @@ export default function WelcomeScreen() {
   }, []);
 
   const startPulse = useCallback(() => {
-    Animated.loop(
+    pulseLoopRef.current?.stop();
+    pulseLoopRef.current = Animated.loop(
       Animated.sequence([
         Animated.timing(btnPulse, { toValue: 1.04, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
         Animated.timing(btnPulse, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ])
-    ).start();
+    );
+    pulseLoopRef.current.start();
   }, []);
 
   // Auto-advance carousel

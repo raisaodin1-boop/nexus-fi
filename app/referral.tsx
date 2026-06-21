@@ -1,5 +1,5 @@
 // HODIX Referral — Programme de parrainage
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Share,
@@ -55,9 +55,13 @@ export default function ReferralScreen() {
     })();
   }, []);
 
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
+
   const showToast = () => {
     setToastVisible(true);
-    setTimeout(() => setToastVisible(false), 2500);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToastVisible(false), 2500);
   };
 
   const copyCode = async () => {

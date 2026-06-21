@@ -16,7 +16,7 @@ export default function HomeTab() {
 
   useEffect(() => {
     if (!loading && !user) router.replace("/onboarding");
-  }, [loading, user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loading, user, router]);
 
   if (loading || !user) {
     return (

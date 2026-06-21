@@ -136,7 +136,8 @@ function BiometricGate({ children }: { children: React.ReactNode }) {
       setLocked(true);
       tryUnlock();
     })();
-  }, [loading, user]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, user]); // tryUnlock is intentionally excluded: it doesn't change and re-running would re-lock
 
   if (locked === null) return null;
   if (!locked) return <>{children}</>;

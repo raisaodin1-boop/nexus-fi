@@ -187,7 +187,9 @@ export default function AdminConsole() {
       setUserTotal(res.total);
       setUsersHasMore(res.has_more);
       setUsers((prev) => (append ? [...prev, ...res.items] : res.items));
-    } catch {}
+    } catch (e) {
+      console.warn("[admin] loadUsers failed:", e);
+    }
     setLoading(false);
     setUsersLoadingMore(false);
   }, []);

@@ -22,7 +22,10 @@ export function invalidateCache(prefix?: string) {
 }
 
 export function inviteCode(len = 6): string {
-  return Math.random().toString(36).toUpperCase().slice(2, 2 + len);
+  // Math.random().toString(36) can produce fewer than len+2 chars for very small values;
+  // concatenate two random strings to guarantee enough characters.
+  const raw = (Math.random().toString(36) + Math.random().toString(36)).toUpperCase().replace(/\./g, "");
+  return raw.slice(0, len).padEnd(len, "X");
 }
 
 /** Lowercase + trim — use for auth emails and profile lookup. */

@@ -29,6 +29,7 @@ export interface User {
   birth_place?: string | null;
   neighborhood?: string | null;
   address?: string | null;
+  push_consent?: boolean | null;
   kyc_status?: string | null;
   trust_score?: number | null;
   push_consent?: boolean | null;

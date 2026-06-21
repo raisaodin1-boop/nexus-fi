@@ -11,7 +11,7 @@ import {
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { Bell, ChevronRight, PiggyBank, Trophy, Users, Wallet, TrendingUp, Sparkles, QrCode, BarChart2, Brain, Repeat, Receipt, PieChart, MessageCircle } from "lucide-react-native";
+import { Bell, ChevronRight, PiggyBank, Trophy, Users, Wallet, TrendingUp, Sparkles, QrCode, BarChart2, Brain, Repeat, Receipt, PieChart, MessageCircle, CreditCard, Store, Gavel, Target } from "lucide-react-native";
 
 import { useAuth } from "@/src/auth-context";
 import { api, formatXAF } from "@/src/api";
@@ -219,6 +219,14 @@ export function MemberDashboard() {
         <View style={styles.qaRow}>
           <QuickAction icon={<MessageCircle color={Colors.secondary} size={22} />} label="Messagerie" onPress={() => router.push("/messages")} testID="home-action-messages" badge={msgUnread} />
           <QuickAction icon={<Receipt color={Colors.accent} size={22} />} label="Partager facture" onPress={() => router.push("/split-expense")} testID="home-action-split" />
+        </View>
+        <View style={styles.qaRow}>
+          <QuickAction icon={<Gavel color="#7C3AED" size={22} />} label="Enchères Tontine" onPress={() => router.push("/tontine-auction" as any)} testID="home-action-auction" />
+          <QuickAction icon={<Target color="#10B981" size={22} />} label="Objectif Collectif" onPress={() => router.push("/collective-goal" as any)} testID="home-action-collective" />
+        </View>
+        <View style={styles.qaRow}>
+          <QuickAction icon={<CreditCard color="#0B1F3A" size={22} />} label="Carte Virtuelle" onPress={() => router.push("/virtual-card" as any)} testID="home-action-virtual-card" />
+          <QuickAction icon={<Store color="#EF4444" size={22} />} label="HODIX Pay Pro" onPress={() => router.push("/merchant-qr" as any)} testID="home-action-merchant" />
         </View>
 
         {/* Promotion CTA for members */}
