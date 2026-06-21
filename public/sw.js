@@ -1,5 +1,5 @@
 /* HODIX — Service Worker: offline shell, asset cache, background sync, push */
-const CACHE_VERSION = "hodix-pwa-v2";
+const CACHE_VERSION = "hodix-pwa-v3";
 const PRECACHE = [
   "/",
   "/manifest.json",
