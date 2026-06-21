@@ -8,6 +8,7 @@ import {
   Dimensions,
   Easing,
   Platform,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -21,6 +22,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, Defs, G, Path, Polygon, Rect } from "react-native-svg";
 
 import { CAROUSEL_SLIDES, UNITY_SLIDE, WELCOME_I18N } from "@/src/welcome-content";
+import { PremiumVisualStack, CommunityAvatars, TRUST_BLOCK_COPY } from "@/src/welcome-visuals";
 import { useFirstLaunch } from "@/src/use-first-launch";
 
 const { width: W, height: H } = Dimensions.get("window");
@@ -294,7 +296,7 @@ function AnimatedBackground({
 
 // ── Hodix Logo mark ──────────────────────────────────────────────────────────
 
-function HodixMark({ size = 56, color = "#F5C842" }: { size?: number; color?: string }) {
+function HodixMark({ size = 56, color = "#C9A227" }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 56 56">
       {/* Outer hexagon ring — pan-African motif */}
@@ -393,7 +395,7 @@ function UnitySlide({
       <Text style={styles.unitySub}>{t.unity_sub1}</Text>
       <Text style={styles.unitySub}>{t.unity_sub2}</Text>
       <Text style={styles.unityBrand}>{t.unity_brand}</Text>
-      <Text style={styles.unityLogo}>Hodix.</Text>
+      <CommunityAvatars width={Math.min(W - 80, 200)} />
     </Animated.View>
   );
 }
@@ -545,33 +547,49 @@ export default function WelcomeScreen() {
         />
 
         <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-
-          {/* ── Top section: logo + wordmark ──────────────────── */}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          {/* ── Hero: vision headline ─────────────────────────── */}
           <View style={styles.topSection}>
             <Animated.View style={[styles.logoWrap, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}>
-              {/* Glow ring behind logo */}
               <View style={styles.logoGlow} />
-              <HodixMark size={52} color="#F5C842" />
+              <HodixMark size={44} color="#C9A227" />
             </Animated.View>
 
-            <Animated.Text
-              style={[
-                styles.wordmark,
-                { opacity: titleOpacity, transform: [{ translateY: titleSlide }] },
-              ]}
-            >
-              Hodix
+            <Animated.View style={{ opacity: titleOpacity, transform: [{ translateY: titleSlide }] }}>
+              <Text style={styles.heroLine1}>{t.hero_line1}</Text>
+              <Text style={styles.heroLine2}>{t.hero_line2}</Text>
+            </Animated.View>
+
+            <Animated.Text style={[styles.heroSub, { opacity: taglineOpacity }]}>
+              {t.hero_sub}
             </Animated.Text>
 
-            <Animated.Text style={[styles.tagline, { opacity: taglineOpacity }]}>
-              {t.tagline}
+            <Animated.Text style={[styles.visionTag, { opacity: taglineOpacity }]}>
+              {t.vision_tag}
             </Animated.Text>
           </View>
 
-          {/* ── Center: carousel ──────────────────────────────── */}
+          {/* ── Premium visual stack ──────────────────────────── */}
+          <Animated.View style={[styles.visualSection, { opacity: carouselFade }]}>
+            <PremiumVisualStack />
+          </Animated.View>
+
+          {/* ── Trust Score block ─────────────────────────────── */}
+          <View style={styles.trustSection}>
+            <View style={styles.trustCard}>
+              <View style={styles.trustAccentBar} />
+              <Text style={styles.trustTitle}>{TRUST_BLOCK_COPY[lang].title}</Text>
+              <Text style={styles.trustSub}>{TRUST_BLOCK_COPY[lang].sub}</Text>
+            </View>
+          </View>
+
+          {/* ── Cultural carousel (compact) ───────────────────── */}
           <View style={styles.carouselSection}>
-            {/* Glassmorphism card */}
-            <View style={styles.glassCard}>
+            <View style={[styles.glassCard, styles.glassCardCompact]}>
               {/* Card inner glow top */}
               <View style={styles.glassCardGlow} />
 
@@ -609,7 +627,7 @@ export default function WelcomeScreen() {
                 testID="welcome-start"
               >
                 <LinearGradient
-                  colors={["#F5C842", "#E8A800", "#D4940A"]}
+                  colors={["#C9A227", "#10B981", "#0F766E"]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.ctaGradient}
@@ -620,14 +638,10 @@ export default function WelcomeScreen() {
               </TouchableOpacity>
             </Animated.View>
 
-            {/* Pan-African stripe accent */}
-            <View style={styles.panAfricanStripe}>
-              {["#CE1126", "#FFFFFF", "#009A44", "#F5C842", "#003087"].map((c, i) => (
-                <View key={i} style={[styles.stripe, { backgroundColor: c }]} />
-              ))}
-            </View>
+            <Text style={styles.footerTagline}>{t.tagline}</Text>
           </View>
 
+        </ScrollView>
         </SafeAreaView>
       </AnimatedBackground>
     </View>
@@ -637,77 +651,137 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#0A0014",
+    backgroundColor: "#0B1F3A",
   },
-  safe: {
-    flex: 1,
-    justifyContent: "space-between",
+  safe: { flex: 1 },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 24,
   },
 
-  // ── Top ──────────────────────────────────────────────────────
+  // ── Hero ─────────────────────────────────────────────────────
   topSection: {
     alignItems: "center",
-    paddingTop: 28,
+    paddingTop: 20,
     paddingHorizontal: 24,
+    gap: 6,
   },
   logoWrap: {
     position: "relative",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 14,
+    marginBottom: 8,
   },
   logoGlow: {
     position: "absolute",
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "#F5C842",
-    opacity: 0.12,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#C9A227",
+    opacity: 0.1,
   },
-  wordmark: {
-    fontSize: 42,
+  heroLine1: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: "rgba(255,255,255,0.85)",
+    textAlign: "center",
+    letterSpacing: -0.5,
+    lineHeight: 32,
+  },
+  heroLine2: {
+    fontSize: 28,
     fontWeight: "900",
     color: "#FFFFFF",
-    letterSpacing: -1.5,
-    marginBottom: 8,
-    textShadowColor: "rgba(245,200,66,0.3)",
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 20,
+    textAlign: "center",
+    letterSpacing: -0.8,
+    lineHeight: 34,
+    marginBottom: 4,
   },
-  tagline: {
+  heroSub: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.75)",
+    textAlign: "center",
+    lineHeight: 22,
+    fontWeight: "500",
+    maxWidth: 340,
+    marginTop: 4,
+  },
+  visionTag: {
+    fontSize: 12,
+    color: "#10B981",
+    textAlign: "center",
+    lineHeight: 18,
+    fontWeight: "600",
+    fontStyle: "italic",
+    maxWidth: 320,
+    marginTop: 6,
+  },
+
+  // ── Visual stack ─────────────────────────────────────────────
+  visualSection: {
+    alignItems: "center",
+    paddingVertical: 8,
+    minHeight: 260,
+  },
+
+  // ── Trust block ──────────────────────────────────────────────
+  trustSection: {
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  trustCard: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "rgba(201,162,39,0.25)",
+    overflow: "hidden",
+  },
+  trustAccentBar: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: "#C9A227",
+  },
+  trustTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    lineHeight: 24,
+    marginBottom: 8,
+    letterSpacing: -0.3,
+  },
+  trustSub: {
     fontSize: 13,
     color: "rgba(255,255,255,0.65)",
-    textAlign: "center",
     lineHeight: 20,
     fontWeight: "500",
-    letterSpacing: 0.3,
   },
 
   // ── Carousel ─────────────────────────────────────────────────
   carouselSection: {
-    flex: 1,
     alignItems: "center",
-    justifyContent: "center",
     paddingHorizontal: 20,
+    marginBottom: 16,
   },
   glassCard: {
     width: W - 40,
-    minHeight: H * 0.28,
-    borderRadius: 24,
-    backgroundColor: "rgba(255,255,255,0.07)",
+    minHeight: H * 0.14,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.05)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.13)",
+    borderColor: "rgba(255,255,255,0.1)",
     overflow: "hidden",
-    paddingHorizontal: 28,
-    paddingVertical: 28,
+    paddingHorizontal: 24,
+    paddingVertical: 20,
     alignItems: "center",
     justifyContent: "center",
-    // Shadow
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.4,
-    shadowRadius: 32,
-    elevation: 16,
+  },
+  glassCardCompact: {
+    minHeight: undefined,
+    paddingVertical: 16,
   },
   glassCardGlow: {
     position: "absolute",
@@ -746,22 +820,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   tontineName: {
-    fontSize: 40,
-    fontWeight: "900",
-    color: "#F5C842",
-    letterSpacing: -1,
-    textShadowColor: "rgba(245,200,66,0.4)",
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 16,
-    marginTop: 4,
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#10B981",
+    letterSpacing: -0.5,
+    marginTop: 2,
   },
   greeting: {
-    fontSize: 15,
-    color: "rgba(255,255,255,0.85)",
+    fontSize: 13,
+    color: "rgba(255,255,255,0.7)",
     textAlign: "center",
     fontWeight: "600",
-    lineHeight: 22,
-    letterSpacing: 0.2,
+    lineHeight: 20,
   },
   decorLine: {
     height: 3,
@@ -791,10 +861,10 @@ const styles = StyleSheet.create({
     marginVertical: 10,
   },
   unityTitle: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: "900",
     color: "#FFFFFF",
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
     textAlign: "center",
   },
   unitySub: {
@@ -805,21 +875,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   unityBrand: {
-    fontSize: 13,
-    color: "#F5C842",
+    fontSize: 12,
+    color: "#C9A227",
     fontWeight: "800",
-    letterSpacing: 1.5,
+    letterSpacing: 1.2,
     textTransform: "uppercase",
-    marginTop: 6,
-  },
-  unityLogo: {
-    fontSize: 34,
-    fontWeight: "900",
-    color: "#F5C842",
-    letterSpacing: -1,
-    textShadowColor: "rgba(245,200,66,0.5)",
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 20,
+    marginTop: 4,
+    marginBottom: 8,
   },
 
   // ── Progress dots ─────────────────────────────────────────────
@@ -840,21 +902,28 @@ const styles = StyleSheet.create({
   },
   dotActive: {
     width: 18,
-    backgroundColor: "#F5C842",
+    backgroundColor: "#10B981",
   },
 
   // ── Bottom / CTA ──────────────────────────────────────────────
   bottomSection: {
     alignItems: "center",
-    paddingBottom: 12,
-    gap: 20,
+    paddingHorizontal: 24,
+    gap: 12,
+  },
+  footerTagline: {
+    fontSize: 11,
+    color: "rgba(255,255,255,0.4)",
+    fontWeight: "600",
+    letterSpacing: 0.5,
+    textAlign: "center",
   },
   ctaOuter: {
     borderRadius: 999,
     overflow: "hidden",
-    shadowColor: "#F5C842",
+    shadowColor: "#10B981",
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.45,
+    shadowOpacity: 0.4,
     shadowRadius: 20,
     elevation: 12,
   },
@@ -868,26 +937,14 @@ const styles = StyleSheet.create({
     minWidth: 220,
   },
   ctaText: {
-    color: "#1A0A00",
-    fontSize: 17,
+    color: "#0B1F3A",
+    fontSize: 16,
     fontWeight: "900",
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
   ctaArrow: {
-    color: "#1A0A00",
+    color: "#0B1F3A",
     fontSize: 18,
     fontWeight: "900",
-  },
-
-  // ── Pan-African stripe ────────────────────────────────────────
-  panAfricanStripe: {
-    flexDirection: "row",
-    height: 3,
-    width: W * 0.6,
-    borderRadius: 2,
-    overflow: "hidden",
-  },
-  stripe: {
-    flex: 1,
   },
 });

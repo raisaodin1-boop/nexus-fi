@@ -169,6 +169,7 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     // ── Credit score
     if (method === "GET"  && s[0] === "credit-score" && !s[1])                         return (await db.getCreditScore()) as T;
     if (method === "GET"  && s[0] === "credit-score" && s[1] === "history")            return (await db.getCreditScoreHistory()) as T;
+    if (method === "GET"  && s[0] === "emoney" && s[1] === "license")                  return (await db.getEmoneyLicenseConfig()) as T;
 
     // ── Savings analytics
     if (method === "GET" && s[0] === "savings" && s[1] === "analytics" && !s[2])       return (await db.getAllSavingsAnalytics()) as T;
@@ -252,7 +253,7 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
       )) as T;
     if (method === "PATCH" && s[0] === "admin" && s[1] === "users" && s[2] === "role")          return (await db.adminUpdateUserRole(body?.user_id, body?.role)) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "users" && s[2] === "deactivate")    return (await db.adminDeactivateUser(body?.user_id)) as T;
-    if (method === "GET"   && s[0] === "admin" && s[1] === "tontines")                          return (await db.adminListTontines(body?.search)) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "tontines")                          return (await db.adminListTontines(query.get("search") ?? "")) as T;
     if (method === "PATCH" && s[0] === "admin" && s[1] === "tontines" && s[2])                  return (await db.adminUpdateTontine(s[2], body)) as T;
     if (method === "DELETE"&& s[0] === "admin" && s[1] === "tontines" && s[2])                  return (await db.adminDeleteTontine(s[2])) as T;
     if (method === "GET"   && s[0] === "admin" && s[1] === "kyc" && s[2])                      return (await db.adminGetKycDetail(s[2])) as T;
@@ -260,6 +261,9 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "POST"  && s[0] === "admin" && s[1] === "kyc" && s[2] === "approve")         return (await db.adminHandleKyc(body?.user_id, true)) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "kyc" && s[2] === "reject")          return (await db.adminHandleKyc(body?.user_id, false, body?.reason)) as T;
     if (method === "DELETE"&& s[0] === "admin" && s[1] === "kyc" && s[2])                      return (await db.adminDeleteKyc(s[2])) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "compliance" && s[2] === "audit")    return (await db.adminListComplianceAudit(Number(query.get("limit") ?? 100), query.get("category") ?? undefined)) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "compliance" && s[2] === "fraud-alerts") return (await db.adminListFraudAlerts(query.get("status") ?? "open")) as T;
+    if (method === "POST"  && s[0] === "admin" && s[1] === "compliance" && s[2] === "fraud-review") return (await db.adminReviewFraudAlert(body?.alert_id, body?.status)) as T;
     if (method === "POST" && s[0] === "promotion-requests" && !s[1])                            return (await db.createPromotionRequest(body?.reason)) as T;
     if (method === "GET"  && s[0] === "promotion-requests" && s[1] === "me")                   return (await db.getMyPromotionRequest()) as T;
     if (method === "GET"   && s[0] === "admin" && s[1] === "promotion-requests")                return (await db.adminListPromotionRequests()) as T;

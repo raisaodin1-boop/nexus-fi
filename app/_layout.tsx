@@ -1,12 +1,8 @@
 // HODIX root layout — wraps app in AuthProvider + SafeArea + Stack.
 import { Platform } from "react-native";
+import { initObservability } from "@/src/observability";
 if (Platform.OS !== "web") {
-  const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN ?? "";
-  if (SENTRY_DSN) {
-    import("@sentry/react-native").then((Sentry) => {
-      Sentry.init({ dsn: SENTRY_DSN, tracesSampleRate: 0.1 });
-    });
-  }
+  initObservability();
 }
 
 import { Stack, useRouter } from "expo-router";

@@ -22,6 +22,9 @@ async function currentUserId(): Promise<string> {
 
 export interface WalletBalance {
   balance_xaf: number;
+  balance_xof: number;
+  balance_ngn: number;
+  balance_ghs: number;
   balance_usd: number;
   balance_eur: number;
   user_id: string;
@@ -42,6 +45,9 @@ export async function getWallet(): Promise<WalletBalance> {
 
   return {
     balance_xaf: Number(data.balance_xaf ?? 0),
+    balance_xof: Number(data.balance_xof ?? 0),
+    balance_ngn: Number(data.balance_ngn ?? 0),
+    balance_ghs: Number(data.balance_ghs ?? 0),
     balance_usd: Number(data.balance_usd ?? 0),
     balance_eur: Number(data.balance_eur ?? 0),
     user_id: me,
@@ -132,8 +138,6 @@ export async function withdrawToMobileMoney(payload: WithdrawPayload): Promise<W
   const rates = await getRates();
   const amountXaf = convert(payload.amount, payload.currency, "XAF", rates);
 
-  // Atomic server-side debit with balance guard — concurrent withdrawals
-  // can never overdraw the wallet.
   const { data: tx, error } = await getSupabase().rpc("wallet_withdraw", {
     p_amount: payload.amount,
     p_currency: payload.currency,
@@ -149,7 +153,19 @@ export async function withdrawToMobileMoney(payload: WithdrawPayload): Promise<W
     throw new Error(msg);
   }
 
-  return { ...tx, amount: Number(tx.amount), amount_xaf: Number(tx.amount_xaf) };
+  const debited: WalletTx = { ...tx, amount: Number(tx.amount), amount_xaf: Number(tx.amount_xaf) };
+
+  try {
+    const { data, error: payoutErr } = await getSupabase().functions.invoke("cinetpay-payout", {
+      body: { wallet_tx_id: debited.id },
+    });
+    if (payoutErr) throw new Error(payoutErr.message ?? "Échec du virement Mobile Money.");
+    if (!data?.ok) throw new Error(data?.error ?? "Échec du virement Mobile Money.");
+    const paid = data.tx ?? debited;
+    return { ...paid, amount: Number(paid.amount), amount_xaf: Number(paid.amount_xaf) };
+  } catch (e: any) {
+    throw new Error(e?.message ?? "Retrait débité mais virement Mobile Money en échec — wallet recrédité.");
+  }
 }
 
 // ─── Peer-to-peer transfer ────────────────────────────────────────────────────

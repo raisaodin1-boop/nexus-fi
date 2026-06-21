@@ -1,14 +1,15 @@
 /**
- * Real-time exchange rates — XAF, NGN, GHS, KES, ZAR, USD, EUR.
+ * Real-time exchange rates — XAF, XOF, NGN, GHS, KES, ZAR, USD, EUR.
  *
- * XAF (CFA franc BEAC) is legally pegged to EUR at exactly 655.957.
+ * XAF (CFA BEAC) and XOF (CFA BCEAO) are pegged to EUR at 655.957.
  * All other rates fetched from ExchangeRate-API (free, USD base, no key required).
  */
 
-export type Currency = "XAF" | "NGN" | "GHS" | "KES" | "ZAR" | "USD" | "EUR";
+export type Currency = "XAF" | "XOF" | "NGN" | "GHS" | "KES" | "ZAR" | "USD" | "EUR";
 
 export const CURRENCY_META: Record<Currency, { name: string; symbol: string; flag: string; decimals: number }> = {
-  XAF: { name: "Franc CFA", symbol: "FCFA", flag: "🇨🇲", decimals: 0 },
+  XAF: { name: "Franc CFA (CEMAC)", symbol: "FCFA", flag: "🇨🇲", decimals: 0 },
+  XOF: { name: "Franc CFA (UEMOA)", symbol: "CFA", flag: "🇸🇳", decimals: 0 },
   NGN: { name: "Naira nigérian", symbol: "₦", flag: "🇳🇬", decimals: 0 },
   GHS: { name: "Cedi ghanéen", symbol: "GH₵", flag: "🇬🇭", decimals: 2 },
   KES: { name: "Shilling kényan", symbol: "KSh", flag: "🇰🇪", decimals: 2 },
@@ -17,7 +18,7 @@ export const CURRENCY_META: Record<Currency, { name: string; symbol: string; fla
   EUR: { name: "Euro", symbol: "€", flag: "🇪🇺", decimals: 2 },
 };
 
-export const ALL_CURRENCIES: Currency[] = ["XAF", "NGN", "GHS", "KES", "ZAR", "USD", "EUR"];
+export const ALL_CURRENCIES: Currency[] = ["XAF", "XOF", "NGN", "GHS", "KES", "ZAR", "USD", "EUR"];
 
 // USD-based rates (1 USD = N units of currency)
 export interface Rates {
@@ -39,7 +40,8 @@ const TTL_MS = 5 * 60 * 1000;
 const FALLBACK_USD: Record<Currency, number> = {
   USD: 1,
   EUR: 0.915,
-  XAF: XAF_PER_EUR * 0.915,  // ~600 XAF/USD (périmètre BCE)
+  XAF: XAF_PER_EUR * 0.915,
+  XOF: XAF_PER_EUR * 0.915,
   NGN: 1620,
   GHS: 15.5,
   KES: 129,
@@ -59,6 +61,7 @@ export async function getRates(): Promise<Rates> {
       USD: 1,
       EUR: r.EUR ?? FALLBACK_USD.EUR,
       XAF: XAF_PER_EUR * (r.EUR ?? FALLBACK_USD.EUR),
+      XOF: XAF_PER_EUR * (r.EUR ?? FALLBACK_USD.EUR),
       NGN: r.NGN ?? FALLBACK_USD.NGN,
       GHS: r.GHS ?? FALLBACK_USD.GHS,
       KES: r.KES ?? FALLBACK_USD.KES,

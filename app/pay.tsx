@@ -133,6 +133,43 @@ export default function PayContribution() {
     return () => clearTimeout(t);
   }, [countdown, stage, method]);
 
+  // Auto-poll payment status (webhook confirms in background)
+  useEffect(() => {
+    if (stage !== "processing" || !paymentId || sandboxMode) return;
+
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const status = await api.get<{ status: string }>(`/payments/${paymentId}/status`);
+        if (cancelled) return;
+        if (status.status === "succeeded") {
+          setFinalStatus("succeeded");
+          setStage("done");
+        }
+      } catch { /* ignore */ }
+    };
+
+    poll();
+    const interval = setInterval(poll, 4000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [stage, paymentId, sandboxMode]);
+
+  // Navigate when webhook/poll confirms payment
+  useEffect(() => {
+    if (stage !== "done" || finalStatus !== "succeeded" || !paymentId) return;
+    if (paymentKind === "certified_report") {
+      router.replace({
+        pathname: "/certificate-delivery",
+        params: { cert_kind: cert_kind ?? "identity", paymentId },
+      } as any);
+    } else {
+      router.replace({
+        pathname: "/receipt",
+        params: { paymentId, type: paymentKind },
+      } as any);
+    }
+  }, [stage, finalStatus, paymentId, paymentKind, cert_kind, router]);
+
   const selectedMethod = METHODS.find((m) => m.key === method);
 
   const buildInitPayload = () => ({
@@ -440,7 +477,7 @@ export default function PayContribution() {
           <Text style={styles.processingDesc}>
             {sandboxMode
               ? "Mode test CinetPay : entrez la référence de transaction reçue après paiement."
-              : `Validez le paiement ${selectedMethod?.label} sur votre téléphone (${phone}), puis entrez la référence CinetPay ci-dessous.`}
+              : `Validez le paiement ${selectedMethod?.label} sur votre téléphone (${phone}). La confirmation est automatique — vous pouvez aussi entrer la référence manuellement.`}
             {"\n"}Aucun crédit ne sera appliqué sans confirmation.
           </Text>
 

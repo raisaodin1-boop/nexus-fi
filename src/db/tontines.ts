@@ -229,17 +229,9 @@ export async function getPublicTontineProfile(id: string) {
   };
 }
 
-export async function contributeTontine(id: string, amount: number) {
-  const me = await uid();
-  const { data: tontine } = await getSupabase().from("tontines").select("current_cycle").eq("id", id).single();
-  const { error } = await getSupabase().from("tontine_contributions").insert({
-    tontine_id: id, user_id: me, amount, cycle: tontine?.current_cycle ?? 1,
-  });
-  throwSb(error);
-  await getSupabase().from("tontine_members")
-    .update({ status: "a_jour" }).eq("tontine_id", id).eq("user_id", me);
-  await addIdentityEvent(me, "tontine_contribution", 1);
-  return { detail: "Contribution enregistrée" };
+/** @deprecated Use CinetPay flow via contributeTontineSecure after payment confirmation. */
+export async function contributeTontine(_id: string, _amount: number) {
+  throw { status: 403, detail: "Paiement électronique requis. Utilisez la page de paiement CinetPay." };
 }
 
 /* ── Security-aware operations ──────────────────────────────── */
@@ -350,43 +342,25 @@ export async function joinTontineSecure(invite_code: string) {
   return { tontine_id: tontine.id };
 }
 
-export async function contributeTontineSecure(id: string, amount: number) {
+export async function contributeTontineSecure(id: string, amount: number, paymentId: string) {
+  if (!paymentId) throw { status: 403, detail: "Paiement électronique requis." };
+
   const me = await uid();
   const sb = getSupabase();
 
-  const { data: tontine } = await sb.from("tontines")
-    .select("current_cycle, amount_per_cycle, max_members, reserve_fund, owner_id, name").eq("id", id).single();
-  if (!tontine) throw { status: 404, detail: "Tontine introuvable" };
-
-  const cycle = tontine.current_cycle ?? 1;
-  const reserveAmount = Math.round(amount * RESERVE_FUND_PCT);
-  const netAmount = amount - reserveAmount;
-
-  const { error } = await sb.from("tontine_contributions").insert({ tontine_id: id, user_id: me, amount: netAmount, cycle });
-  throwSb(error);
-
-  const currentReserve = Number(tontine.reserve_fund ?? 0);
-  await sb.from("tontines").update({ reserve_fund: currentReserve + reserveAmount }).eq("id", id).then(() => {});
-  await sb.from("tontine_members").update({ status: "a_jour", last_paid_cycle: cycle }).eq("tontine_id", id).eq("user_id", me).then(() => {});
+  const { error: rpcErr } = await sb.rpc("contribute_tontine_paid", {
+    p_tontine_id: id,
+    p_amount: amount,
+    p_payment_id: paymentId,
+  });
+  if (rpcErr) throwSb(rpcErr);
 
   invalidateCache("tontines");
   invalidateCache(`identity-${me}`);
-
-  if (cycle === 1) {
-    const { count: paidCount } = await sb.from("tontine_contributions")
-      .select("*", { count: "exact", head: true }).eq("tontine_id", id).eq("cycle", 1);
-    const membersCount = Number(tontine.max_members ?? 12);
-    if ((paidCount ?? 0) >= membersCount - 1) {
-      const releaseAt = new Date(Date.now() + ESCROW_HOURS * 3600 * 1000).toISOString();
-      await sb.from("tontine_escrow").upsert({
-        tontine_id: id, cycle: 1, amount: netAmount * membersCount,
-        release_at: releaseAt, status: "held", dispute_count: 0,
-      });
-    }
-  }
-
   await addIdentityEvent(me, "tontine_contribution", 1);
-  return { detail: "Contribution enregistrée", reserve_deducted: reserveAmount, net_amount: netAmount };
+
+  const reserveAmount = Math.round(amount * RESERVE_FUND_PCT);
+  return { detail: "Contribution enregistrée", reserve_deducted: reserveAmount, net_amount: amount - reserveAmount };
 }
 
 function nextCycleDeadline(frequency?: string | null): string {

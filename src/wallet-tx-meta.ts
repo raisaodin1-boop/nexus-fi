@@ -37,6 +37,8 @@ export function txStatusLabel(status: string): { label: string; color: string } 
       return { label: "En attente", color: "#F59E0B" };
     case "processing":
       return { label: "En cours", color: "#3B82F6" };
+    case "pending_disbursement":
+      return { label: "Virement en cours", color: "#3B82F6" };
     case "failed":
     case "rejected":
       return { label: "Échoué", color: "#EF4444" };

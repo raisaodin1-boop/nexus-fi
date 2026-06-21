@@ -148,11 +148,11 @@ async function fulfillPayment(meta: PaymentMeta, paymentId: string) {
   switch (meta.kind) {
     case "tontine_contribution":
       if (!meta.tontine_id) break;
-      await contributeTontineSecure(meta.tontine_id, amount);
+      await contributeTontineSecure(meta.tontine_id, amount, paymentId);
       break;
     case "savings_deposit":
       if (!meta.goal_id) break;
-      await depositSaving(meta.goal_id, amount, "Dépôt CinetPay");
+      await depositSaving(meta.goal_id, amount, "Dépôt CinetPay", paymentId);
       break;
     case "association_contribution":
       if (!meta.association_id) break;
@@ -187,10 +187,20 @@ async function fulfillPayment(meta: PaymentMeta, paymentId: string) {
   }
 }
 
-async function createCinetpayCheckout(paymentId: string, amount: number, meta: PaymentMeta, provider: PaymentProvider) {
+async function createCinetpayCheckout(
+  paymentId: string,
+  amount: number,
+  meta: PaymentMeta,
+  provider: PaymentProvider,
+  notifyUrl?: string,
+) {
   const apiKey = process.env.EXPO_PUBLIC_CINETPAY_API_KEY?.trim();
   const siteId = process.env.EXPO_PUBLIC_CINETPAY_SITE_ID?.trim();
   if (!apiKey || !siteId) return null;
+
+  const resolvedNotify = notifyUrl
+    ?? process.env.EXPO_PUBLIC_CINETPAY_NOTIFY_URL?.trim()
+    ?? undefined;
 
   const channels = provider === "card" ? "CREDIT_CARD" : "MOBILE_MONEY";
   const response = await fetch("https://api-checkout.cinetpay.com/v2/payment", {
@@ -205,7 +215,7 @@ async function createCinetpayCheckout(paymentId: string, amount: number, meta: P
       description: meta.label ?? "Paiement Hodix",
       channels,
       customer_phone_number: meta.phone ?? "",
-      notify_url: process.env.EXPO_PUBLIC_CINETPAY_NOTIFY_URL ?? undefined,
+      notify_url: resolvedNotify,
       return_url: process.env.EXPO_PUBLIC_CINETPAY_RETURN_URL ?? undefined,
       metadata: meta,
     }),
@@ -267,7 +277,12 @@ export async function initiateCinetpayPayment(payload: InitiatePayload) {
     cert_kind: payload.cert_kind,
   };
 
-  const checkout = await createCinetpayCheckout(paymentId, amount, meta, provider);
+  const webhookUrl = process.env.EXPO_PUBLIC_CINETPAY_NOTIFY_URL?.trim()
+    || (process.env.EXPO_PUBLIC_SUPABASE_URL
+      ? `${process.env.EXPO_PUBLIC_SUPABASE_URL.replace(/\/$/, "")}/functions/v1/cinetpay-webhook`
+      : undefined);
+
+  const checkout = await createCinetpayCheckout(paymentId, amount, meta, provider, webhookUrl);
   if (checkout?.cinetpay_transaction_id) meta.cinetpay_transaction_id = checkout.cinetpay_transaction_id;
 
   const { error } = await getSupabase().from("payments").insert({
@@ -310,7 +325,8 @@ export async function confirmCinetpayPayment(payload: ConfirmPayload) {
     if (!payment.receipt_email_sent_at) {
       try { await sendPaymentReceiptEmail(payment.id); } catch { /* best-effort */ }
     }
-    return { payment_id: payment.id, status: "succeeded", already_fulfilled: true };
+    const meta = parsePaymentMeta(payment.description);
+    return { payment_id: payment.id, status: "succeeded", already_fulfilled: true, meta };
   }
   if (payment.status !== "pending_cinetpay") {
     throw { status: 400, detail: "Ce paiement n'est plus en attente." };
@@ -326,32 +342,12 @@ export async function confirmCinetpayPayment(payload: ConfirmPayload) {
     throw { status: 402, detail: "Paiement non confirmé par CinetPay. L'opération n'a pas été créditée." };
   }
 
-  const meta = parsePaymentMeta(payment.description);
-  if (!meta) throw { status: 500, detail: "Métadonnées de paiement invalides." };
-
-  const { data: locked, error: lockErr } = await getSupabase()
-    .from("payments")
-    .update({
-      status: "succeeded",
-      description: `${payment.description} · ref:${transactionId}`,
-    })
-    .eq("id", payment.id)
-    .eq("status", "pending_cinetpay")
-    .select("id")
-    .maybeSingle();
-  throwSb(lockErr);
-  if (!locked) {
-    throw { status: 409, detail: "Ce paiement est déjà en cours de traitement ou finalisé." };
-  }
-
-  await fulfillPayment(meta, payment.id);
-
-  await notifyUser({
-    user_id: me,
-    title: "Paiement confirmé",
-    body: `${meta.amount_xaf.toLocaleString("fr-FR")} XAF — opération enregistrée après validation du paiement.`,
-    type: "success",
+  const { data: result, error: rpcErr } = await getSupabase().rpc("confirm_cinetpay_payment", {
+    p_payment_id: payment.id,
+    p_reference: transactionId,
   });
+  throwSb(rpcErr);
+  const meta = parsePaymentMeta(payment.description);
 
   let receiptEmail: { delivery?: string } | null = null;
   try {
@@ -360,7 +356,14 @@ export async function confirmCinetpayPayment(payload: ConfirmPayload) {
     // Reçu toujours disponible dans l'app même si l'email échoue.
   }
 
-  return { payment_id: payment.id, status: "succeeded", meta, receipt_email: receiptEmail };
+  return {
+    payment_id: payment.id,
+    status: "succeeded",
+    meta,
+    result,
+    receipt_email: receiptEmail,
+    already_fulfilled: !!(result as { already_fulfilled?: boolean })?.already_fulfilled,
+  };
 }
 
 export async function getPaymentReceipt(paymentId: string) {

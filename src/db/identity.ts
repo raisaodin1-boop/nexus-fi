@@ -1,12 +1,15 @@
 import { getSupabase } from "@/src/supabase";
 import { uid, cached, invalidateCache } from "./helpers";
 import {
-  scoreRegularity, scoreSavingsVolume, scoreSeniority, scoreNetwork, scoreKyc,
+  scoreRegularity, scoreSeniority, scoreNetwork, scoreKyc,
   computeScore, generateTips, getTier,
   type CreditScoreResult, type MonthlySnapshot,
 } from "@/src/credit-score";
 import { computeProgression, trustLevelFromScore } from "@/src/identity-progression";
 import { enrichTips } from "@/src/insight-actions";
+import { computeAlternativeCredit, scoreSavingsVolumeRegional } from "@/src/alternative-credit";
+import { getRegionalProfile, countryQueryValue } from "@/src/regional-credit";
+import type { Currency } from "@/src/exchange-rates";
 
 export async function addIdentityEvent(user_id: string, event_type: string, points: number) {
   await getSupabase().from("identity_events").insert({ user_id, event_type, points_delta: points });
@@ -181,9 +184,9 @@ export async function getCreditScore(): Promise<CreditScoreResult> {
   const me = await uid();
   return cached(`credit-score-${me}`, 90_000, async () => {
     const sb = getSupabase();
-    const [profileRes, contribRes, savingsRes, tontineMemRes, assocMemRes, coopMemRes, createdTontinesRes, createdAssocRes, createdCoopRes, kycRes] = await Promise.all([
-      sb.from("profiles").select("created_at, kyc_status").eq("id", me).single(),
-      sb.from("tontine_contributions").select("created_at, tontine_id").eq("user_id", me).order("created_at", { ascending: true }),
+    const [profileRes, contribRes, savingsRes, tontineMemRes, assocMemRes, coopMemRes, createdTontinesRes, createdAssocRes, createdCoopRes, kycRes, walletTopupRes] = await Promise.all([
+      sb.from("profiles").select("created_at, kyc_status, country").eq("id", me).single(),
+      sb.from("tontine_contributions").select("created_at, tontine_id, amount").eq("user_id", me).order("created_at", { ascending: true }),
       sb.from("savings_goals").select("current_amount").eq("user_id", me),
       sb.from("tontine_members").select("tontine_id, joined_at").eq("user_id", me),
       sb.from("association_members").select("association_id").eq("user_id", me),
@@ -192,9 +195,11 @@ export async function getCreditScore(): Promise<CreditScoreResult> {
       sb.from("associations").select("id").eq("owner_id", me),
       sb.from("cooperatives").select("id").eq("owner_id", me),
       sb.from("kyc_submissions").select("status").eq("user_id", me).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      sb.from("wallet_transactions").select("created_at, amount_xaf").eq("user_id", me).eq("type", "topup"),
     ]);
 
     const profile = profileRes.data ?? {};
+    const regional = getRegionalProfile((profile as any).country);
     const contributions = contribRes.data ?? [];
     const totalSavings = (savingsRes.data ?? []).reduce((s: number, g: any) => s + Number(g.current_amount), 0);
     const groupsJoined = (tontineMemRes.data?.length ?? 0) + (assocMemRes.data?.length ?? 0) + (coopMemRes.data?.length ?? 0);
@@ -207,23 +212,53 @@ export async function getCreditScore(): Promise<CreditScoreResult> {
 
     const breakdown = {
       regularity:     scoreRegularity(contributions, memberSince, 30),
-      savings_volume: scoreSavingsVolume(totalSavings),
+      savings_volume: scoreSavingsVolumeRegional(totalSavings, regional),
       seniority:      scoreSeniority(createdAt),
       network:        scoreNetwork(groupsJoined, groupsCreated),
       kyc:            scoreKyc(kycStatus),
     };
-    const score = computeScore(breakdown);
+    const baseScore = computeScore(breakdown);
+
+    const alternative = computeAlternativeCredit({
+      country: (profile as any).country,
+      createdAt,
+      kycStatus,
+      contributions,
+      savingsTotalLocal: totalSavings,
+      savingsCurrency: regional.local_currency as Currency,
+      walletTopups: walletTopupRes.data ?? [],
+      groupsJoined,
+      groupsCreated,
+      tontineCyclesCompleted: contributions.length,
+      infractionCount: 0,
+      baseScore,
+      memberSince,
+    });
+
+    const score = alternative.composite_score;
     const tier  = getTier(score);
 
     try {
       await sb.from("identity_events").insert({
         user_id: me, event_type: "credit_score_snapshot",
         points_delta: 0, created_at: new Date().toISOString(),
-        metadata: { score },
+        metadata: { score, base_score: baseScore, alternative_score: alternative.alternative_score, zone: regional.zone },
       } as any);
     } catch { /* non-blocking */ }
 
-    return { score, breakdown, tier, is_loan_eligible: score >= 700, tips: generateTips(breakdown), computed_at: new Date().toISOString() } as CreditScoreResult & { tips: string[] };
+    return {
+      score,
+      breakdown,
+      tier,
+      is_loan_eligible: score >= 700,
+      tips: generateTips(breakdown),
+      computed_at: new Date().toISOString(),
+      alternative_score: alternative.alternative_score,
+      composite_score: score,
+      regional_zone: regional.zone,
+      local_currency: regional.local_currency,
+      alternative_signals: { ...alternative.signals },
+    } as CreditScoreResult & { tips: string[] };
   });
 }
 
@@ -304,7 +339,8 @@ export async function getFinancialAnalytics() {
 
 export async function getRegionalRanking(country: string) {
   const sb = getSupabase();
-  const { data: profiles } = await sb.from("profiles").select("id, full_name, country").eq("country", country).limit(200);
+  const countryName = countryQueryValue(country);
+  const { data: profiles } = await sb.from("profiles").select("id, full_name, country").eq("country", countryName).limit(200);
   if (!profiles?.length) return { ranking: [], my_rank: null, is_pillar: false, total_users: 0 };
 
   const me = await uid();

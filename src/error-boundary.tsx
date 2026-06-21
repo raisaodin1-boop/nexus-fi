@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { captureError } from "@/src/observability";
 import { Colors, Spacing } from "@/src/theme";
 
 interface State { hasError: boolean; message: string }
@@ -12,6 +13,7 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
   }
 
   componentDidCatch(error: any, info: any) {
+    captureError(error, { componentStack: info?.componentStack });
     if (__DEV__) console.error("[ErrorBoundary]", error, info?.componentStack);
   }
 

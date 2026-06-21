@@ -19,6 +19,8 @@ export * from "./db/reports";
 export * from "./db/loans";
 export * from "./db/extras";
 export * from "./db/wallet-security";
+export * from "./db/compliance";
+export * from "./db/emoney-license";
 export { invalidateCache } from "./db/helpers";
 
 // Wallet operations (delegated to wallet-db.ts)

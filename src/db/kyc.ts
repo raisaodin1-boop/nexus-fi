@@ -1,9 +1,7 @@
 import { getSupabase } from "@/src/supabase";
 import { uid, throwSb } from "./helpers";
-import { notifyUser } from "./notifications";
 
 const BUCKET = "kyc-documents";
-
 const COUNTRY_CODES: Record<string, string> = {
   // Afrique Centrale
   Cameroun: "CM", Tchad: "TD", Gabon: "GA", Congo: "CG", RDC: "CD",
@@ -89,8 +87,12 @@ export async function submitKyc(payload?: {
   const me = await uid();
   const sb = getSupabase();
 
-  if (payload?.id_front_path && payload?.selfie_path) {
-    const { data, error } = await sb.functions.invoke("verify-kyc", {
+  // Documents requis — pas de contournement client-side (protect_profile_columns)
+  if (!payload?.id_front_path || !payload?.selfie_path) {
+    throw { status: 400, detail: "Recto pièce d'identité et selfie requis. Utilisez l'écran KYC." };
+  }
+
+  const { data, error } = await sb.functions.invoke("verify-kyc", {
       body: {
         id_front_path: payload.id_front_path,
         id_back_path: payload.id_back_path ?? null,
@@ -108,25 +110,6 @@ export async function submitKyc(payload?: {
         : "Dossier soumis — revue manuelle en cours",
       ...data,
     };
-  }
-
-  // Fallback sans documents : file manuelle (profil déjà complété)
-  const { error } = await sb.from("kyc_submissions").upsert({
-    user_id: me,
-    status: "pending",
-    verification_mode: "manual",
-    provider: "manual",
-    submitted_at: new Date().toISOString(),
-  }, { onConflict: "user_id" });
-  throwSb(error);
-  await sb.from("profiles").update({ kyc_status: "pending_review" }).eq("id", me);
-  await notifyUser({
-    user_id: me,
-    title: "Dossier KYC soumis",
-    body: "Votre dossier est en file d'attente pour revue par notre équipe.",
-    type: "kyc",
-  });
-  return { detail: "Demande KYC soumise (revue manuelle)" };
 }
 
 export async function submitKycFromBase64(docs: {

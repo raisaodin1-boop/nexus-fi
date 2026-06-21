@@ -4,6 +4,7 @@ import {
   Alert, KeyboardAvoidingView, Modal, Platform, ScrollView,
   StyleSheet, Text, TouchableOpacity, View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -159,6 +160,9 @@ export default function CompleteProfile() {
         occupation: occupation.trim(),
       });
       await refresh();
+      if (idDocBase64) {
+        await AsyncStorage.setItem("hodix_kyc_draft_id_front", idDocBase64);
+      }
       router.replace("/kyc");
     } catch (e) {
       setError(e instanceof ApiError ? e.detail : "Erreur");

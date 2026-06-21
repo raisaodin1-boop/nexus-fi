@@ -4,13 +4,14 @@
 
 | Couche | Technologie |
 |--------|-------------|
-| Frontend | Expo (React Native Web) + TypeScript |
-| Backend | FastAPI (Python) + MongoDB |
-| Auth | JWT + OTP Twilio |
-| Paiements | Stripe |
-| Frontend Deploy | Vercel |
-| Backend Deploy | Railway |
-| Monitoring | Sentry |
+| Frontend | Expo 51 (React Native Web) + TypeScript |
+| Backend actif | **Supabase** (Postgres, Auth, RLS, RPC, Edge Functions) |
+| Paiements | CinetPay (Mobile Money + checkout) |
+| KYC | Smile Identity + revue admin |
+| Auth | Supabase Auth + OTP Twilio |
+| Frontend Deploy | Vercel / EAS Build |
+| Observabilité | Sentry (`EXPO_PUBLIC_SENTRY_DSN`) |
+| Legacy (archivé) | FastAPI + MongoDB → `archive/backend-legacy/` |
 
 ---
 

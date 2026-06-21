@@ -16,7 +16,7 @@ import { PinConfirmModal } from "@/src/pin-modal";
 import { OtpModal } from "@/src/otp-modal";
 
 const PROVIDERS: MobileMoneyProvider[] = ["MTN MoMo", "Orange Money", "Moov Money", "Wave"];
-const CURRENCIES: Currency[] = ["XAF", "EUR", "USD"];
+const CURRENCIES: Currency[] = ["XAF", "XOF", "NGN", "GHS", "EUR", "USD"];
 
 export default function WithdrawScreen() {
   const router = useRouter();
@@ -35,14 +35,26 @@ export default function WithdrawScreen() {
   const [pendingOtp, setPendingOtp] = useState(false);
   const [amountXaf, setAmountXaf] = useState(0);
   const [userId, setUserId]       = useState("");
+  const [kycStatus, setKycStatus] = useState<string>("not_submitted");
 
   useEffect(() => {
     api.get<WalletBalance>("/wallet").then(setWallet).catch(() => {});
-    api.get<{ id: string }>("/users/me").then(me => setUserId(me.id)).catch(() => {});
+    Promise.all([
+      api.get<{ id: string; kyc_status?: string }>("/users/me"),
+      api.get<{ status?: string }>("/users/me/kyc").catch(() => null),
+    ]).then(([me, kyc]) => {
+      setUserId(me.id);
+      setKycStatus(me.kyc_status ?? kyc?.status ?? "not_submitted");
+    }).catch(() => {});
   }, []);
+
+  const kycApproved = kycStatus === "approved";
 
   const maxBal = wallet
     ? currency === "XAF" ? wallet.balance_xaf
+    : currency === "XOF" ? wallet.balance_xof
+    : currency === "NGN" ? wallet.balance_ngn
+    : currency === "GHS" ? wallet.balance_ghs
     : currency === "EUR" ? wallet.balance_eur
     : wallet.balance_usd
     : 0;
@@ -62,6 +74,10 @@ export default function WithdrawScreen() {
 
   const submit = async () => {
     setError(null);
+    if (!kycApproved) {
+      setError("KYC niveau 2 requis pour les retraits (réglementation LCB-FT).");
+      return;
+    }
     const amt = parseFloat(amount.replace(/\s/g, "").replace(",", "."));
     if (!amt || amt <= 0) { setError("Entrez un montant valide."); return; }
     if (amt > maxBal) { setError(`Solde insuffisant (max ${formatAmount(maxBal, currency)}).`); return; }
@@ -103,7 +119,9 @@ export default function WithdrawScreen() {
           {txRef ? <Text style={styles.refText}>Réf. {txRef}</Text> : null}
           <Text style={styles.successSub}>
             {txStatus === "completed"
-              ? `Débit wallet confirmé. Envoi ${provider} sur ${phone.trim()} en cours de traitement.`
+              ? `Virement ${provider} vers ${phone.trim()} confirmé.`
+              : txStatus === "pending_disbursement"
+              ? `Débit wallet enregistré — virement Mobile Money en cours de traitement.`
               : `Demande enregistrée — suivi dans l'historique wallet.`}
           </Text>
           <Button label="Voir le wallet" onPress={() => router.replace("/wallet")} />
@@ -149,6 +167,17 @@ export default function WithdrawScreen() {
             <Text style={styles.balLabel}>Solde disponible</Text>
             <Text style={styles.balValue}>{formatAmount(maxBal, currency)}</Text>
           </View>
+        )}
+
+        {!kycApproved && (
+          <TouchableOpacity style={styles.kycBanner} onPress={() => router.push("/kyc" as any)}>
+            <Shield color="#D97706" size={20} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.kycBannerTitle}>KYC requis pour retirer</Text>
+              <Text style={styles.kycBannerSub}>Vérifiez votre identité (niveau 2) — obligation LCB-FT / COBAC.</Text>
+            </View>
+            <Text style={styles.kycBannerLink}>Vérifier →</Text>
+          </TouchableOpacity>
         )}
 
         {/* Currency */}
@@ -203,6 +232,14 @@ const styles = StyleSheet.create({
   back: { padding: 4 },
   headerTitle: { fontSize: 18, fontWeight: "800", color: "#fff" },
   body: { padding: Spacing.xl, gap: 4, paddingBottom: 100 },
+  kycBanner: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: "#FFFBEB", borderRadius: Radius.lg, padding: 14,
+    borderWidth: 1, borderColor: "#FDE68A", marginBottom: 12,
+  },
+  kycBannerTitle: { fontSize: 14, fontWeight: "800", color: "#92400E" },
+  kycBannerSub: { fontSize: 12, color: "#B45309", marginTop: 2, lineHeight: 16 },
+  kycBannerLink: { fontSize: 12, fontWeight: "800", color: Colors.primary },
   balInfo: {
     backgroundColor: Colors.surfaceAlt, borderRadius: Radius.xl,
     padding: Spacing.lg, marginBottom: 16, flexDirection: "row",

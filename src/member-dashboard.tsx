@@ -1,7 +1,6 @@
 // Member dashboard — premium personal fintech home.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
-  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -18,11 +17,10 @@ import { useAuth } from "@/src/auth-context";
 import { api, formatXAF } from "@/src/api";
 import { supabase } from "@/src/supabase";
 import { Card, SectionTitle, StatCard, SkeletonBox, SkeletonCard } from "@/src/ui";
-import { Colors, Radius, Shadow, Spacing, timeGreeting } from "@/src/theme";
+import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { EngagementStrip } from "@/src/engagement-strip";
-import { TrustGauge } from "@/src/trust-gauge";
+import { MemberDashboardHero } from "@/src/member-dashboard-hero";
 import { LineChart } from "@/src/charts";
-import { Tooltip } from "@/src/tooltip";
 
 interface Summary { total_saved: number; total_target: number; active_goals: number; progress_pct: number; currency: string }
 interface TrustScore {
@@ -107,15 +105,8 @@ export function MemberDashboard() {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
-          <View style={styles.header}>
-            <View style={{ gap: 8 }}>
-              <SkeletonBox width={80} height={14} />
-              <SkeletonBox width={140} height={26} />
-            </View>
-            <SkeletonBox width={44} height={44} borderRadius={22} />
-          </View>
-          <View style={{ paddingHorizontal: Spacing.xl }}>
-            <SkeletonBox height={200} borderRadius={20} />
+          <View style={{ paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg }}>
+            <SkeletonBox height={280} borderRadius={20} />
           </View>
           <View style={styles.statsRow}>
             <SkeletonBox height={80} borderRadius={16} style={{ flex: 1 }} />
@@ -141,16 +132,15 @@ export function MemberDashboard() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.hello}>{timeGreeting()}</Text>
-            <Text style={styles.name}>{user?.full_name?.split(" ")[0] ?? "Membre"}</Text>
-          </View>
-          <TouchableOpacity onPress={() => router.push("/notifications")} testID="home-notif-btn" style={styles.bellWrap}>
-            <Bell color={Colors.primary} size={22} />
-            {unread > 0 ? <View style={styles.bellDot}><Text style={styles.bellDotText}>{unread > 9 ? "9+" : unread}</Text></View> : null}
-          </TouchableOpacity>
+        <View style={{ paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg }}>
+          <MemberDashboardHero
+            firstName={user?.full_name?.split(" ")[0]}
+            trustScore={trust?.score}
+            trustLevel={trust?.level}
+            totalSaved={summary?.total_saved}
+            currency={summary?.currency}
+            unread={unread}
+          />
         </View>
 
         {/* Alerts row */}
@@ -177,30 +167,6 @@ export function MemberDashboard() {
           savingsProgressPct={summary?.progress_pct ?? 0}
           trustScore={trust?.score}
         />
-
-        {/* Trust Score card */}
-        <View style={{ paddingHorizontal: Spacing.xl }}>
-          <TouchableOpacity activeOpacity={0.9} onPress={() => router.push("/(tabs)/identity")} testID="home-trust-card">
-            <LinearGradient
-              colors={[Colors.gradStart, Colors.gradMid, Colors.gradEnd]}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={[styles.scoreCard, Shadow.cardDark]}
-            >
-              <View style={styles.scoreHeader}>
-                <View>
-                  <Text style={styles.scoreLabel}>Score Hodix</Text>
-                  <Text style={styles.scoreRisk}>Risque {trust?.risk}</Text>
-                </View>
-                <View style={[styles.glow, { backgroundColor: trust?.color ?? Colors.accent }]} />
-              </View>
-              {trust ? <TrustGauge score={trust.score} level={trust.level} color={trust.color} size={220} /> : null}
-              <View style={styles.scoreFooter}>
-                <Text style={styles.scoreFooterText}>Voir mon identité financière</Text>
-                <ChevronRight color="rgba(255,255,255,0.7)" size={16} />
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
 
         {/* Stats */}
         <View style={styles.statsRow}>
@@ -290,22 +256,6 @@ export function MemberDashboard() {
             </TouchableOpacity>
           ))}
         </View>
-
-        {/* Hero image */}
-        <View style={{ paddingHorizontal: Spacing.xl, marginTop: Spacing.lg }}>
-          <View style={[styles.heroCard, Shadow.card]}>
-            <Image
-              source={{ uri: "https://images.unsplash.com/photo-1694286066858-462538cd9886?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njl8MHwxfHNlYXJjaHwzfHxhZnJpY2FuJTIwcGVvcGxlJTIwc2F2aW5nJTIwbW9uZXklMjBzbWlsaW5nfGVufDB8fHx8MTc4MDE3MTQ5N3ww&ixlib=rb-4.1.0&q=85" }}
-              style={styles.heroImg}
-              resizeMode="cover"
-            />
-            <LinearGradient colors={["transparent", "rgba(15,40,71,0.95)"]} style={styles.heroOverlay} />
-            <View style={styles.heroContent}>
-              <Text style={styles.heroTitle}>Bâtir ensemble, durablement.</Text>
-              <Text style={styles.heroSub}>Hodix transforme votre épargne en histoire financière reconnue.</Text>
-            </View>
-          </View>
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -330,12 +280,6 @@ function QuickAction({ icon, label, onPress, testID, badge }: { icon: React.Reac
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: Spacing.xl, paddingVertical: Spacing.lg },
-  hello: { color: Colors.textMuted, fontSize: 14, fontWeight: "600" },
-  name: { color: Colors.brandNavy, fontSize: 26, fontWeight: "900", letterSpacing: -0.5 },
-  bellWrap: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border },
-  bellDot: { position: "absolute", top: 6, right: 6, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: Colors.danger, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
-  bellDotText: { color: "#fff", fontSize: 10, fontWeight: "800" },
   alertsRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -359,13 +303,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   alertsBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800" },
-  scoreCard: { borderRadius: Radius.xxl, padding: 24, overflow: "hidden" },
-  scoreHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-  scoreLabel: { color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: "700", letterSpacing: 1 },
-  scoreRisk: { color: "#fff", fontSize: 18, fontWeight: "800", marginTop: 4 },
-  glow: { width: 18, height: 18, borderRadius: 9 },
-  scoreFooter: { marginTop: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
-  scoreFooterText: { color: "rgba(255,255,255,0.8)", fontSize: 13, fontWeight: "600" },
   statsRow: { flexDirection: "row", paddingHorizontal: Spacing.xl, gap: 10, marginTop: 12, minWidth: 0 },
   qaRow: { flexDirection: "row", paddingHorizontal: Spacing.xl, gap: 10, marginBottom: 10 },
   qa: { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.lg, borderWidth: 1, borderColor: Colors.border, flexDirection: "row", alignItems: "center", gap: 12 },
@@ -391,10 +328,4 @@ const styles = StyleSheet.create({
   promoDesc: { color: "rgba(255,255,255,0.85)", fontSize: 11, marginTop: 2, fontWeight: "600" },
   insightText: { color: Colors.text, fontSize: 14, lineHeight: 20, fontWeight: "500" },
   insightAction: { color: Colors.primary, fontSize: 12, fontWeight: "700", marginTop: 8 },
-  heroCard: { borderRadius: Radius.xxl, overflow: "hidden", height: 180, position: "relative" },
-  heroImg: { width: "100%", height: "100%" },
-  heroOverlay: { position: "absolute", left: 0, right: 0, bottom: 0, top: "30%" },
-  heroContent: { position: "absolute", left: 20, right: 20, bottom: 20 },
-  heroTitle: { color: "#fff", fontSize: 20, fontWeight: "900", letterSpacing: -0.5 },
-  heroSub: { color: "rgba(255,255,255,0.85)", fontSize: 13, marginTop: 4 },
 });

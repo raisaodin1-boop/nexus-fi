@@ -140,23 +140,33 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
-    global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
-  });
-  const { data: { user } } = await userClient.auth.getUser();
-  if (!user) return json({ ok: false, error: "Non authentifié." }, 401);
-
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const authHeader = req.headers.get("Authorization") ?? "";
   const body = await req.json().catch(() => ({}));
   const paymentId = String(body.payment_id ?? "").trim();
   if (!paymentId) return json({ ok: false, error: "payment_id requis." }, 400);
 
-  const admin = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const isServiceRole = authHeader === `Bearer ${serviceKey}`;
+  let userId: string | null = null;
+
+  if (isServiceRole && body.user_id) {
+    userId = String(body.user_id).trim();
+  } else {
+    const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user } } = await userClient.auth.getUser();
+    if (!user) return json({ ok: false, error: "Non authentifié." }, 401);
+    userId = user.id;
+  }
+
+  const admin = createClient(supabaseUrl, serviceKey);
 
   const { data: payment, error: payErr } = await admin
     .from("payments")
     .select("id, user_id, amount, status, description, created_at, receipt_email_sent_at")
     .eq("id", paymentId)
-    .eq("user_id", user.id)
+    .eq("user_id", userId!)
     .maybeSingle();
   if (payErr || !payment) return json({ ok: false, error: "Paiement introuvable." }, 404);
   if (payment.status !== "succeeded") {
@@ -167,8 +177,9 @@ Deno.serve(async (req) => {
   }
 
   const { data: profile } = await admin.from("profiles")
-    .select("full_name, email").eq("id", user.id).maybeSingle();
-  const email = (profile?.email ?? user.email ?? "").trim().toLowerCase();
+    .select("full_name, email").eq("id", userId!).maybeSingle();
+  const { data: authUser } = await admin.auth.admin.getUserById(userId!);
+  const email = (profile?.email ?? authUser?.user?.email ?? "").trim().toLowerCase();
   if (!email) return json({ ok: false, error: "Aucune adresse email sur le compte." }, 400);
 
   const meta = parseMeta(payment.description ?? null);
@@ -178,7 +189,7 @@ Deno.serve(async (req) => {
   const amountXaf = Number(payment.amount);
   const label = meta?.label ? String(meta.label) : undefined;
   const method = providerLabel(meta?.provider ? String(meta.provider) : undefined);
-  const fullName = profile?.full_name ?? user.email?.split("@")[0] ?? "Membre";
+  const fullName = profile?.full_name ?? authUser?.user?.email?.split("@")[0] ?? "Membre";
 
   const resendKey = Deno.env.get("RESEND_API_KEY");
   const fromEmail = Deno.env.get("RECEIPT_FROM_EMAIL") ?? "onboarding@resend.dev";
@@ -224,7 +235,7 @@ Deno.serve(async (req) => {
 
   if (delivery === "app") {
     await admin.from("notifications").insert({
-      user_id: user.id,
+      user_id: userId!,
       title: pushTitle,
       body: pushBody,
       type: "receipt",
@@ -238,7 +249,7 @@ Deno.serve(async (req) => {
           Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ user_id: user.id, title: pushTitle, body: pushBody, type: "receipt" }),
+        body: JSON.stringify({ user_id: userId!, title: pushTitle, body: pushBody, type: "receipt" }),
       });
     } catch { /* best-effort */ }
   }

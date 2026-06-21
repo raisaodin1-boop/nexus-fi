@@ -1,4 +1,5 @@
 import { getSupabase } from "@/src/supabase";
+import { emitFraudAlert } from "@/src/fraud-alerts";
 import { uid } from "./helpers";
 
 const LIMITS = {
@@ -134,6 +135,14 @@ export async function detectTransactionAnomalies(amountXaf: number, deviceFp?: s
     await sb.from("profiles").update({ wallet_frozen: true }).eq("id", me);
     await sb.from("notifications").insert({ user_id: me, title: "⚠️ Wallet temporairement gelé", body: "Activité inhabituelle détectée sur votre wallet.", type: "security_freeze" });
     await logSecurityEvent(me, "wallet_frozen", { flags, amount: amountXaf });
+    await emitFraudAlert({
+      userId: me,
+      alertType: "wallet_auto_freeze",
+      severity: "high",
+      amountXaf,
+      flags,
+      metadata: { source: "detectTransactionAnomalies" },
+    });
   }
   const risk = shouldFreeze || flags.length >= 3 ? "high" : flags.length >= 1 ? "medium" : "low";
   return { risk, flags, should_freeze: shouldFreeze };
@@ -161,11 +170,43 @@ export async function getSecurityLog() {
   return (data ?? []).map((e: any) => ({ type: e.event_type.replace("sec:", ""), at: e.created_at, meta: e.metadata ?? {} }));
 }
 
-export async function preTransactionCheck(amountXaf: number, recipientPhone?: string): Promise<{
-  allowed: boolean; reason?: string; requires_pin: boolean; requires_otp: boolean; risk: string;
+export async function preTransactionCheck(amountXaf: number, recipientPhone?: string, deviceFp?: string): Promise<{
+  allowed: boolean; reason?: string; requires_pin: boolean; requires_otp: boolean; risk: string; fraud_score?: number;
 }> {
   const freeze = await getWalletFreezeStatus();
   if (freeze.frozen) return { allowed: false, reason: freeze.reason, requires_pin: false, requires_otp: false, risk: "blocked" };
+
+  try {
+    const { data: fraudResult, error: fraudErr } = await getSupabase().functions.invoke("fraud-score", {
+      body: {
+        amount_xaf: amountXaf,
+        tx_type: recipientPhone ? "transfer" : "withdraw",
+        recipient_phone: recipientPhone ?? null,
+        device_fingerprint: deviceFp ?? null,
+      },
+    });
+    if (!fraudErr && fraudResult?.should_block) {
+      if (fraudResult.should_freeze) {
+        await emitFraudAlert({
+          userId: (await uid()),
+          alertType: "realtime_fraud_block",
+          severity: "critical",
+          amountXaf,
+          flags: fraudResult.flags ?? [],
+          metadata: { score: fraudResult.score },
+        });
+      }
+      return {
+        allowed: false,
+        reason: "Transaction bloquée — analyse anti-fraude temps réel.",
+        requires_pin: false,
+        requires_otp: false,
+        risk: fraudResult.risk ?? "high",
+        fraud_score: fraudResult.score,
+      };
+    }
+  } catch { /* edge function optional in dev */ }
+
   const limits = await checkTransactionLimits(amountXaf);
   if (!limits.allowed) return { allowed: false, reason: limits.reason, requires_pin: false, requires_otp: false, risk: "blocked" };
   if (recipientPhone) {

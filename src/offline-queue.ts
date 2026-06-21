@@ -8,12 +8,10 @@ import { api } from "@/src/api";
 const QUEUE_KEY = "hodix_offline_tx_queue";
 const MAX_RETRIES = 3;
 
+/** Only wallet ops that do not require CinetPay confirmation can be replayed offline. */
 export type QueuedTxKind =
-  | "wallet_topup"
   | "wallet_withdraw"
-  | "wallet_transfer"
-  | "tontine_contribution"
-  | "savings_deposit";
+  | "wallet_transfer";
 
 export interface QueuedTx {
   id: string;
@@ -115,20 +113,11 @@ export async function clearFailedQueue(): Promise<void> {
 
 async function submitQueuedTx(tx: QueuedTx): Promise<void> {
   switch (tx.kind) {
-    case "wallet_topup":
-      await api.post("/wallet/topup", tx.payload);
-      break;
     case "wallet_withdraw":
       await api.post("/wallet/withdraw", tx.payload);
       break;
     case "wallet_transfer":
       await api.post("/wallet/transfer", tx.payload);
-      break;
-    case "tontine_contribution":
-      await api.post("/tontines/contribute", tx.payload);
-      break;
-    case "savings_deposit":
-      await api.post("/savings/deposit", tx.payload);
       break;
     default:
       throw new Error(`Unknown queued tx kind: ${(tx as any).kind}`);

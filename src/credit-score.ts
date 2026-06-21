@@ -18,11 +18,17 @@ export interface ScoreBreakdown {
 }
 
 export interface CreditScoreResult {
-  score: number;          // 0-1000
+  score: number;
   breakdown: ScoreBreakdown;
   tier: ScoreTier;
   is_loan_eligible: boolean;
   computed_at: string;
+  /** Alternative credit overlay (hodix-alt-v1) */
+  alternative_score?: number;
+  composite_score?: number;
+  regional_zone?: string;
+  local_currency?: string;
+  alternative_signals?: Record<string, number>;
 }
 
 export interface ScoreTier {
@@ -111,9 +117,10 @@ export function scoreNetwork(
 /** 10% — KYC level */
 export function scoreKyc(kycStatus: string | null | undefined): number {
   switch (kycStatus) {
-    case "approved":  return 100;
-    case "pending":   return 40;
-    default:          return 0;
+    case "approved":        return 100;
+    case "pending":
+    case "pending_review": return 40;
+    default:                return 0;
   }
 }
 
