@@ -12,11 +12,12 @@ import {
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { Bell, ChevronRight, PiggyBank, Trophy, Users, Wallet, TrendingUp, Sparkles, QrCode, BarChart2, Brain, Repeat, Receipt, PieChart, MessageCircle, CreditCard, Store, Gavel, Target } from "lucide-react-native";
+import { Bell, ChevronRight, PiggyBank, Trophy, Users, Wallet, TrendingUp, Sparkles, QrCode, BarChart2, Brain, Repeat, Receipt, PieChart, MessageCircle, CreditCard, Store, Gavel, Target, Crown } from "lucide-react-native";
 
 import { useAuth } from "@/src/auth-context";
 import { api, formatXAF } from "@/src/api";
 import { supabase } from "@/src/supabase";
+import { type UserSubscription } from "@/src/db/subscriptions";
 import { DegradedDataBanner } from "@/src/degraded-banner";
 import { Card, SectionTitle, StatCard, SkeletonBox, SkeletonCard } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
@@ -61,6 +62,7 @@ export function MemberDashboard() {
   const [savingsSeries, setSavingsSeries] = useState<Series | null>(null);
   const [streakWeeks, setStreakWeeks] = useState(0);
   const [primaryDegraded, setPrimaryDegraded] = useState(false);
+  const [myPlan, setMyPlan] = useState<UserSubscription | null>(null);
 
   const load = useCallback(async (opts?: { secondaryOnly?: boolean }) => {
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
@@ -80,18 +82,20 @@ export function MemberDashboard() {
       setLoading(false);
     }
 
-    const [i, ss, al, st, mu] = await Promise.all([
+    const [i, ss, al, st, mu, pl] = await Promise.all([
       safe(() => api.get<{ items: Insight[] }>("/insights")),
       safe(() => api.get<Series>("/analytics/me/savings?days=14")),
       safe(() => api.get<any[]>("/alerts")),
       safe(() => api.get<{ current_streak?: number }>("/streaks")),
       safe(() => api.get<{ unread_count: number }>("/messages/unread-count")),
+      safe(() => api.get<UserSubscription>("/subscriptions/me")),
     ]);
     if (i) setInsights(i.items ?? []);
     if (ss) setSavingsSeries(ss);
     if (al) setAlertCount(Array.isArray(al) ? al.length : 0);
     if (st) setStreakWeeks(st.current_streak ?? 0);
     if (mu) setMsgUnread(mu.unread_count ?? 0);
+    if (pl) setMyPlan(pl);
   }, []);
 
   const loadDebouncedRef = useRef(debounce(() => { load({ secondaryOnly: true }); }, 500));
@@ -285,6 +289,39 @@ export function MemberDashboard() {
           <QuickAction icon={<Store color="#EF4444" size={22} />} label="HODIX Pay Pro" onPress={() => router.push("/merchant-qr" as any)} testID="home-action-merchant" compact={isCompact} />
         </View>
 
+        {/* Subscription plan badge + upgrade CTA */}
+        {myPlan ? (
+          <View style={{ ...contentPad, marginTop: Spacing.lg }}>
+            <TouchableOpacity
+              onPress={() => router.push("/subscription" as any)}
+              activeOpacity={0.85}
+              style={[
+                styles.planBanner,
+                { borderColor: myPlan.features.color },
+                Shadow.card,
+              ]}
+            >
+              <View style={[styles.planIconDot, { backgroundColor: myPlan.features.color }]}>
+                <Crown color="#fff" size={14} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.planBannerTitle, { color: myPlan.features.color }]}>
+                  Plan {myPlan.plan_name}
+                  {myPlan.plan_id === "free" ? " — Passez Premium" : " actif ✓"}
+                </Text>
+                <Text style={styles.planBannerSub}>
+                  {myPlan.plan_id === "free"
+                    ? "Débloquez tontines illimitées, analytics et plus."
+                    : myPlan.expires_at
+                    ? `Renouvellement le ${new Date(myPlan.expires_at).toLocaleDateString("fr-FR")}`
+                    : "Abonnement actif"}
+                </Text>
+              </View>
+              <ChevronRight color={myPlan.features.color} size={18} />
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
         {/* Promotion CTA for members */}
         {user?.role === "member" ? (
           <View style={{ ...contentPad, marginTop: Spacing.lg }}>
@@ -379,6 +416,10 @@ const styles = StyleSheet.create({
     borderColor: "#FDE68A",
   },
   badgeShareText: { color: "#92400E", fontSize: 13, fontWeight: "700" },
+  planBanner: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: 14, borderWidth: 1.5 },
+  planIconDot: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  planBannerTitle: { fontSize: 13, fontWeight: "800" },
+  planBannerSub: { color: Colors.textMuted, fontSize: 11, marginTop: 2 },
   statsRow: { flexDirection: "row", gap: 10, marginTop: 12, minWidth: 0 },
   qaRow: { flexDirection: "row", gap: 10, marginBottom: 10, minWidth: 0 },
   qa: { flex: 1, minWidth: 0, backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.lg, borderWidth: 1, borderColor: Colors.border, flexDirection: "row", alignItems: "center", gap: 12 },

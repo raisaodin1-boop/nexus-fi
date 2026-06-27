@@ -126,6 +126,10 @@ export async function getTontine(id: string) {
 }
 
 export async function createTontine(body: Record<string, any>) {
+  // Vérifier la limite du plan abonnement
+  const { checkTontineCreationAllowed } = await import("@/src/db/subscriptions");
+  await checkTontineCreationAllowed();
+
   const me = await uid();
   const sb = getSupabase();
   let data: any;
@@ -288,6 +292,9 @@ const ESCROW_HOURS               = 72;
 const RESERVE_FUND_PCT           = 0.02;
 
 export async function createTontineSecure(body: Record<string, any>) {
+  const { checkTontineCreationAllowed } = await import("@/src/db/subscriptions");
+  await checkTontineCreationAllowed();
+
   const me = await uid();
   const sb = getSupabase();
 

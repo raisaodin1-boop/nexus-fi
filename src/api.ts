@@ -353,6 +353,12 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "POST" && s[0] === "instant-credit" && s[1] === "disburse")             return (await db.disburseInstantLoan(Number(body?.amount_xaf))) as T;
     if (method === "POST" && s[0] === "instant-credit" && s[1] === "repay")                return (await db.repayInstantLoan(String(body?.loan_id))) as T;
 
+    // ── Subscriptions
+    if (method === "GET"  && s[0] === "subscriptions" && s[1] === "plans")               return (await import("@/src/db/subscriptions").then(m => m.getActivePlans())) as T;
+    if (method === "GET"  && s[0] === "subscriptions" && s[1] === "me")                  return (await import("@/src/db/subscriptions").then(m => m.getMyPlan())) as T;
+    if (method === "POST" && s[0] === "subscriptions" && s[1] === "upgrade")             return (await import("@/src/db/subscriptions").then(m => m.subscribeToPlan(body?.plan_id, body?.payment_id))) as T;
+    if (method === "POST" && s[0] === "subscriptions" && s[1] === "cancel")              return (await import("@/src/db/subscriptions").then(m => m.cancelSubscription())) as T;
+
     throw { status: 404, detail: `Route introuvable: ${method} /${s.join("/")}` };
 
   } catch (e: any) {
