@@ -1,5 +1,7 @@
 import { getSupabase } from "@/src/supabase";
 
+export { secureRandomAlphanumeric, inviteCode } from "./secure-random";
+
 export async function uid(): Promise<string> {
   const { data } = await getSupabase().auth.getSession();
   if (!data.session?.user) throw { status: 401, detail: "Non authentifié" };
@@ -21,12 +23,7 @@ export function invalidateCache(prefix?: string) {
   for (const k of _cache.keys()) if (k.startsWith(prefix)) _cache.delete(k);
 }
 
-export function inviteCode(len = 6): string {
-  // Math.random().toString(36) can produce fewer than len+2 chars for very small values;
-  // concatenate two random strings to guarantee enough characters.
-  const raw = (Math.random().toString(36) + Math.random().toString(36)).toUpperCase().replace(/\./g, "");
-  return raw.slice(0, len).padEnd(len, "X");
-}
+// inviteCode exported from secure-random (expo-crypto)
 
 /** Lowercase + trim — use for auth emails and profile lookup. */
 export function normalizeEmail(email: string): string {

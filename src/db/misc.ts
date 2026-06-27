@@ -1,5 +1,6 @@
 import { getSupabase } from "@/src/supabase";
 import { uid, throwSb } from "./helpers";
+import { secureRandomAlphanumeric } from "./secure-random";
 import { notifyUser } from "./notifications";
 
 /* ── PAYMENTS ────────────────────────────────────────────── */
@@ -15,7 +16,70 @@ export async function listPayments() {
 /* ── REFERRAL ────────────────────────────────────────────── */
 
 function genReferralCode(): string {
-  return Math.random().toString(36).toUpperCase().slice(2, 9);
+  return secureRandomAlphanumeric(8);
+}
+
+async function grantReferralBonus(referrerId: string, amount: number, body: string) {
+  const sb = getSupabase();
+  const { data: ref } = await sb.from("profiles").select("referral_bonus").eq("id", referrerId).single();
+  await sb.from("profiles").update({ referral_bonus: Number(ref?.referral_bonus ?? 0) + amount }).eq("id", referrerId);
+  await notifyUser({
+    user_id: referrerId,
+    title: "Bonus parrainage 🚀",
+    body,
+    type: "referral",
+  });
+}
+
+/** Multiplier: bonus when referred user creates a tontine or joins 3+ groups. */
+export async function checkReferralMilestones(userId: string) {
+  const sb = getSupabase();
+  const { data: profile } = await sb.from("profiles").select("referred_by").eq("id", userId).single();
+  const code = profile?.referred_by;
+  if (!code) return;
+
+  const { data: referrer } = await sb.from("profiles").select("id").eq("referral_code", code).maybeSingle();
+  if (!referrer?.id) return;
+
+  const [tontineCount, memberCount] = await Promise.all([
+    sb.from("tontines").select("*", { count: "exact", head: true }).eq("owner_id", userId),
+    sb.from("tontine_members").select("*", { count: "exact", head: true }).eq("user_id", userId),
+  ]);
+
+  const { data: priorEvents } = await sb.from("identity_events")
+    .select("metadata")
+    .eq("user_id", referrer.id)
+    .eq("event_type", "referral_milestone")
+    .limit(50);
+
+  const granted = new Set((priorEvents ?? []).map((e: { metadata?: { milestone?: string; referred_id?: string } }) =>
+    `${e.metadata?.milestone}:${e.metadata?.referred_id}`,
+  ));
+
+  if ((tontineCount.count ?? 0) >= 1 && !granted.has(`first_tontine:${userId}`)) {
+    await grantReferralBonus(referrer.id, 1000, "Votre filleul a créé sa première tontine ! +1 000 FCFA bonus.");
+    await sb.from("identity_events").insert({
+      user_id: referrer.id,
+      event_type: "referral_milestone",
+      points_delta: 10,
+      metadata: { milestone: "first_tontine", referred_id: userId },
+    } as any);
+  }
+
+  const groups =
+    (memberCount.count ?? 0)
+    + ((await sb.from("association_members").select("*", { count: "exact", head: true }).eq("user_id", userId)).count ?? 0)
+    + ((await sb.from("cooperative_members").select("*", { count: "exact", head: true }).eq("user_id", userId)).count ?? 0);
+
+  if (groups >= 3 && !granted.has(`three_groups:${userId}`)) {
+    await grantReferralBonus(referrer.id, 1500, "Votre filleul a rejoint 3 groupes ! +1 500 FCFA bonus (×3).");
+    await sb.from("identity_events").insert({
+      user_id: referrer.id,
+      event_type: "referral_milestone",
+      points_delta: 15,
+      metadata: { milestone: "three_groups", referred_id: userId },
+    } as any);
+  }
 }
 
 export async function getReferralInfo() {

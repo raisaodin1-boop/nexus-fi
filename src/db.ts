@@ -25,6 +25,7 @@ export * from "./db/tontine-guarantor";
 export * from "./db/momo-roundup";
 export * from "./db/instant-loan";
 export * from "./db/emoney-license";
+export * from "./db/verify";
 export { invalidateCache } from "./db/helpers";
 
 // Wallet operations (delegated to wallet-db.ts)

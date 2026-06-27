@@ -1,5 +1,5 @@
 // Manager dashboard component — used inside (tabs)/index.tsx when role is tontine_manager.
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -10,7 +10,9 @@ import {
 } from "lucide-react-native";
 
 import { api, formatXAF } from "@/src/api";
-import { EMPTY_MANAGER_OVERVIEW } from "@/src/db/extras";
+import { supabase } from "@/src/supabase";
+import { EMPTY_MANAGER_OVERVIEW, MANAGER_PRO_MONTHLY_XAF } from "@/src/db/extras";
+import { openPaymentScreen } from "@/src/payment-nav";
 import { DegradedDataBanner } from "@/src/degraded-banner";
 import { Card, SectionTitle, StatCard, SkeletonBox, SkeletonStatRow, SkeletonCard } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
@@ -29,6 +31,7 @@ interface Overview {
   currency: string;
 }
 interface Series { days: number; series: { date: string; value: number }[] }
+interface ProStatus { active: boolean; until: string | null; eligible: boolean; monthly_price_xaf: number }
 
 const DEFAULT_OVERVIEW: Overview = { ...EMPTY_MANAGER_OVERVIEW, tontines: [] };
 
@@ -40,20 +43,23 @@ export function ManagerDashboard() {
   const [loading, setLoading] = useState(true);
   const [unread, setUnread] = useState(0);
   const [overviewDegraded, setOverviewDegraded] = useState(false);
+  const [proStatus, setProStatus] = useState<ProStatus | null>(null);
 
   const load = useCallback(async () => {
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch { return null; }
     };
-    const [o, s, n] = await Promise.all([
+    const [o, s, n, pro] = await Promise.all([
       safe(() => api.get<Overview>("/manager/overview")),
       safe(() => api.get<Series>("/analytics/me/contributions?days=14")),
       safe(() => api.get<{ unread_count: number }>("/notifications")),
+      safe(() => api.get<ProStatus>("/manager/pro-status")),
     ]);
     setOverview(o ?? DEFAULT_OVERVIEW);
     setOverviewDegraded(!o);
     if (s) setSeries(s);
     if (n) setUnread(n.unread_count ?? 0);
+    if (pro) setProStatus(pro);
     setLoading(false);
   }, []);
 
@@ -63,6 +69,17 @@ export function ManagerDashboard() {
     setLoading(true);
     load();
   }, [load]));
+
+  useEffect(() => {
+    const userId = user?.id;
+    if (!userId) return;
+    const ch = supabase
+      .channel(`rt-dashboard-manager-${userId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "tontine_contributions" }, () => { load(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "tontine_members" }, () => { load(); })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [load, user?.id]);
 
   if (loading) {
     return (
@@ -102,6 +119,36 @@ export function ManagerDashboard() {
 
         {overviewDegraded ? (
           <DegradedDataBanner onRetry={retry} testID="manager-retry-overview" />
+        ) : null}
+
+        {proStatus && !proStatus.active && proStatus.eligible ? (
+          <View style={{ paddingHorizontal: Spacing.xl, marginBottom: 8 }}>
+            <LinearGradient colors={["#7C3AED", "#5B21B6"]} style={[styles.proBanner, Shadow.card]}>
+              <Text style={styles.proTitle}>Manager Pro</Text>
+              <Text style={styles.proSub}>
+                Statistiques avancées, exports PDF, alertes prioritaires — {formatXAF(proStatus.monthly_price_xaf ?? MANAGER_PRO_MONTHLY_XAF)}/mois
+              </Text>
+              <TouchableOpacity
+                style={styles.proBtn}
+                onPress={() => openPaymentScreen(router, {
+                  kind: "manager_pro_subscription",
+                  amount: proStatus.monthly_price_xaf ?? MANAGER_PRO_MONTHLY_XAF,
+                  label: "Manager Pro — 30 jours",
+                })}
+                testID="manager-pro-subscribe"
+              >
+                <Text style={styles.proBtnText}>Activer Manager Pro</Text>
+              </TouchableOpacity>
+            </LinearGradient>
+          </View>
+        ) : null}
+
+        {proStatus?.active ? (
+          <View style={{ paddingHorizontal: Spacing.xl, marginBottom: 8 }}>
+            <View style={styles.proActivePill}>
+              <Text style={styles.proActiveText}>✓ Manager Pro actif</Text>
+            </View>
+          </View>
         ) : null}
 
         <View style={{ paddingHorizontal: Spacing.xl }}>
@@ -240,4 +287,11 @@ const styles = StyleSheet.create({
   tontineIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   tontineName: { color: Colors.text, fontSize: 14, fontWeight: "800" },
   tontineMeta: { color: Colors.textMuted, fontSize: 11, marginTop: 2, fontWeight: "600" },
+  proActivePill: { backgroundColor: "#EDE9FE", borderRadius: Radius.lg, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: "#C4B5FD", alignItems: "center" },
+  proActiveText: { color: "#5B21B6", fontWeight: "800", fontSize: 12 },
+  proBanner: { borderRadius: Radius.xl, padding: Spacing.lg, gap: 8 },
+  proTitle: { color: "#fff", fontSize: 18, fontWeight: "900" },
+  proSub: { color: "rgba(255,255,255,0.85)", fontSize: 12, lineHeight: 18 },
+  proBtn: { marginTop: 6, backgroundColor: "#fff", borderRadius: Radius.lg, paddingVertical: 12, alignItems: "center" },
+  proBtnText: { color: "#5B21B6", fontWeight: "900", fontSize: 13 },
 });

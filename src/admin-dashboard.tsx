@@ -1,6 +1,6 @@
 // Super Admin home — Investor-Ready Control Center.
 import { useCallback, useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -19,6 +19,19 @@ import { AdminPromotionRequestsPanel, type PromotionRequestRow } from "@/src/adm
 import { useToast } from "@/src/toast";
 
 interface Series { days: number; series: { date: string; value: number }[] }
+
+interface InvestorKpis {
+  gmv_xaf: number;
+  manager_pro_active: number;
+  manager_pro_mrr_xaf: number;
+  total_managers: number;
+  users_total: number;
+  users_new_30d: number;
+  kyc_approved: number;
+  tontines_active: number;
+  associations: number;
+  cooperatives: number;
+}
 
 type Analytics = typeof EMPTY_ADMIN_ANALYTICS & {
   users: { total: number; active: number; new_7d: number; new_30d: number };
@@ -90,6 +103,11 @@ export function AdminDashboard() {
   const [analytics, setAnalytics] = useState<Analytics>(DEFAULT_ANALYTICS);
   const [savings, setSavings] = useState<Series | null>(null);
   const [usersSeries, setUsersSeries] = useState<Series | null>(null);
+  const [contribSeries90, setContribSeries90] = useState<Series | null>(null);
+  const [savingsSeries90, setSavingsSeries90] = useState<Series | null>(null);
+  const [usersSeries90, setUsersSeries90] = useState<Series | null>(null);
+  const [investorKpis, setInvestorKpis] = useState<InvestorKpis | null>(null);
+  const [exportBusy, setExportBusy] = useState(false);
   const [pendingReqs, setPendingReqs] = useState(0);
   const [promoRequests, setPromoRequests] = useState<PromotionRequestRow[]>([]);
   const [openFraudAlerts, setOpenFraudAlerts] = useState(0);
@@ -101,12 +119,16 @@ export function AdminDashboard() {
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch { return null; }
     };
-    const [a, s, u, p, comp] = await Promise.all([
+    const [a, s, u, p, comp, ik, c90, s90, u90] = await Promise.all([
       safe(() => api.get<Analytics>("/admin/analytics")),
       safe(() => api.get<Series>("/analytics/platform/savings?days=14")),
       safe(() => api.get<Series>("/analytics/platform/users?days=14")),
       safe(() => api.get<any[]>("/admin/promotion-requests")),
       safe(() => api.get<{ open_fraud_alerts: number; critical_fraud_alerts: number }>("/admin/compliance/stats")),
+      safe(() => api.get<InvestorKpis>("/admin/investor-kpis")),
+      safe(() => api.get<Series>("/analytics/platform/contributions?days=90")),
+      safe(() => api.get<Series>("/analytics/platform/savings?days=90")),
+      safe(() => api.get<Series>("/analytics/platform/users?days=90")),
     ]);
     setAnalytics(a ?? DEFAULT_ANALYTICS);
     setAnalyticsDegraded(!a);
@@ -120,8 +142,37 @@ export function AdminDashboard() {
       setOpenFraudAlerts(comp.open_fraud_alerts);
       setCriticalFraudAlerts(comp.critical_fraud_alerts ?? 0);
     }
+    if (ik) setInvestorKpis(ik);
+    if (c90) setContribSeries90(c90);
+    if (s90) setSavingsSeries90(s90);
+    if (u90) setUsersSeries90(u90);
     setLoading(false);
   }, []);
+
+  const exportDataRoom = async () => {
+    setExportBusy(true);
+    try {
+      const payload = await api.get<{ csv: string; generated_at: string }>("/admin/investor-export?days=90");
+      const filename = `hodix-data-room-${payload.generated_at.slice(0, 10)}.csv`;
+      if (Platform.OS === "web" && typeof document !== "undefined") {
+        const blob = new Blob([payload.csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = filename;
+        anchor.click();
+        URL.revokeObjectURL(url);
+        show("Export CSV téléchargé", "success");
+      } else {
+        await Share.share({ message: payload.csv, title: filename });
+        show("Données partagées", "success");
+      }
+    } catch {
+      show("Export impossible", "error");
+    } finally {
+      setExportBusy(false);
+    }
+  };
 
   const retry = () => { setLoading(true); load(); };
 
@@ -305,6 +356,27 @@ export function AdminDashboard() {
           <KpiCard label="Commission HODIX" value={`${commission.toFixed(0)} ${payments.currency}`} icon={DollarSign} color="#7C3AED" sub="Taux 1%" />
         </View>
 
+        {/* Investor KPIs */}
+        {investorKpis ? (
+          <>
+            <SectionHeader accent="#7C3AED">Data Room investisseur</SectionHeader>
+            <View style={styles.statsRow}>
+              <KpiCard label="GMV plateforme" value={formatXAF(investorKpis.gmv_xaf)} icon={TrendingUp} color="#7C3AED" sub="Cotisations + épargne" />
+              <KpiCard label="Managers Pro actifs" value={`${investorKpis.manager_pro_active}`} icon={Crown} color={Colors.warning} sub={`MRR ~${formatXAF(investorKpis.manager_pro_mrr_xaf)}`} />
+            </View>
+            <View style={styles.statsRow}>
+              <KpiCard label="Tontine Managers" value={`${investorKpis.total_managers}`} icon={Users} color={Colors.secondary} />
+              <KpiCard label="KYC approuvés" value={`${investorKpis.kyc_approved}`} icon={CheckCircle} color="#059669" sub={`${investorKpis.users_new_30d} nouveaux (30j)`} />
+            </View>
+            <View style={{ paddingHorizontal: Spacing.xl, marginBottom: 8 }}>
+              <TouchableOpacity onPress={exportDataRoom} disabled={exportBusy} style={[styles.exportBtn, Shadow.card]} testID="admin-export-csv">
+                <FileText color="#fff" size={18} />
+                <Text style={styles.exportBtnText}>{exportBusy ? "Export en cours…" : "Exporter métriques CSV (90 jours)"}</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : null}
+
         {/* Tier distribution — premium card */}
         <SectionHeader accent="#8B5CF6">Identité financière</SectionHeader>
         <View style={{ paddingHorizontal: Spacing.xl }}>
@@ -363,6 +435,19 @@ export function AdminDashboard() {
           </Card>
           <Card>
             <LineChart title="Nouveaux utilisateurs" data={usersSeries?.series ?? []} color={Colors.secondary} format={(v) => `${v.toFixed(0)}`} />
+          </Card>
+        </View>
+
+        <SectionHeader accent="#7C3AED">Data Room — 90 jours</SectionHeader>
+        <View style={{ paddingHorizontal: Spacing.xl, gap: 12 }}>
+          <Card>
+            <LineChart title="Contributions tontines (90j)" data={contribSeries90?.series ?? []} color="#7C3AED" format={(v) => formatXAF(v)} />
+          </Card>
+          <Card>
+            <LineChart title="Dépôts épargne (90j)" data={savingsSeries90?.series ?? []} color={Colors.accent} format={(v) => formatXAF(v)} />
+          </Card>
+          <Card>
+            <LineChart title="Inscriptions (90j)" data={usersSeries90?.series ?? []} color={Colors.secondary} format={(v) => `${v.toFixed(0)}`} />
           </Card>
         </View>
 
@@ -442,4 +527,6 @@ const styles = StyleSheet.create({
   linkDesc: { color: Colors.textMuted, fontSize: 11, marginTop: 2 },
   countBadge: { minWidth: 24, height: 24, borderRadius: 12, backgroundColor: Colors.danger, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
   countBadgeText: { color: "#fff", fontSize: 11, fontWeight: "900" },
+  exportBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#7C3AED", paddingVertical: 14, borderRadius: Radius.lg },
+  exportBtnText: { color: "#fff", fontWeight: "800", fontSize: 13 },
 });

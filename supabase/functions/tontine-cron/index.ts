@@ -99,13 +99,20 @@ Deno.serve(async (req) => {
     .eq("status", "held").lte("release_at", now.toISOString()).lt("dispute_count", 2);
 
   for (const row of due ?? []) {
-    await admin.from("tontine_escrow").update({ status: "released" }).eq("id", row.id);
-    const ownerId = (row as any).tontines?.owner_id;
+    const { data: updated } = await admin.from("tontine_escrow")
+      .update({ status: "released", release_notified: true })
+      .eq("id", row.id)
+      .eq("status", "held")
+      .eq("release_notified", false)
+      .select("id, tontine_id, cycle, tontines(name, owner_id)")
+      .maybeSingle();
+    if (!updated) continue;
+    const ownerId = (updated as any).tontines?.owner_id;
     if (ownerId) {
       await admin.from("notifications").insert({
         user_id: ownerId,
         title: "Escrow libéré",
-        body: `Cycle ${row.cycle} — fonds disponibles.`,
+        body: `Cycle ${updated.cycle} — fonds disponibles.`,
         type: "escrow_release",
         is_read: false,
         metadata: { action_url: `/tontines/${row.tontine_id}` },

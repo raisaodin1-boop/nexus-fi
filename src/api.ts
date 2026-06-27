@@ -30,10 +30,14 @@ export interface User {
 export class ApiError extends Error {
   status: number;
   detail: string;
-  constructor(status: number, detail: string) {
+  redirect_to?: string;
+  payment_required?: boolean;
+  constructor(status: number, detail: string, extra?: { redirect_to?: string; payment_required?: boolean }) {
     super(detail);
     this.status = status;
     this.detail = detail;
+    this.redirect_to = extra?.redirect_to;
+    this.payment_required = extra?.payment_required;
   }
 }
 
@@ -70,7 +74,8 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "profile")               return (await db.getPublicTontineProfile(s[1])) as T;
     if (method === "POST" && s[0] === "tontines" && s[1] === "request-join")                  return (await db.requestJoinTontine(body?.tontine_id)) as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] && !s[2])                            return (await db.getTontine(s[1])) as T;
-    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "contribute")            return db.rejectDirectPayment() as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "contribute")
+      return db.rejectDirectPaymentRedirect("tontine_contribution", { tontine_id: s[1] }) as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "leaderboard")           return (await db.getTontineLeaderboard(s[1])) as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "escrow")                return (await db.getEscrowStatus(s[1])) as T;
     if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "escrow-dispute")        return (await db.reportEscrowDispute(s[1], body?.reason ?? "")) as T;
@@ -115,20 +120,23 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "POST" && s[0] === "associations" && !s[1])                         return (await db.createAssociation(body)) as T;
     if (method === "POST" && s[0] === "associations" && s[1] === "join")               return (await db.joinAssociation(body?.invite_code)) as T;
     if (method === "GET"  && s[0] === "associations" && s[1] && !s[2])                 return (await db.getAssociation(s[1])) as T;
-    if (method === "POST" && s[0] === "associations" && s[1] && s[2] === "contribute") return db.rejectDirectPayment() as T;
+    if (method === "POST" && s[0] === "associations" && s[1] && s[2] === "contribute")
+      return db.rejectDirectPaymentRedirect("association_contribution", { association_id: s[1] }) as T;
 
     // ── Cooperatives
     if (method === "GET"  && s[0] === "cooperatives" && !s[1])                         return (await db.listCooperatives()) as T;
     if (method === "POST" && s[0] === "cooperatives" && !s[1])                         return (await db.createCooperative(body)) as T;
     if (method === "POST" && s[0] === "cooperatives" && s[1] === "join")               return (await db.joinCooperative(body?.invite_code)) as T;
     if (method === "GET"  && s[0] === "cooperatives" && s[1] && !s[2])                 return (await db.getCooperative(s[1])) as T;
-    if (method === "POST" && s[0] === "cooperatives" && s[1] && s[2] === "contribute") return db.rejectDirectPayment() as T;
+    if (method === "POST" && s[0] === "cooperatives" && s[1] && s[2] === "contribute")
+      return db.rejectDirectPaymentRedirect("cooperative_contribution", { cooperative_id: s[1] }) as T;
 
     // ── Funds
     if (method === "GET"  && s[0] === "funds" && !s[1])                                return (await db.listFunds()) as T;
     if (method === "POST" && s[0] === "funds" && !s[1])                                return (await db.createFund(body)) as T;
     if (method === "GET"  && s[0] === "funds" && s[1] && !s[2])                        return (await db.getFund(s[1])) as T;
-    if (method === "POST" && s[0] === "funds" && s[1] && s[2] === "contribute")        return db.rejectDirectPayment() as T;
+    if (method === "POST" && s[0] === "funds" && s[1] && s[2] === "contribute")
+      return db.rejectDirectPaymentRedirect("fund_contribution", { fund_id: s[1] }) as T;
 
     // ── Savings
     if (method === "GET"  && s[0] === "savings" && (!s[1] || s[1] === "goals"))          return (await db.listSavings()) as T;
@@ -138,7 +146,8 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "PATCH" && s[0] === "savings" && s[1] === "roundup")                  return (await db.updateMomoRoundUpSettings(body ?? {})) as T;
     if (method === "POST" && s[0] === "savings" && (!s[1] || s[1] === "goals"))         return (await db.createSaving(body)) as T;
     if (method === "GET"  && s[0] === "savings" && s[1] && !s[2])                      return (await db.getSaving(s[1])) as T;
-    if (method === "POST" && s[0] === "savings" && s[1] && s[2] === "deposit")         return db.rejectDirectPayment() as T;
+    if (method === "POST" && s[0] === "savings" && s[1] && s[2] === "deposit")
+      return db.rejectDirectPaymentRedirect("savings_deposit", { goal_id: s[1] }) as T;
     if (method === "POST" && s[0] === "savings" && s[1] === "goals" && s[2] && s[3] === "transactions")
       return (await db.savingsGoalTransaction(s[2], body)) as T;
     if (method === "POST" && s[0] === "savings" && s[1] === "goals" && s[2] && s[3] === "unlock")
@@ -162,6 +171,14 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
       return (await db.getPlatformSavingsSeries(Number(query.get("days")) || 14)) as T;
     if (method === "GET" && s[0] === "analytics" && s[1] === "platform" && s[2] === "users")
       return (await db.getUsersSeries(Number(query.get("days")) || 14)) as T;
+    if (method === "GET" && s[0] === "analytics" && s[1] === "platform" && s[2] === "contributions")
+      return (await db.getPlatformContributionsSeries(Number(query.get("days")) || 14)) as T;
+
+    if (method === "GET" && s[0] === "verify" && s[1])
+      return (await db.verifyCertificateByHash(s[1])) as T;
+
+    if (method === "GET" && s[0] === "manager" && s[1] === "pro-status")
+      return (await db.getManagerProStatus()) as T;
 
     // ── Identity
     if (method === "GET" && s[0] === "identity" && !s[1])                              return (await db.getIdentity()) as T;
@@ -256,6 +273,8 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"   && s[0] === "admin" && s[1] === "payment-config")                   return (await db.getPaymentConfig()) as T;
     if (method === "PATCH" && s[0] === "admin" && s[1] === "payment-config")                   return (await db.updatePaymentConfig(body)) as T;
     if (method === "GET"   && s[0] === "admin" && s[1] === "analytics")                         return (await db.getAdminAnalytics()) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "investor-kpis")                       return (await db.getInvestorKpis()) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "investor-export")                   return (await db.getInvestorDataRoomExport(Number(query.get("days")) || 90)) as T;
     if (method === "GET"   && s[0] === "admin" && s[1] === "users")
       return (await db.adminListUsers(
         query.get("search") ?? "",
@@ -338,7 +357,10 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
 
   } catch (e: any) {
     if (e instanceof ApiError) throw e;
-    throw new ApiError(e?.status ?? 500, e?.detail ?? e?.message ?? "Erreur inattendue");
+    throw new ApiError(e?.status ?? 500, e?.detail ?? e?.message ?? "Erreur inattendue", {
+      redirect_to: e?.redirect_to,
+      payment_required: e?.payment_required,
+    });
   }
 }
 

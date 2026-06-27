@@ -637,11 +637,115 @@ export async function adminBroadcast(title: string, body: string) {
 
 export async function getUsersSeries(days = 14) {
   await requireAdmin();
-  return cached(`users-series`, 120_000, async () => {
+  return cached(`users-series-${days}`, 120_000, async () => {
     const since = new Date(Date.now() - days * 86400000).toISOString();
     const { data } = await getSupabase().from("profiles").select("created_at").gte("created_at", since).order("created_at", { ascending: true });
     const byDate: Record<string, number> = {};
-    for (const p of data ?? []) { const d = (p.created_at as string).slice(0, 10); byDate[d] = (byDate[d] ?? 0) + 1; }
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+      byDate[d] = 0;
+    }
+    for (const p of data ?? []) { const d = (p.created_at as string).slice(0, 10); if (d in byDate) byDate[d] += 1; }
     return { days, series: Object.entries(byDate).map(([date, value]) => ({ date, value })) };
   });
+}
+
+export async function getPlatformContributionsSeries(days = 14) {
+  await requireAdmin();
+  return cached(`contrib-series-${days}`, 120_000, async () => {
+    const since = new Date(Date.now() - days * 86400000).toISOString();
+    const { data } = await getSupabase()
+      .from("tontine_contributions")
+      .select("amount, created_at")
+      .gte("created_at", since)
+      .order("created_at", { ascending: true });
+    const byDate: Record<string, number> = {};
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+      byDate[d] = 0;
+    }
+    for (const tx of data ?? []) {
+      const d = (tx.created_at as string).slice(0, 10);
+      if (d in byDate) byDate[d] += Number(tx.amount);
+    }
+    return { days, series: Object.entries(byDate).map(([date, value]) => ({ date, value })) };
+  });
+}
+
+export async function getInvestorKpis() {
+  await requireAdmin();
+  const nowIso = new Date().toISOString();
+  const sb = getSupabase();
+  const [analytics, proRes, managersRes] = await Promise.all([
+    getAdminAnalytics(),
+    sb.from("profiles").select("id", { count: "exact", head: true }).gt("manager_pro_until", nowIso),
+    sb.from("profiles").select("id", { count: "exact", head: true }).eq("role", "tontine_manager"),
+  ]);
+  const proActive = proRes.count ?? 0;
+  return {
+    gmv_xaf: (analytics.contributions_volume ?? 0) + (analytics.savings_volume ?? 0),
+    manager_pro_active: proActive,
+    manager_pro_mrr_xaf: proActive * 4990,
+    total_managers: managersRes.count ?? 0,
+    users_total: analytics.users.total,
+    users_new_30d: analytics.users.new_30d,
+    kyc_approved: analytics.kyc.approved,
+    tontines_active: analytics.tontines.active,
+    associations: analytics.associations,
+    cooperatives: analytics.cooperatives,
+  };
+}
+
+function fillDailySeries(days: number, rows: { created_at: string; amount?: number }[], mode: "sum" | "count") {
+  const byDate: Record<string, number> = {};
+  for (let i = days - 1; i >= 0; i--) {
+    byDate[new Date(Date.now() - i * 86400000).toISOString().slice(0, 10)] = 0;
+  }
+  for (const row of rows) {
+    const d = row.created_at.slice(0, 10);
+    if (!(d in byDate)) continue;
+    byDate[d] += mode === "sum" ? Number(row.amount ?? 0) : 1;
+  }
+  return byDate;
+}
+
+export async function getInvestorDataRoomExport(days = 90) {
+  await requireAdmin();
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+  const sb = getSupabase();
+  const [users, contribs, savings, allUsers, proRes, kpis] = await Promise.all([
+    sb.from("profiles").select("created_at").gte("created_at", since),
+    sb.from("tontine_contributions").select("amount, created_at").gte("created_at", since),
+    sb.from("savings_transactions").select("amount, created_at").gte("created_at", since),
+    sb.from("profiles").select("created_at"),
+    sb.from("profiles").select("id", { count: "exact", head: true }).gt("manager_pro_until", new Date().toISOString()),
+    getInvestorKpis(),
+  ]);
+
+  const newUsersByDay = fillDailySeries(days, (users.data ?? []).map((u) => ({ created_at: u.created_at as string })), "count");
+  const contribsByDay = fillDailySeries(days, (contribs.data ?? []) as { created_at: string; amount?: number }[], "sum");
+  const savingsByDay = fillDailySeries(days, (savings.data ?? []) as { created_at: string; amount?: number }[], "sum");
+
+  const sortedDates = Object.keys(newUsersByDay).sort();
+  let cumulative = (allUsers.data ?? []).filter((u) => (u.created_at as string) < since).length;
+  const lines: string[] = [];
+  for (const date of sortedDates) {
+    cumulative += newUsersByDay[date] ?? 0;
+    lines.push([
+      date,
+      newUsersByDay[date] ?? 0,
+      contribsByDay[date] ?? 0,
+      savingsByDay[date] ?? 0,
+      cumulative,
+    ].join(","));
+  }
+
+  const header = "date,new_users,contributions_xaf,savings_deposits_xaf,cumulative_users";
+  return {
+    csv: [header, ...lines].join("\n"),
+    days,
+    generated_at: new Date().toISOString(),
+    summary: kpis,
+    manager_pro_active: proRes.count ?? 0,
+  };
 }

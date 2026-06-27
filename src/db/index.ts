@@ -18,3 +18,4 @@ export * from "./auto-savings";
 export * from "./split-expense";
 export * from "./budget";
 export * from "./compliance";
+export * from "./verify";

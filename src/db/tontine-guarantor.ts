@@ -76,11 +76,11 @@ export async function assignTontineGuarantors(
       const { data: profile } = await sb.from("profiles").select("id").eq("id", ref).maybeSingle();
       profileId = profile?.id ?? null;
     } else if (ref.includes("@")) {
-      const { data: profile } = await sb.from("profiles").select("id").eq("email", ref.toLowerCase()).maybeSingle();
-      profileId = profile?.id ?? null;
+      const { data: rows } = await sb.rpc("lookup_profile_by_email", { p_email: ref.toLowerCase() });
+      profileId = (rows as { id: string }[] | null)?.[0]?.id ?? null;
     } else {
-      const { data: profile } = await sb.from("profiles").select("id").eq("phone", ref).maybeSingle();
-      profileId = profile?.id ?? null;
+      const { data: rows } = await sb.rpc("lookup_profile_by_phone", { p_phone: ref });
+      profileId = (rows as { id: string }[] | null)?.[0]?.id ?? null;
     }
     if (!profileId) throw { status: 404, detail: `Garant introuvable : ${ref}` };
     if (profileId === me) throw { status: 400, detail: "Vous ne pouvez pas vous désigner comme garant." };

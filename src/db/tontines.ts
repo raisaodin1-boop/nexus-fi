@@ -199,16 +199,40 @@ export async function listPublicTontines(filters?: {
 
 export async function requestJoinTontine(tontine_id: string) {
   const me = await uid();
-  const { count } = await getSupabase()
+  const sb = getSupabase();
+  const { count } = await sb
     .from("tontine_members").select("*", { count: "exact", head: true })
     .eq("tontine_id", tontine_id).eq("user_id", me);
   if ((count ?? 0) > 0) throw { status: 400, detail: "Vous êtes déjà membre de cette tontine" };
-  const { error } = await getSupabase().from("notifications").insert({
-    user_id: me, title: "Demande d'adhésion",
-    body: `Demande d'adhésion à la tontine ${tontine_id}`,
-    type: "join_request", metadata: { tontine_id },
+
+  const { data: tontine, error: tErr } = await sb
+    .from("tontines")
+    .select("owner_id, name")
+    .eq("id", tontine_id)
+    .single();
+  if (tErr || !tontine?.owner_id) throw { status: 404, detail: "Tontine introuvable" };
+
+  const requesterProfiles = await profileDisplayMap([me]);
+  const requesterName = profileFromMap(requesterProfiles, me).full_name;
+  const tontineName = tontine.name ?? "votre tontine";
+
+  const { error: ownerErr } = await sb.from("notifications").insert({
+    user_id: tontine.owner_id,
+    title: "Demande d'adhésion",
+    body: `${requesterName} souhaite rejoindre « ${tontineName} ».`,
+    type: "join_request",
+    metadata: { tontine_id, requester_id: me, requester_name: requesterName },
   });
-  throwSb(error);
+  throwSb(ownerErr);
+
+  await sb.from("notifications").insert({
+    user_id: me,
+    title: "Demande envoyée",
+    body: `Votre demande pour « ${tontineName} » a été transmise au manager.`,
+    type: "join_request_sent",
+    metadata: { tontine_id },
+  });
+
   return { status: "pending", tontine_id };
 }
 
@@ -321,6 +345,8 @@ export async function createTontineSecure(body: Record<string, any>) {
 
   invalidateCache("tontines");
   invalidateCache(`identity-${me}`);
+  const { checkReferralMilestones } = await import("./misc");
+  checkReferralMilestones(me).catch(() => {});
   return data;
 }
 
@@ -364,6 +390,8 @@ export async function joinTontineSecure(invite_code: string) {
 
   invalidateCache("tontines");
   invalidateCache(`identity-${me}`);
+  const { checkReferralMilestones } = await import("./misc");
+  checkReferralMilestones(me).catch(() => {});
   return { tontine_id: tontine.id };
 }
 
@@ -397,7 +425,7 @@ export async function advanceTontineCycle(tontineId: string) {
   const me = await uid();
   const sb = getSupabase();
   const { data: tontine } = await sb.from("tontines")
-    .select("id, owner_id, name, current_cycle, max_members, frequency, auto_advance")
+    .select("id, owner_id, name, current_cycle, max_members, frequency, auto_advance, invite_code")
     .eq("id", tontineId).single();
   if (!tontine) throw { status: 404, detail: "Tontine introuvable." };
   if (tontine.owner_id !== me) throw { status: 403, detail: "Réservé au gestionnaire de la tontine." };
@@ -429,7 +457,17 @@ export async function advanceTontineCycle(tontineId: string) {
   }
 
   invalidateCache("tontines");
-  return { current_cycle: nextCycle, detail: `Cycle ${nextCycle} démarré.` };
+  return {
+    current_cycle: nextCycle,
+    detail: `Cycle ${nextCycle} démarré.`,
+    graduation_invite: {
+      tontine_id: tontineId,
+      tontine_name: tontine.name,
+      invite_code: tontine.invite_code,
+      cycle_completed: cycle,
+      deeplink: `https://www.hodix.app/join?code=${tontine.invite_code}`,
+    },
+  };
 }
 
 export async function releaseDueEscrows() {
@@ -442,13 +480,21 @@ export async function releaseDueEscrows() {
     .lt("dispute_count", 2);
   let released = 0;
   for (const row of due ?? []) {
-    await sb.from("tontine_escrow").update({ status: "released" }).eq("id", row.id);
-    const ownerId = (row as any).tontines?.owner_id;
+    const { data: updated } = await sb.from("tontine_escrow")
+      .update({ status: "released", release_notified: true })
+      .eq("id", row.id)
+      .eq("status", "held")
+      .eq("release_notified", false)
+      .select("*, tontines(name, owner_id)")
+      .maybeSingle();
+    if (!updated) continue;
+
+    const ownerId = (updated as any).tontines?.owner_id;
     if (ownerId) {
       await notifyUser({
         user_id: ownerId,
         title: "Escrow libéré",
-        body: `Les fonds du cycle ${row.cycle} de ${(row as any).tontines?.name ?? "la tontine"} sont disponibles.`,
+        body: `Les fonds du cycle ${updated.cycle} de ${(updated as any).tontines?.name ?? "la tontine"} sont disponibles.`,
         type: "escrow_release",
       });
     }

@@ -29,14 +29,25 @@ export const EMPTY_MANAGER_OVERVIEW = {
   currency: "XAF",
 };
 
-async function safeSelect<T>(query: PromiseLike<{ data: T | null; error: unknown }>): Promise<NonNullable<T>> {
-  try {
-    const { data, error } = await query;
-    if (error) return [] as NonNullable<T>;
-    return (data ?? []) as NonNullable<T>;
-  } catch {
-    return [] as NonNullable<T>;
-  }
+export const MANAGER_PRO_MONTHLY_XAF = 4990;
+
+export async function getManagerProStatus() {
+  const me = await uid();
+  const { data, error } = await getSupabase()
+    .from("profiles")
+    .select("role, manager_pro_until, manager_pro_plan")
+    .eq("id", me)
+    .single();
+  throwSb(error);
+  const until = data?.manager_pro_until ? new Date(data.manager_pro_until) : null;
+  const active = !!until && until.getTime() > Date.now();
+  return {
+    active,
+    plan: active ? "pro" : (data?.manager_pro_plan ?? "free"),
+    until: data?.manager_pro_until ?? null,
+    monthly_price_xaf: MANAGER_PRO_MONTHLY_XAF,
+    eligible: ["tontine_manager", "super_admin", "admin"].includes(data?.role ?? ""),
+  };
 }
 
 export async function getManagerOverview() {
@@ -44,90 +55,21 @@ export async function getManagerOverview() {
     const me = await uid();
     const sb = getSupabase();
 
-
     const { data: profile } = await sb.from("profiles").select("role").eq("id", me).single();
     const role = profile?.role ?? "member";
     if (role !== "tontine_manager" && role !== "super_admin" && role !== "admin") {
       return { ...EMPTY_MANAGER_OVERVIEW };
     }
 
-    const [tontines, associations, cooperatives, funds] = await Promise.all([
-      sb.from("tontines").select("*").eq("owner_id", me),
-      sb.from("associations").select("*").eq("owner_id", me),
-      sb.from("cooperatives").select("*").eq("owner_id", me),
-      sb.from("community_funds").select("*").eq("owner_id", me),
-    ]);
-
-    const tList = tontines.data ?? [];
-    const aList = associations.data ?? [];
-    const cList = cooperatives.data ?? [];
-    const fList = funds.data ?? [];
-
-    const tIds = tList.map((t) => t.id);
-    const aIds = aList.map((a) => a.id);
-    const cIds = cList.map((c) => c.id);
-    const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString();
-
-    const [tMembers, aMembers, cMembers, contribs, recentMembers] = await Promise.all([
-      tIds.length ? safeSelect(sb.from("tontine_members").select("tontine_id").in("tontine_id", tIds)) : Promise.resolve([] as { tontine_id: string }[]),
-      aIds.length ? safeSelect(sb.from("association_members").select("association_id").in("association_id", aIds)) : Promise.resolve([] as { association_id: string }[]),
-      cIds.length ? safeSelect(sb.from("cooperative_members").select("cooperative_id").in("cooperative_id", cIds)) : Promise.resolve([] as { cooperative_id: string }[]),
-      tIds.length ? safeSelect(sb.from("tontine_contributions").select("tontine_id, amount").in("tontine_id", tIds)) : Promise.resolve([] as { tontine_id: string; amount: number }[]),
-      tIds.length ? safeSelect(sb.from("tontine_members").select("tontine_id").in("tontine_id", tIds).gte("joined_at", thirtyAgo)) : Promise.resolve([] as { tontine_id: string }[]),
-    ]);
-
-    const tMemberCounts = new Map<string, number>();
-    for (const row of tMembers) {
-      tMemberCounts.set(row.tontine_id, (tMemberCounts.get(row.tontine_id) ?? 0) + 1);
+    const { data, error } = await sb.rpc("get_manager_overview", { p_user_id: me });
+    if (error || !data) {
+      return { ...EMPTY_MANAGER_OVERVIEW };
     }
-
-    const totalMembers = tMembers.length + aMembers.length + cMembers.length;
-
-    const contribByTontine = new Map<string, number>();
-    for (const row of contribs) {
-      contribByTontine.set(row.tontine_id, (contribByTontine.get(row.tontine_id) ?? 0) + Number(row.amount ?? 0));
-    }
-    const totalCollected = [...contribByTontine.values()].reduce((s, v) => s + v, 0);
-    const complianceValues: number[] = [];
-    for (const t of tList) {
-      const members = tMemberCounts.get(t.id) ?? 0;
-      const collected = contribByTontine.get(t.id) ?? 0;
-      const perCycle = Number(t.amount_per_cycle ?? t.contribution_amount ?? 0);
-      const expected = perCycle * members;
-      if (expected > 0) complianceValues.push(Math.min(100, (collected / expected) * 100));
-    }
-
-    const newMembers30d = recentMembers.length;
-
-    const avgCompliance = complianceValues.length
-      ? Math.round((complianceValues.reduce((a, b) => a + b, 0) / complianceValues.length) * 10) / 10
-      : 0;
-    const growthScore = Math.min(100, (newMembers30d / Math.max(totalMembers, 1)) * 300);
-    const healthScore = Math.round(avgCompliance * 0.6 + growthScore * 0.4 * 10) / 10;
-
-    const enrichedTontines = tList.slice(0, 5).map((t) => ({
-      ...t,
-      members_count: tMemberCounts.get(t.id) ?? 0,
-      max_members: Number(t.max_members ?? 12),
-      current_cycle: Number(t.current_cycle ?? 1),
-      total_collected: contribByTontine.get(t.id) ?? 0,
-      currency: t.currency ?? "XAF",
-    }));
-
+    const overview = data as typeof EMPTY_MANAGER_OVERVIEW & { tontines: Record<string, unknown>[] };
     return {
-      groups: {
-        tontines: tList.length,
-        associations: aList.length,
-        cooperatives: cList.length,
-        funds: fList.length,
-      },
-      total_members: totalMembers,
-      total_collected: totalCollected,
-      avg_compliance: avgCompliance,
-      health_score: healthScore,
-      new_members_30d: newMembers30d,
-      tontines: enrichedTontines,
-      currency: "XAF",
+      ...EMPTY_MANAGER_OVERVIEW,
+      ...overview,
+      tontines: overview.tontines ?? [],
     };
   } catch {
     return { ...EMPTY_MANAGER_OVERVIEW };
@@ -232,15 +174,25 @@ export async function updateTontineRotation(
   if (!order.length) throw { status: 400, detail: "order est requis." };
 
   const sb = getSupabase();
+  const { data: members } = await sb
+    .from("tontine_members")
+    .select("id")
+    .eq("tontine_id", tontineId);
+  const validIds = new Set((members ?? []).map((m: { id: string }) => m.id));
+
   for (const entry of order) {
     const memberRowId = entry.member_id;
     const pos = entry.position;
     if (!memberRowId || pos == null) continue;
-    await sb
+    if (!validIds.has(memberRowId)) {
+      throw { status: 400, detail: "Membre invalide pour cette tontine." };
+    }
+    const { error } = await sb
       .from("tontine_members")
       .update({ rotation_position: Number(pos) })
       .eq("id", memberRowId)
       .eq("tontine_id", tontineId);
+    throwSb(error);
   }
   return { detail: "rotation mise à jour" };
 }

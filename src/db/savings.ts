@@ -41,9 +41,10 @@ export async function createSaving(body: Record<string, any>) {
   if (body.guardian_phone_or_email && body.savings_type === "locked") {
     const search = String(body.guardian_phone_or_email).trim();
     const isEmail = search.includes("@");
-    const { data: guardian } = isEmail
-      ? await sb.from("profiles").select("id").eq("email", search.toLowerCase()).maybeSingle()
-      : await sb.from("profiles").select("id").eq("phone", search).maybeSingle();
+    const { data: guardianRows } = isEmail
+      ? await sb.rpc("lookup_profile_by_email", { p_email: search.toLowerCase() })
+      : await sb.rpc("lookup_profile_by_phone", { p_phone: search });
+    const guardian = (guardianRows as { id: string }[] | null)?.[0];
     if (guardian?.id && guardian.id !== me) {
       insertBody.lock_guardian_id = guardian.id;
     }

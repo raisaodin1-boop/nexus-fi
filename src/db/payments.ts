@@ -5,6 +5,7 @@ import { depositSaving } from "./savings";
 import { contributeAssociation, contributeCooperative, contributeFund } from "./groups";
 import { markCertificatePaid } from "./extras";
 import type { PaymentKind } from "@/src/payment-nav";
+import { parsePaymentMetaSafe } from "@/src/payment-meta-schema";
 import { paymentToReceipt } from "@/src/payment-receipt";
 import { notifyUser } from "./notifications";
 
@@ -63,10 +64,31 @@ export function parsePaymentMeta(description: string | null): PaymentMeta | null
   if (!description) return null;
   const raw = description.split(" · ref:")[0]?.trim() ?? description;
   try {
-    return JSON.parse(raw) as PaymentMeta;
+    const parsed = JSON.parse(raw);
+    return parsePaymentMetaSafe(parsed) as PaymentMeta | null;
   } catch {
     return null;
   }
+}
+
+export function buildPaymentRedirect(kind: PaymentKind, ctx: Record<string, string> = {}): string {
+  const params = new URLSearchParams({ kind, ...ctx });
+  return `/pay?${params.toString()}`;
+}
+
+/** Block direct credits; include payment screen redirect for client UX. */
+export function rejectDirectPaymentRedirect(kind: PaymentKind, ctx: Record<string, string> = {}) {
+  throw {
+    status: 403,
+    detail: PAYMENT_BLOCKED,
+    redirect_to: buildPaymentRedirect(kind, ctx),
+    payment_required: true,
+  };
+}
+
+/** @deprecated Use rejectDirectPaymentRedirect with payment context when possible. */
+export function rejectDirectPayment() {
+  throw { status: 403, detail: PAYMENT_BLOCKED };
 }
 
 async function assertTontineMember(tontineId: string, userId: string) {
@@ -137,6 +159,15 @@ async function validatePaymentTarget(me: string, payload: InitiatePayload): Prom
     case "certified_report":
       amount = 10000;
       break;
+    case "manager_pro_subscription": {
+      const { data: profile } = await getSupabase()
+        .from("profiles").select("role").eq("id", me).single();
+      if (!["tontine_manager", "super_admin", "admin"].includes(profile?.role ?? "")) {
+        throw { status: 403, detail: "Manager Pro réservé aux Tontine Managers." };
+      }
+      amount = 4990;
+      break;
+    }
     default:
       throw { status: 400, detail: "Type de paiement inconnu." };
   }
@@ -184,6 +215,17 @@ async function fulfillPayment(meta: PaymentMeta, paymentId: string) {
     case "certified_report":
       await markCertificatePaid(meta.cert_kind ?? "identity", paymentId ?? "");
       break;
+    case "manager_pro_subscription": {
+      const me = await uid();
+      const sb = getSupabase();
+      const { data: profile } = await sb.from("profiles").select("manager_pro_until").eq("id", me).single();
+      const base = profile?.manager_pro_until && new Date(profile.manager_pro_until) > new Date()
+        ? new Date(profile.manager_pro_until)
+        : new Date();
+      const until = new Date(base.getTime() + 30 * 86400000).toISOString();
+      await sb.from("profiles").update({ manager_pro_plan: "pro", manager_pro_until: until }).eq("id", me);
+      break;
+    }
   }
 }
 
@@ -243,11 +285,6 @@ async function verifyCinetpayTransaction(paymentId: string) {
   });
   const body = await response.json().catch(() => ({}));
   return body?.data?.status === "ACCEPTED";
-}
-
-/** Block direct client-side credits without electronic payment. */
-export function rejectDirectPayment() {
-  throw { status: 403, detail: PAYMENT_BLOCKED };
 }
 
 export async function initiateCinetpayPayment(payload: InitiatePayload) {

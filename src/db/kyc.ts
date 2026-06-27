@@ -1,5 +1,6 @@
 import { getSupabase } from "@/src/supabase";
 import { uid, throwSb } from "./helpers";
+import { secureRandomAlphanumeric } from "./secure-random";
 
 const BUCKET = "kyc-documents";
 const COUNTRY_CODES: Record<string, string> = {
@@ -44,10 +45,7 @@ function base64ToUint8Array(base64: string): Uint8Array {
 export type KycDocKind = "id_front" | "id_back" | "selfie";
 
 function randomToken(len = 16): string {
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-  let s = "";
-  for (let i = 0; i < len; i++) s += chars[Math.floor(Math.random() * chars.length)];
-  return s;
+  return secureRandomAlphanumeric(len, "abcdefghijklmnopqrstuvwxyz0123456789");
 }
 
 export async function uploadKycDocument(kind: KycDocKind, base64: string, mime = "image/jpeg"): Promise<string> {

@@ -1,5 +1,54 @@
 import { getSupabase } from "@/src/supabase";
+import { profileDisplayMap, profileFromMap } from "@/src/profile-display";
 import { uid, throwSb, inviteCode, isUniqueViolation } from "./helpers";
+
+type GroupMemberRow = { user_id: string; role?: string; [key: string]: unknown };
+type GroupContribRow = { id: string; user_id: string; amount?: number | string; created_at: string; [key: string]: unknown };
+
+async function buildCommunityGroupDetail(
+  me: string,
+  entity: Record<string, unknown>,
+  members: GroupMemberRow[],
+  contributions: GroupContribRow[],
+) {
+  const memberProfiles = await profileDisplayMap(members.map((m) => m.user_id));
+  const contribProfiles = await profileDisplayMap(contributions.map((c) => c.user_id));
+
+  const membersList = members.map((m) => {
+    const prof = profileFromMap(memberProfiles, m.user_id);
+    return {
+      ...m,
+      full_name: prof.full_name,
+      kyc_verified: prof.kyc_verified,
+    };
+  });
+
+  const contributionsList = contributions.map((c) => {
+    const prof = profileFromMap(contribProfiles, c.user_id);
+    return {
+      id: c.id,
+      user_id: c.user_id,
+      full_name: prof.full_name,
+      kyc_verified: prof.kyc_verified,
+      amount: Number(c.amount ?? 0),
+      created_at: c.created_at,
+    };
+  });
+
+  const totalCollected = contributionsList.reduce((sum, c) => sum + c.amount, 0);
+  const myMember = membersList.find((m) => m.user_id === me);
+  const ownerId = entity.owner_id as string | undefined;
+  const isAdmin = ownerId === me || myMember?.role === "admin";
+
+  const enriched = {
+    ...entity,
+    members_count: membersList.length,
+    total_collected: totalCollected,
+    currency: (entity.currency as string | undefined) ?? "XAF",
+  };
+
+  return { enriched, isAdmin, membersList, contributionsList };
+}
 
 /* ── ASSOCIATIONS ────────────────────────────────────────────── */
 
@@ -14,10 +63,39 @@ export async function listAssociations() {
 }
 
 export async function getAssociation(id: string) {
-  const { data, error } = await getSupabase()
-    .from("associations").select("*, association_members(*, profiles(full_name)), association_contributions(*)").eq("id", id).single();
+  const me = await uid();
+  const sb = getSupabase();
+
+  const { data: association, error } = await sb.from("associations").select("*").eq("id", id).single();
   throwSb(error);
-  return { association: data };
+
+  const { data: members, error: membersErr } = await sb
+    .from("association_members")
+    .select("*")
+    .eq("association_id", id);
+  throwSb(membersErr);
+
+  const { data: contributions, error: contribErr } = await sb
+    .from("association_contributions")
+    .select("*")
+    .eq("association_id", id)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  throwSb(contribErr);
+
+  const { enriched, isAdmin, membersList, contributionsList } = await buildCommunityGroupDetail(
+    me,
+    association as Record<string, unknown>,
+    (members ?? []) as GroupMemberRow[],
+    (contributions ?? []) as GroupContribRow[],
+  );
+
+  return {
+    association: enriched,
+    is_admin: isAdmin,
+    members: membersList,
+    contributions: contributionsList,
+  };
 }
 
 export async function createAssociation(body: Record<string, any>) {
@@ -71,10 +149,39 @@ export async function listCooperatives() {
 }
 
 export async function getCooperative(id: string) {
-  const { data, error } = await getSupabase()
-    .from("cooperatives").select("*, cooperative_members(*, profiles(full_name)), cooperative_contributions(*)").eq("id", id).single();
+  const me = await uid();
+  const sb = getSupabase();
+
+  const { data: cooperative, error } = await sb.from("cooperatives").select("*").eq("id", id).single();
   throwSb(error);
-  return { cooperative: data };
+
+  const { data: members, error: membersErr } = await sb
+    .from("cooperative_members")
+    .select("*")
+    .eq("cooperative_id", id);
+  throwSb(membersErr);
+
+  const { data: contributions, error: contribErr } = await sb
+    .from("cooperative_contributions")
+    .select("*")
+    .eq("cooperative_id", id)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  throwSb(contribErr);
+
+  const { enriched, isAdmin, membersList, contributionsList } = await buildCommunityGroupDetail(
+    me,
+    cooperative as Record<string, unknown>,
+    (members ?? []) as GroupMemberRow[],
+    (contributions ?? []) as GroupContribRow[],
+  );
+
+  return {
+    cooperative: enriched,
+    is_admin: isAdmin,
+    members: membersList,
+    contributions: contributionsList,
+  };
 }
 
 export async function createCooperative(body: Record<string, any>) {
@@ -124,10 +231,40 @@ export async function listFunds() {
 }
 
 export async function getFund(id: string) {
-  const { data, error } = await getSupabase()
-    .from("community_funds").select("*, fund_contributions(*, profiles(full_name)), fund_members(count)").eq("id", id).single();
+  const me = await uid();
+  const sb = getSupabase();
+
+  const { data: fund, error } = await sb.from("community_funds").select("*").eq("id", id).single();
   throwSb(error);
-  return { fund: data, members_count: data?.fund_members?.[0]?.count ?? 0 };
+
+  const { data: members, error: membersErr } = await sb
+    .from("fund_members")
+    .select("*")
+    .eq("fund_id", id);
+  throwSb(membersErr);
+
+  const { data: contributions, error: contribErr } = await sb
+    .from("fund_contributions")
+    .select("*")
+    .eq("fund_id", id)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  throwSb(contribErr);
+
+  const { enriched, isAdmin, membersList, contributionsList } = await buildCommunityGroupDetail(
+    me,
+    fund as Record<string, unknown>,
+    (members ?? []).map((m: any) => ({ ...m, user_id: m.user_id, role: m.role ?? "member" })),
+    (contributions ?? []) as GroupContribRow[],
+  );
+
+  return {
+    fund: enriched,
+    members_count: membersList.length,
+    is_admin: isAdmin,
+    members: membersList,
+    contributions: contributionsList,
+  };
 }
 
 export async function createFund(body: Record<string, any>) {

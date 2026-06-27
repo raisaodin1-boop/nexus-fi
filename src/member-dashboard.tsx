@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from "react";
 import {
   RefreshControl,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -21,6 +22,8 @@ import { Card, SectionTitle, StatCard, SkeletonBox, SkeletonCard } from "@/src/u
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { EngagementStrip } from "@/src/engagement-strip";
 import { MemberDashboardHero } from "@/src/member-dashboard-hero";
+import { QuickSendBar } from "@/src/quick-send-bar";
+import { buildBadgeShareMessage, computeSocialBadges } from "@/src/social-badges";
 import { LineChart } from "@/src/charts";
 import { debounce } from "@/src/utils/debounce";
 import { useResponsive } from "@/src/hooks/use-responsive";
@@ -171,8 +174,29 @@ export function MemberDashboard() {
           />
         </View>
 
+        <QuickSendBar />
+
         {primaryDegraded ? (
           <DegradedDataBanner onRetry={retryPrimary} testID="member-retry-primary" />
+        ) : null}
+
+        {trust ? (
+          <TouchableOpacity
+            style={[styles.badgeShareRow, { marginHorizontal: horizontalPad }]}
+            onPress={async () => {
+              const badges = computeSocialBadges({
+                trustScore: trust.score,
+                totalSaved: summaryData.total_saved,
+                contributionsMade: trust.stats?.contributions_made ?? 0,
+              });
+              const msg = buildBadgeShareMessage(badges, user?.full_name ?? "Membre");
+              try { await Share.share({ message: msg }); } catch { /* noop */ }
+            }}
+            testID="home-share-badges"
+          >
+            <Trophy color={Colors.warning} size={16} />
+            <Text style={styles.badgeShareText}>Partager mes badges sur WhatsApp</Text>
+          </TouchableOpacity>
         ) : null}
 
         {/* Alerts row */}
@@ -342,6 +366,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   alertsBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800" },
+  badgeShareRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: Spacing.sm,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: "#FFFBEB",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  badgeShareText: { color: "#92400E", fontSize: 13, fontWeight: "700" },
   statsRow: { flexDirection: "row", gap: 10, marginTop: 12, minWidth: 0 },
   qaRow: { flexDirection: "row", gap: 10, marginBottom: 10, minWidth: 0 },
   qa: { flex: 1, minWidth: 0, backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.lg, borderWidth: 1, borderColor: Colors.border, flexDirection: "row", alignItems: "center", gap: 12 },

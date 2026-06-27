@@ -149,6 +149,17 @@ export const LANDING_I18N = {
     persona_diaspora: "Diaspora",
     persona_diaspora_desc: "Restez connecté à votre communauté et participez aux tontines depuis n'importe où.",
 
+    diaspora_badge: "DIASPORA",
+    diaspora_title: "Votre tontine, depuis Paris, Montréal ou Dubai",
+    diaspora_sub: "Cotisez en EUR ou XAF, suivez chaque cycle en temps réel et gardez le lien avec votre famille au pays — sans frais HODIX entre membres.",
+    diaspora_cta: "Rejoindre depuis l'étranger",
+    diaspora_video_label: "Voir la présentation (2 min)",
+    diaspora_points: [
+      "Paiement Mobile Money ou carte depuis l'étranger",
+      "Notifications à chaque cotisation du groupe",
+      "Trust Score reconnu par votre communauté au pays",
+    ],
+
     journey_heading: "Construisez votre réputation financière",
     journey_sub: "Chaque cotisation est une brique de votre avenir financier.",
     journey_step1_title: "Cotisez régulièrement",
@@ -242,6 +253,17 @@ export const LANDING_I18N = {
     persona_youth_desc: "Prepare for your future projects and build a solid financial track record now.",
     persona_diaspora: "Diaspora",
     persona_diaspora_desc: "Stay connected to your community and join tontines from anywhere.",
+
+    diaspora_badge: "DIASPORA",
+    diaspora_title: "Your tontine — from Paris, Montreal or Dubai",
+    diaspora_sub: "Contribute in EUR or XAF, follow every cycle in real time and stay close to family back home — zero HODIX fees between members.",
+    diaspora_cta: "Join from abroad",
+    diaspora_video_label: "Watch the 2-min intro",
+    diaspora_points: [
+      "Pay with Mobile Money or card from abroad",
+      "Alerts on every group contribution",
+      "Trust Score recognized by your community at home",
+    ],
 
     journey_heading: "Build your financial reputation",
     journey_sub: "Every contribution is a brick in your financial future.",

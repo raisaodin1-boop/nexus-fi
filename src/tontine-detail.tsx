@@ -31,6 +31,7 @@ import { openPaymentScreen } from "@/src/payment-nav";
 import { supabase } from "@/src/supabase";
 import { Button, Card, Field, SkeletonBox, SkeletonCard } from "@/src/ui";
 import { VerifiedName } from "@/src/verified-name";
+import { TontineGraduationModal, type GraduationInvite } from "@/src/tontine-graduation-modal";
 import { DocumentButton } from "@/src/document-button";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 
@@ -441,6 +442,8 @@ export function TontineDetailView({ id }: { id: string }) {
   const [disbursements, setDisbursements] = useState<Disbursement[]>([]);
   const [showDisbModal, setShowDisbModal] = useState(false);
   const [advanceBusy, setAdvanceBusy] = useState(false);
+  const [graduationInvite, setGraduationInvite] = useState<GraduationInvite | null>(null);
+  const [showGraduation, setShowGraduation] = useState(false);
   const [activeTab, setActiveTab] = useState<"cycle" | "rotation" | "history" | "members" | "contributions">("cycle");
 
   const load = useCallback(async () => {
@@ -476,7 +479,11 @@ export function TontineDetailView({ id }: { id: string }) {
   const advanceCycle = async () => {
     setAdvanceBusy(true);
     try {
-      await api.post(`/tontines/${id}/advance`);
+      const res = await api.post<{ graduation_invite?: GraduationInvite }>(`/tontines/${id}/advance`);
+      if (res?.graduation_invite) {
+        setGraduationInvite(res.graduation_invite);
+        setShowGraduation(true);
+      }
       await load();
     } catch (e) {
       Alert.alert("Erreur", e instanceof ApiError ? e.detail : "Impossible d'avancer le cycle");
@@ -804,6 +811,11 @@ export function TontineDetailView({ id }: { id: string }) {
         currency={tontine.currency}
         onClose={() => setShowDisbModal(false)}
         onSuccess={load}
+      />
+      <TontineGraduationModal
+        visible={showGraduation}
+        invite={graduationInvite}
+        onClose={() => setShowGraduation(false)}
       />
     </SafeAreaView>
   );

@@ -6,6 +6,7 @@ import React, { useEffect, useRef, useMemo } from "react";
 import {
   Animated,
   Easing,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -246,6 +247,36 @@ export default function LandingScreen() {
               <View style={ss.statDivider} />
               <StatPill value={copy.stats_collected} label={copy.stats_collected_label} />
             </View>
+          </FadeIn>
+
+          {/* ── Diaspora acquisition ──────────────────────────── */}
+          <FadeIn delay={40}>
+            <LinearGradient colors={["#0B1F3A", "#1E3A5F", "#0F766E"]} style={ss.diasporaSection}>
+              <View style={ss.diasporaInner}>
+                <View style={[ss.sectionBadge, { borderColor: "rgba(201,162,39,0.5)", backgroundColor: "rgba(201,162,39,0.12)" }]}>
+                  <Text style={[ss.sectionBadgeText, { color: GOLD }]}>{copy.diaspora_badge}</Text>
+                </View>
+                <Text style={[ss.sectionHeading, { color: LIGHT, textAlign: "left" }]}>{copy.diaspora_title}</Text>
+                <Text style={[ss.sectionSub, { color: "rgba(226,232,240,0.8)", textAlign: "left" }]}>{copy.diaspora_sub}</Text>
+                {(copy.diaspora_points ?? []).map((point: string, i: number) => (
+                  <View key={i} style={ss.diasporaPointRow}>
+                    <Text style={ss.diasporaBullet}>✓</Text>
+                    <Text style={ss.diasporaPointText}>{point}</Text>
+                  </View>
+                ))}
+                <View style={ss.diasporaCtas}>
+                  <TouchableOpacity style={ss.ctaPrimary} onPress={() => router.push("/register")}>
+                    <Text style={ss.ctaPrimaryText}>{copy.diaspora_cta}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={ss.diasporaVideoBtn}
+                    onPress={() => Linking.openURL("https://www.hodix.app/register").catch(() => router.push("/register"))}
+                  >
+                    <Text style={ss.diasporaVideoText}>▶ {copy.diaspora_video_label}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </LinearGradient>
           </FadeIn>
 
           {/* ── Security & fees ───────────────────────────────── */}
@@ -569,6 +600,15 @@ const ss = StyleSheet.create({
   finalCta: { backgroundColor: EMERALD, paddingHorizontal: 32, paddingVertical: 16, borderRadius: 14 },
   finalCtaText: { color: "#fff", fontWeight: "900", fontSize: 16 },
   finalLogin: { color: "rgba(226,232,240,0.55)", fontSize: 13, textDecorationLine: "underline" },
+
+  diasporaSection: { marginHorizontal: 20, marginBottom: 40, borderRadius: 24, overflow: "hidden" },
+  diasporaInner: { padding: 28, gap: 10 },
+  diasporaPointRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginTop: 4 },
+  diasporaBullet: { color: EMERALD, fontWeight: "900", fontSize: 14 },
+  diasporaPointText: { color: "rgba(248,250,252,0.9)", fontSize: 14, flex: 1, lineHeight: 20 },
+  diasporaCtas: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 16 },
+  diasporaVideoBtn: { borderWidth: 1, borderColor: "rgba(255,255,255,0.35)", borderRadius: 14, paddingHorizontal: 18, paddingVertical: 14, justifyContent: "center" },
+  diasporaVideoText: { color: LIGHT, fontWeight: "700", fontSize: 14 },
 
   footer: { textAlign: "center", color: "#94A3B8", fontSize: 12, paddingBottom: 16, lineHeight: 18 },
 });

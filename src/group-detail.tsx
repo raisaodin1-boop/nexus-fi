@@ -41,20 +41,35 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
       const d = await api.get<any>(endpoint);
+      if (!d?.[detailKey]) throw new Error("Groupe introuvable");
       setData(d);
-      if (d?.[detailKey]) {
-        // Default to current user as member
-      }
-    } catch {}
-    setLoading(false);
+    } catch (e) {
+      setData(null);
+      setError(e instanceof ApiError ? e.detail : "Impossible de charger ce groupe");
+    } finally {
+      setLoading(false);
+    }
   }, [endpoint, detailKey]);
 
   useEffectOnFocus(load);
 
-  if (loading || !data) {
+  if (loading) {
     return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator color={Colors.secondary} /></View></SafeAreaView>;
+  }
+
+  if (error || !data) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={[styles.center, { padding: Spacing.xl, gap: 12 }]}>
+          <Text style={{ color: Colors.text, fontWeight: "700", textAlign: "center" }}>{error ?? "Groupe introuvable"}</Text>
+          <Button label="Réessayer" onPress={load} />
+        </View>
+      </SafeAreaView>
+    );
   }
 
   const item = data[detailKey];
