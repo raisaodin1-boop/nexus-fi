@@ -2,7 +2,7 @@
  * HODIX — Landing page premium. Vision émotionnelle, storytelling fort.
  * Aucune logique métier modifiée. Uniquement visuel & UX.
  */
-import React, { useEffect, useRef, useMemo } from "react";
+import React, { useEffect, useRef, useMemo, useState } from "react";
 import {
   Animated,
   Easing,
@@ -29,6 +29,14 @@ import {
 import { CAROUSEL_SLIDES, LANDING_I18N, WELCOME_I18N } from "@/src/welcome-content";
 import { AuctionHighlight, SecurityFeesSection } from "@/src/landing-visuals";
 import { APP_MAX_WIDTH } from "@/src/hooks/use-responsive";
+import {
+  formatRatePct,
+  formatSavingsVolumeXaf,
+  formatStatCount,
+  getPublicPlatformStats,
+  type PublicPlatformStats,
+} from "@/src/db/platform-stats";
+import { TrustBenefitsPanel } from "@/src/trust-benefits-panel";
 
 const NAVY    = "#0B1F3A";
 const EMERALD = "#10B981";
@@ -136,6 +144,23 @@ export default function LandingScreen() {
   const welcome = WELCOME_I18N[lang];
   const trustCopy = TRUST_BLOCK_COPY[lang];
   const isWide = width >= 768;
+  const [stats, setStats] = useState<PublicPlatformStats | null>(null);
+
+  useEffect(() => {
+    getPublicPlatformStats().then(setStats).catch(() => setStats(null));
+  }, []);
+
+  const statsDisplay = useMemo(() => {
+    const s = stats;
+    return {
+      members: s ? formatStatCount(s.users_count) : "12k+",
+      groups: s ? formatStatCount(s.groups_count) : "2.4k+",
+      collected: s ? formatSavingsVolumeXaf(s.savings_volume_xaf) : "850M+ XAF",
+      participation: s ? formatRatePct(s.participation_rate_pct) : "87%",
+      repayment: s ? formatRatePct(s.repayment_rate_pct) : "96%",
+      countries: "12",
+    };
+  }, [stats]);
 
   const JOURNEY_STEPS = [
     { icon: "📈", title: copy.journey_step1_title, desc: copy.journey_step1_desc, accent: EMERALD },
@@ -206,6 +231,10 @@ export default function LandingScreen() {
                 </FadeIn>
 
                 <FadeIn delay={280}>
+                  <Text style={ss.heroVision}>{copy.hero_vision_line}</Text>
+                </FadeIn>
+
+                <FadeIn delay={320}>
                   <Text style={ss.heroTagline}>{copy.hero_tagline}</Text>
                 </FadeIn>
 
@@ -236,16 +265,45 @@ export default function LandingScreen() {
             </View>
           </LinearGradient>
 
-          {/* ── Stats strip ───────────────────────────────────── */}
+          {/* ── Stats strip (live when available) ─────────────── */}
           <FadeIn delay={0}>
             <View style={[ss.statsStrip, isWide && ss.statsStripWide]}>
-              <StatPill value={copy.stats_members}   label={copy.stats_members_label} />
+              <StatPill value={statsDisplay.members} label={copy.stats_members_label} />
               <View style={ss.statDivider} />
-              <StatPill value={copy.stats_groups}    label={copy.stats_groups_label} />
+              <StatPill value={statsDisplay.groups} label={copy.stats_groups_label} />
               <View style={ss.statDivider} />
-              <StatPill value={copy.stats_countries} label={copy.stats_countries_label} />
+              <StatPill value={statsDisplay.collected} label={copy.stats_collected_label} />
               <View style={ss.statDivider} />
-              <StatPill value={copy.stats_collected} label={copy.stats_collected_label} />
+              <StatPill value={statsDisplay.participation} label={copy.stats_participation_label} />
+              <View style={ss.statDivider} />
+              <StatPill value={statsDisplay.repayment} label={copy.stats_repayment_label} />
+              <View style={ss.statDivider} />
+              <StatPill value={statsDisplay.countries} label={copy.stats_countries_label} />
+            </View>
+          </FadeIn>
+
+          {/* ── Network effect ──────────────────────────────── */}
+          <FadeIn delay={20}>
+            <View style={ss.section}>
+              <View style={ss.sectionHeader}>
+                <View style={ss.sectionBadge}>
+                  <Text style={ss.sectionBadgeText}>RÉSEAU</Text>
+                </View>
+                <Text style={ss.sectionHeading}>{copy.network_heading}</Text>
+                <Text style={ss.sectionSub}>{copy.network_sub}</Text>
+              </View>
+              <View style={[ss.networkGrid, isWide && ss.networkGridWide]}>
+                {(copy.network_points ?? []).map((p, i) => (
+                  <View key={p.title} style={ss.networkCard}>
+                    <Text style={ss.networkEmoji}>{p.emoji}</Text>
+                    <Text style={ss.networkTitle}>{p.title}</Text>
+                    <Text style={ss.networkBody}>{p.body}</Text>
+                  </View>
+                ))}
+              </View>
+              <TouchableOpacity style={ss.networkCta} onPress={() => router.push("/register")}>
+                <Text style={ss.networkCtaText}>{copy.network_cta}</Text>
+              </TouchableOpacity>
             </View>
           </FadeIn>
 
@@ -407,6 +465,22 @@ export default function LandingScreen() {
             </View>
           </View>
 
+          {/* ── Trust Score benefits ──────────────────────────── */}
+          <View style={[ss.section, { paddingHorizontal: 0 }]}>
+            <FadeIn>
+              <View style={[ss.sectionHeader, { paddingHorizontal: 20 }]}>
+                <View style={ss.sectionBadge}>
+                  <Text style={ss.sectionBadgeText}>TRUST SCORE</Text>
+                </View>
+                <Text style={ss.sectionHeading}>{copy.trust_benefits_heading}</Text>
+                <Text style={ss.sectionSub}>{copy.trust_benefits_sub}</Text>
+              </View>
+              <View style={{ paddingHorizontal: 20 }}>
+                <TrustBenefitsPanel lang={lang} compact />
+              </View>
+            </FadeIn>
+          </View>
+
           {/* ── Features ──────────────────────────────────────── */}
           <View style={ss.section}>
             <FadeIn>
@@ -431,6 +505,33 @@ export default function LandingScreen() {
                 <FeatureCard icon="🔒" title={copy.section_security_title} body={copy.section_security_body} accent="#8B5CF6" />
               </FadeIn>
             </View>
+          </View>
+
+          {/* ── Vision / roadmap ──────────────────────────────── */}
+          <View style={ss.section}>
+            <FadeIn>
+              <View style={ss.sectionHeader}>
+                <View style={ss.sectionBadge}>
+                  <Text style={ss.sectionBadgeText}>VISION</Text>
+                </View>
+                <Text style={ss.sectionHeading}>{copy.vision_heading}</Text>
+                <Text style={ss.sectionSub}>{copy.vision_sub}</Text>
+              </View>
+              <View style={[ss.visionGrid, isWide && ss.visionGridWide]}>
+                {(copy.vision_pillars ?? []).map((p) => (
+                  <View key={p.title} style={ss.visionCard}>
+                    <View style={[ss.visionBadge, p.label === "Bientôt" || p.label === "Soon"
+                      ? { backgroundColor: "rgba(100,116,139,0.15)" }
+                      : { backgroundColor: "rgba(16,185,129,0.15)" }]}>
+                      <Text style={[ss.visionBadgeText, p.label === "Bientôt" || p.label === "Soon"
+                        ? { color: SLATE } : { color: EMERALD }]}>{p.label}</Text>
+                    </View>
+                    <Text style={ss.visionTitle}>{p.title}</Text>
+                    <Text style={ss.visionBody}>{p.body}</Text>
+                  </View>
+                ))}
+              </View>
+            </FadeIn>
           </View>
 
           {/* ── Countries ─────────────────────────────────────── */}
@@ -511,6 +612,7 @@ const ss = StyleSheet.create({
   heroTitle: { fontSize: 30, fontWeight: "900", color: "#F8FAFC", lineHeight: 38, letterSpacing: -0.8, marginBottom: 14 },
   heroTitleWide: { fontSize: 38, lineHeight: 46 },
   heroSub: { fontSize: 15, color: "rgba(226,232,240,0.88)", lineHeight: 24, marginBottom: 10 },
+  heroVision: { fontSize: 14, color: "rgba(226,232,240,0.92)", lineHeight: 21, marginBottom: 10, fontWeight: "600" },
   heroTagline: { fontSize: 13, color: GOLD, fontWeight: "700", fontStyle: "italic", marginBottom: 22, letterSpacing: 0.3 },
   heroCtas: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 22 },
   ctaPrimary: { backgroundColor: EMERALD, paddingHorizontal: 22, paddingVertical: 14, borderRadius: 12 },
@@ -609,6 +711,32 @@ const ss = StyleSheet.create({
   diasporaCtas: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 16 },
   diasporaVideoBtn: { borderWidth: 1, borderColor: "rgba(255,255,255,0.35)", borderRadius: 14, paddingHorizontal: 18, paddingVertical: 14, justifyContent: "center" },
   diasporaVideoText: { color: LIGHT, fontWeight: "700", fontSize: 14 },
+
+  networkGrid: { gap: 12 },
+  networkGridWide: { flexDirection: "row", flexWrap: "wrap" },
+  networkCard: {
+    flex: 1, minWidth: 220, backgroundColor: "#fff", borderRadius: 16, padding: 18,
+    borderWidth: 1, borderColor: "#E2E8F0",
+  },
+  networkEmoji: { fontSize: 24, marginBottom: 8 },
+  networkTitle: { fontSize: 15, fontWeight: "800", color: NAVY, marginBottom: 6 },
+  networkBody: { fontSize: 13, color: SLATE, lineHeight: 19 },
+  networkCta: {
+    alignSelf: "flex-start", marginTop: 16, backgroundColor: NAVY,
+    paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12,
+  },
+  networkCtaText: { color: "#fff", fontWeight: "800", fontSize: 14 },
+
+  visionGrid: { gap: 12 },
+  visionGridWide: { flexDirection: "row", flexWrap: "wrap" },
+  visionCard: {
+    flex: 1, minWidth: 240, backgroundColor: "#fff", borderRadius: 16, padding: 18,
+    borderWidth: 1, borderColor: "#E2E8F0",
+  },
+  visionBadge: { alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, marginBottom: 10 },
+  visionBadgeText: { fontSize: 10, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
+  visionTitle: { fontSize: 15, fontWeight: "800", color: NAVY, marginBottom: 6 },
+  visionBody: { fontSize: 13, color: SLATE, lineHeight: 19 },
 
   footer: { textAlign: "center", color: "#94A3B8", fontSize: 12, paddingBottom: 16, lineHeight: 18 },
 });

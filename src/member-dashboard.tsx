@@ -228,6 +228,20 @@ export function MemberDashboard() {
           trustScore={trust?.score ?? user?.trust_score ?? undefined}
         />
 
+        <TouchableOpacity
+          style={[styles.discoverBanner, { marginHorizontal: horizontalPad }]}
+          onPress={() => router.push("/tontines/directory" as any)}
+          activeOpacity={0.88}
+          testID="home-discover-network"
+        >
+          <Users color={Colors.secondary} size={20} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.discoverTitle}>Découvrir des communautés</Text>
+            <Text style={styles.discoverSub}>Groupes publics recommandés selon la fiabilité</Text>
+          </View>
+          <ChevronRight color={Colors.textMuted} size={18} />
+        </TouchableOpacity>
+
         {/* Stats */}
         <View style={[styles.statsRow, { paddingHorizontal: horizontalPad }]}>
           <StatCard label="Total épargné" value={formatXAF(summaryData.total_saved, summaryData.currency)} hint={summaryData.total_target > 0 ? `${summaryData.progress_pct}% de l'objectif` : "Aucun objectif"} accent={Colors.accent} testID="stat-total-saved" />
@@ -416,6 +430,20 @@ const styles = StyleSheet.create({
     borderColor: "#FDE68A",
   },
   badgeShareText: { color: "#92400E", fontSize: 13, fontWeight: "700" },
+  discoverBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: Spacing.sm,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: Colors.secondaryLight,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.secondary + "33",
+  },
+  discoverTitle: { fontSize: 14, fontWeight: "800", color: Colors.text },
+  discoverSub: { fontSize: 11, color: Colors.textMuted, marginTop: 2 },
   planBanner: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: 14, borderWidth: 1.5 },
   planIconDot: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   planBannerTitle: { fontSize: 13, fontWeight: "800" },

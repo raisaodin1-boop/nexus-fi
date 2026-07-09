@@ -59,6 +59,9 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
   const query = q(path);
 
   try {
+    // ── Public platform stats (no auth)
+    if (method === "GET" && s[0] === "platform" && s[1] === "stats")                  return (await db.getPublicPlatformStats()) as T;
+
     // ── Users
     if (method === "GET"   && s[0] === "users" && s[1] === "me" && !s[2])              return (await db.getMe()) as T;
     if (method === "PATCH" && s[0] === "users" && s[1] === "me")                        return (await db.updateMe(body)) as T;

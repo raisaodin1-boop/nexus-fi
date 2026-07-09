@@ -216,7 +216,7 @@ export default function Root({ children }: PropsWithChildren) {
         <script src="/hodix-env.js" />
 
         {/* ── Titre & Description ─────────────────────────────────────── */}
-        <title>HODIX – Tontines Digitales & Épargne Africaine | Wallet Mobile</title>
+        <title>HODIX — Réseau d'épargne communautaire & Trust Score | Infrastructure fintech</title>
         <meta
           name="description"
           content="HODIX digitalise les tontines africaines (njangi, likelemba, djangui). Gérez vos groupes d'épargne, transférez via Mobile Money MTN/Orange, et obtenez votre Trust Score financier. Disponible au Cameroun, Côte d'Ivoire, Sénégal, Gabon et diaspora."
@@ -255,7 +255,7 @@ export default function Root({ children }: PropsWithChildren) {
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="HODIX" />
         <meta property="og:url" content="https://www.hodix.app/" />
-        <meta property="og:title" content="HODIX – Tontines Digitales & Épargne Africaine" />
+        <meta property="og:title" content="HODIX — Réseau d'épargne communautaire & Trust Score" />
         <meta
           property="og:description"
           content="La première super-app fintech africaine. Gérez vos tontines (njangi, likelemba), épargnez en groupe, transférez via Mobile Money MTN/Orange, et obtenez votre Trust Score. Cameroun, Côte d'Ivoire, Sénégal, diaspora."
@@ -271,7 +271,7 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:site" content="@hodix_app" />
         <meta name="twitter:creator" content="@hodix_app" />
-        <meta name="twitter:title" content="HODIX – Tontines Digitales & Épargne Africaine" />
+        <meta name="twitter:title" content="HODIX — Réseau d'épargne communautaire & Trust Score" />
         <meta
           name="twitter:description"
           content="Digitalisez vos tontines, gérez votre épargne collective et transférez via Mobile Money. Trust Score financier inclus. 🌍"
@@ -373,7 +373,7 @@ export default function Root({ children }: PropsWithChildren) {
       <body style={{ margin: 0, height: "100%", overflow: "hidden", display: "flex", flexDirection: "column" }}>
         <noscript>
           <div style={{ padding: 24, maxWidth: 720, margin: "0 auto", fontFamily: "system-ui, sans-serif" }}>
-            <h1>HODIX — Tontines Digitales &amp; Épargne Africaine</h1>
+            <h1>HODIX — Réseau d'épargne communautaire &amp; Trust Score</h1>
             <p>
               HODIX digitalise les tontines africaines (njangi, likelemba, djangui). Gérez vos groupes
               d&apos;épargne, transférez via Mobile Money et construisez votre Trust Score financier.

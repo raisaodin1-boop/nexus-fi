@@ -243,12 +243,12 @@ export function TrustScoreHeroBlock({ lang }: { lang: "fr" | "en" }) {
 // Export copy helper for trust block text (used in parent)
 export const TRUST_BLOCK_COPY = {
   fr: {
-    title: "Votre Trust Score : votre nouvelle réputation financière",
-    sub: "Plus vous cotisez régulièrement, plus votre score augmente et plus vous inspirez confiance.",
+    title: "Votre Trust Score : un actif financier communautaire",
+    sub: "Intégrez des groupes, accédez au crédit, réduisez les cautions — votre réputation travaille pour vous.",
   },
   en: {
-    title: "Your Trust Score: your new financial reputation",
-    sub: "The more regularly you contribute, the higher your score — and the more trust you inspire.",
+    title: "Your Trust Score: a community financial asset",
+    sub: "Join groups, access credit, lower collateral — your reputation works for you.",
   },
 };
 

@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "HODIX - Tontines et Epargne Africaine",
+  "name": "HODIX — Réseau d'épargne & Trust Score",
   "short_name": "HODIX",
-  "description": "Tontines digitales, epargne collective, wallet Mobile Money et Trust Score financier pour l'Afrique.",
+  "description": "Réseau mondial d'épargne communautaire et de réputation financière (Trust Score) pour l'Afrique et la diaspora.",
   "start_url": "https://www.hodix.app/?source=pwa",
   "scope": "https://www.hodix.app/",
   "display": "standalone",

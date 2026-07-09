@@ -16,7 +16,7 @@ import {
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { LogOut, Save, Shield, ShieldCheck, Bell, ChevronRight, Edit3, Mail, MapPin, Phone, Briefcase, Sparkles, CreditCard, Moon, Fingerprint, Globe } from "lucide-react-native";
+import { LogOut, Save, Shield, ShieldCheck, Bell, ChevronRight, Edit3, Mail, MapPin, Phone, Briefcase, Sparkles, CreditCard, Moon, Fingerprint, Globe, Gift } from "lucide-react-native";
 
 import { useAuth } from "@/src/auth-context";
 import { useI18n } from "@/src/i18n";
@@ -483,6 +483,7 @@ export default function ProfileScreen() {
             <Card>
               <SettingRow icon={<Globe color={Colors.secondary} size={18} />} label={t("profile.language") + " · " + (language === "fr" ? "Français" : "English")} onPress={() => Alert.alert("Langue / Language", "", [{ text: "Français", onPress: () => setLanguage("fr") }, { text: "English", onPress: () => setLanguage("en") }, { text: t("common.cancel"), style: "cancel" }])} testID="profile-language" borderColor={borderColor} txtColor={txt} />
               <SettingRow icon={<Bell color={Colors.secondary} size={18} />} label="Centre de notifications" onPress={() => router.push("/notifications")} testID="profile-go-notifs" borderColor={borderColor} txtColor={txt} />
+              <SettingRow icon={<Gift color={Colors.accent} size={18} />} label="Parrainage & réseau" onPress={() => router.push("/referral" as any)} testID="profile-go-referral" borderColor={borderColor} txtColor={txt} />
               {Platform.OS !== "web" ? (
                 <View style={[styles.toggleRow, { borderTopWidth: 1, borderTopColor: borderColor }]}>
                   <Bell color={pushEnabled ? Colors.secondary : Colors.textMuted} size={18} />

@@ -16,6 +16,7 @@ import { api, formatXAF } from "@/src/api";
 import { Card, EmptyState, Button, SkeletonList } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { supabase } from "@/src/supabase";
+import { CommunityDiscoverPreview } from "@/src/community-discover-preview";
 
 type Tab = "tontines" | "associations" | "cooperatives" | "funds";
 
@@ -81,7 +82,7 @@ export default function Groups() {
       <View style={styles.header}>
         <View>
           <Text style={styles.h1}>Communauté</Text>
-          <Text style={styles.subtitle}>Tontines, associations & fonds</Text>
+          <Text style={styles.subtitle}>Rejoignez, découvrez et bâtissez votre réputation</Text>
         </View>
         <TouchableOpacity
           testID={`groups-create-${tab}`}
@@ -119,6 +120,8 @@ export default function Groups() {
       </ScrollView>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+        {tab === "tontines" ? <CommunityDiscoverPreview /> : null}
+
         {/* Public directory banner — tontines tab only */}
         {tab === "tontines" ? (
           <View style={{ paddingHorizontal: Spacing.xl, marginBottom: 8 }}>

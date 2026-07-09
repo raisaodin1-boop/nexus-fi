@@ -24,6 +24,7 @@ import { TrustGauge } from "@/src/trust-gauge";
 import { useAuth } from "@/src/auth-context";
 import { sharePdfCertificate } from "@/src/share";
 import { downloadOrSharePdf } from "@/src/pdf-download";
+import { TrustBenefitsPanel } from "@/src/trust-benefits-panel";
 import { Tooltip } from "@/src/tooltip";
 
 interface TS {
@@ -206,6 +207,13 @@ export default function Identity() {
             </View>
             <Text style={styles.certIssued}>Membre depuis {new Date(identity.user.created_at).toLocaleDateString("fr-FR", { month: "short", year: "numeric" })}</Text>
           </LinearGradient>
+        </View>
+
+        <View style={{ paddingHorizontal: Spacing.xl, marginTop: 8 }}>
+          <TrustBenefitsPanel
+            compact
+            onCredit={() => router.push("/credit-score" as any)}
+          />
         </View>
 
         {/* === IDENTITY ENGINE: Bronze / Silver / Gold / Platinum === */}

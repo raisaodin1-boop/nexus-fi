@@ -55,7 +55,7 @@ export const WELCOME_I18N = {
     hero_sub:
       "Épargnez, cotisez, empruntez et bâtissez votre réputation financière partout en Afrique.",
     vision_tag:
-      "Ce n'est pas seulement une application — c'est une infrastructure financière communautaire.",
+      "HODIX construit le premier réseau mondial d'épargne communautaire et de réputation financière pour les marchés émergents.",
     trust_title: "Votre Trust Score : votre nouvelle réputation financière",
     trust_sub:
       "Plus vous cotisez régulièrement, plus votre score augmente et plus vous inspirez confiance.",
@@ -74,7 +74,7 @@ export const WELCOME_I18N = {
     hero_sub:
       "Save, contribute, borrow, and build your financial reputation across Africa.",
     vision_tag:
-      "Not just an app — a community financial infrastructure.",
+      "HODIX is building the world's first community savings and financial reputation network for emerging markets.",
     trust_title: "Your Trust Score: your new financial reputation",
     trust_sub:
       "The more regularly you contribute, the higher your score — and the more trust you inspire.",
@@ -93,8 +93,8 @@ export const WELCOME_I18N = {
 export const DASHBOARD_HERO_I18N = {
   fr: {
     greeting: (name: string) => (name ? `Bonjour, ${name}` : "Bonjour"),
-    headline: "Votre identité financière vérifiable",
-    subline: "Épargne, tontine et crédit — un seul score de confiance.",
+    headline: "Infrastructure financière communautaire",
+    subline: "Épargne, réputation et réseau — une identité financière portable.",
     trust_cta: "Voir mon identité",
     wallet_cta: "Mon portefeuille",
     saved_label: "Épargné",
@@ -103,8 +103,8 @@ export const DASHBOARD_HERO_I18N = {
   },
   en: {
     greeting: (name: string) => (name ? `Hello, ${name}` : "Hello"),
-    headline: "Your verifiable financial identity",
-    subline: "Savings, tontine and credit — one trust score.",
+    headline: "Community financial infrastructure",
+    subline: "Savings, reputation and network — one portable financial identity.",
     trust_cta: "View my identity",
     wallet_cta: "My wallet",
     saved_label: "Saved",
@@ -117,22 +117,46 @@ export const DASHBOARD_HERO_I18N = {
 export const LANDING_I18N = {
   fr: {
     nav_cta: "Commencer",
-    hero_badge: "Njangi · Ajo · Chama · Stokvel · Djanguy",
-    hero_title: "Transformez votre communauté d'épargne en véritable identité financière.",
-    hero_sub: "Épargnez ensemble, développez votre Trust Score, bâtissez votre réputation financière et ouvrez la porte à de nouvelles opportunités partout en Afrique.",
+    hero_badge: "Infrastructure · Trust Score · Réseau communautaire",
+    hero_title: "Le premier réseau mondial d'épargne communautaire et de réputation financière.",
+    hero_sub: "HODIX transforme l'historique d'épargne informel en identité financière vérifiable — pour les marchés émergents et la diaspora.",
     hero_cta: "Commencer maintenant",
     hero_secondary: "Découvrir HODIX",
-    hero_social: "+12 000 membres · 12 pays · 2 400 groupes",
-    hero_tagline: "Votre confiance. Votre réputation. Votre avenir financier.",
+    hero_social: "Membres actifs · groupes vérifiés · épargne collective",
+    hero_tagline: "Vous ne vendez plus une application. Vous construisez une infrastructure financière.",
+    hero_vision_line:
+      "HODIX construit le premier réseau mondial d'épargne communautaire et de réputation financière pour les marchés émergents.",
 
-    stats_members: "12 000+",
-    stats_members_label: "Membres actifs",
-    stats_groups: "2 400+",
-    stats_groups_label: "Groupes d'épargne",
-    stats_countries: "12",
-    stats_countries_label: "Pays en Afrique",
-    stats_collected: "850M+ XAF",
-    stats_collected_label: "Collectés ensemble",
+    stats_members_label: "Utilisateurs",
+    stats_groups_label: "Groupes créés",
+    stats_countries_label: "Pays",
+    stats_collected_label: "FCFA épargnés",
+    stats_participation_label: "Participation (90j)",
+    stats_repayment_label: "Taux de confirmation",
+
+    network_heading: "Rejoignez le réseau, pas seulement une app",
+    network_sub: "Découvrez des communautés, comparez la réputation des groupes et intégrez-vous plus facilement grâce à votre Trust Score.",
+    network_points: [
+      { emoji: "🌍", title: "Rejoindre une communauté", body: "Annuaire public de tontines, associations et coopératives vérifiées." },
+      { emoji: "🔍", title: "Découvrir des groupes", body: "Filtres par pays, montant et fiabilité du groupe." },
+      { emoji: "⭐", title: "Réputation visible", body: "Trust Score, taux de participation et historique de cotisations." },
+      { emoji: "✨", title: "Recommandations", body: "Groupes suggérés selon votre profil et votre score." },
+    ],
+    network_cta: "Explorer les communautés",
+
+    trust_benefits_heading: "Votre Trust Score devient un actif",
+    trust_benefits_sub: "Plus qu'un chiffre — une réputation portable qui ouvre des portes concrètes.",
+
+    vision_heading: "Une trajectoire fintech cohérente",
+    vision_sub: "HODIX ne se limite pas aux tontines : nous construisons l'infrastructure de réputation financière communautaire pour l'Afrique.",
+    vision_pillars: [
+      { label: "Disponible", title: "Tontines & groupes", body: "Njangi, Ajo, Chama, associations, coopératives." },
+      { label: "Disponible", title: "Trust Score & crédit", body: "Score communautaire, microcrédit instantané, certificats PDF." },
+      { label: "Disponible", title: "Épargne & wallet", body: "Coffres objectifs, auto-épargne, multi-devises, diaspora." },
+      { label: "Disponible", title: "Coach IA", body: "Conseils personnalisés sur épargne, risques et groupes." },
+      { label: "Bientôt", title: "Marketplace & API", body: "Commerce entre membres et Trust Score pour partenaires fintech." },
+      { label: "Bientôt", title: "Assurance & investissement", body: "Micro-assurance et produits d'épargne-investissement réglementés." },
+    ],
 
     personas_heading: "HODIX est fait pour vous",
     personas_sub: "Des familles aux entrepreneurs — chaque communauté mérite une infrastructure financière moderne.",
@@ -175,11 +199,11 @@ export const LANDING_I18N = {
     showcase_sub: "Simple, sécurisée et pensée pour votre communauté.",
 
     section_trust_title: "Trust Score",
-    section_trust_body: "Chaque cotisation renforce votre réputation. Un score portable, vérifiable, reconnu par la communauté.",
+    section_trust_body: "Régularité, ancienneté, participation et réputation — un credit score communautaire portable sur 1000 points.",
     section_wallet_title: "Portefeuille multi-devises",
     section_wallet_body: "XAF, XOF, NGN, GHS, EUR, USD — cotisez et retirez en toute sécurité.",
-    section_community_title: "Tontines digitales",
-    section_community_body: "Njangi, Ajo, Chama, Stokvel — une seule plateforme pour vos cercles d'épargne.",
+    section_community_title: "Réseau communautaire",
+    section_community_body: "Rejoignez, découvrez et recommandez des groupes — l'effet réseau au cœur de l'épargne africaine.",
     section_security_title: "Sécurité & conformité",
     section_security_body: "Chiffrement de bout en bout, KYC intégré et transactions protégées pour chaque membre.",
     security_section_title: "Vos fonds, protégés",
@@ -222,22 +246,46 @@ export const LANDING_I18N = {
   },
   en: {
     nav_cta: "Get started",
-    hero_badge: "Njangi · Ajo · Chama · Stokvel · Djanguy",
-    hero_title: "Transform your savings community into a real financial identity.",
-    hero_sub: "Save together, grow your Trust Score, build your financial reputation and unlock new opportunities across Africa.",
+    hero_badge: "Infrastructure · Trust Score · Community network",
+    hero_title: "The world's first community savings and financial reputation network.",
+    hero_sub: "HODIX turns informal savings history into verifiable financial identity — for emerging markets and the diaspora.",
     hero_cta: "Start now",
     hero_secondary: "Discover HODIX",
-    hero_social: "+12,000 members · 12 countries · 2,400 groups",
-    hero_tagline: "Your trust. Your reputation. Your financial future.",
+    hero_social: "Active members · verified groups · collective savings",
+    hero_tagline: "Not just an app — community financial infrastructure.",
+    hero_vision_line:
+      "HODIX is building the world's first community savings and financial reputation network for emerging markets.",
 
-    stats_members: "12,000+",
-    stats_members_label: "Active members",
-    stats_groups: "2,400+",
-    stats_groups_label: "Savings groups",
-    stats_countries: "12",
-    stats_countries_label: "African countries",
-    stats_collected: "850M+ XAF",
-    stats_collected_label: "Collected together",
+    stats_members_label: "Users",
+    stats_groups_label: "Groups created",
+    stats_countries_label: "Countries",
+    stats_collected_label: "XAF saved",
+    stats_participation_label: "Participation (90d)",
+    stats_repayment_label: "Confirmation rate",
+
+    network_heading: "Join the network, not just an app",
+    network_sub: "Discover communities, compare group reputation and join faster with your Trust Score.",
+    network_points: [
+      { emoji: "🌍", title: "Join a community", body: "Public directory of verified tontines, associations and cooperatives." },
+      { emoji: "🔍", title: "Discover groups", body: "Filter by country, amount and group reliability." },
+      { emoji: "⭐", title: "Visible reputation", body: "Trust Score, participation rate and contribution history." },
+      { emoji: "✨", title: "Recommendations", body: "Suggested groups based on your profile and score." },
+    ],
+    network_cta: "Explore communities",
+
+    trust_benefits_heading: "Your Trust Score becomes an asset",
+    trust_benefits_sub: "More than a number — portable reputation that unlocks real benefits.",
+
+    vision_heading: "A coherent fintech trajectory",
+    vision_sub: "HODIX goes beyond tontines: we build community financial reputation infrastructure for Africa.",
+    vision_pillars: [
+      { label: "Live", title: "Tontines & groups", body: "Njangi, Ajo, Chama, associations, cooperatives." },
+      { label: "Live", title: "Trust Score & credit", body: "Community score, instant microcredit, PDF certificates." },
+      { label: "Live", title: "Savings & wallet", body: "Goal vaults, auto-savings, multi-currency, diaspora." },
+      { label: "Live", title: "AI coach", body: "Personal tips on savings, risk and group fit." },
+      { label: "Soon", title: "Marketplace & API", body: "Member commerce and Trust Score for fintech partners." },
+      { label: "Soon", title: "Insurance & investing", body: "Micro-insurance and regulated savings-investment products." },
+    ],
 
     personas_heading: "HODIX is made for you",
     personas_sub: "From families to entrepreneurs — every community deserves modern financial infrastructure.",
@@ -280,11 +328,11 @@ export const LANDING_I18N = {
     showcase_sub: "Simple, secure and designed for your community.",
 
     section_trust_title: "Trust Score",
-    section_trust_body: "Every contribution builds your reputation. A portable, verifiable score recognized by your community.",
+    section_trust_body: "Regularity, seniority, participation and reputation — a portable 1000-point community credit score.",
     section_wallet_title: "Multi-currency wallet",
     section_wallet_body: "XAF, XOF, NGN, GHS, EUR, USD — contribute and withdraw securely.",
-    section_community_title: "Digital tontines",
-    section_community_body: "Njangi, Ajo, Chama, Stokvel — one platform for your savings circles.",
+    section_community_title: "Community network",
+    section_community_body: "Join, discover and get recommended groups — network effects at the heart of African savings.",
     section_security_title: "Security & compliance",
     section_security_body: "End-to-end encryption, built-in KYC and protected transactions for every member.",
     security_section_title: "Your funds, protected",
@@ -324,5 +372,49 @@ export const LANDING_I18N = {
     final_cta: "Create my free account",
 
     footer: "© 2026 HODIX — Community finance, verifiable identity. · Privacy Policy · Terms",
+  },
+};
+
+/** Trust Score benefits — landing + identity tab */
+export const TRUST_BENEFITS_I18N = {
+  fr: {
+    eyebrow: "TRUST SCORE",
+    title: "Comment ça marche — et pourquoi c'est utile",
+    sub: "Votre score mesure ponctualité, régularité, ancienneté et participation communautaire. Il devient un actif financier.",
+    benefits: [
+      { emoji: "🤝", title: "Intégrer une tontine plus facilement", body: "Les groupes publics exigent un score minimum — le vôtre ouvre les portes." },
+      { emoji: "💳", title: "Obtenir des prêts", body: "Microcrédit instantané lié à votre Trust Score et historique HODIX." },
+      { emoji: "🛡️", title: "Réduire les cautions", body: "Moins de garanties quand votre réputation est élevée et vérifiable." },
+      { emoji: "🏦", title: "Accéder à des partenaires", body: "Certificats PDF et score exportable pour banques et fintechs." },
+    ],
+    how_title: "Calcul du score (sur 1000 pts)",
+    how_steps: [
+      "Cotisations et dépôts à temps renforcent la régularité",
+      "Ancienneté et fréquence d'activité comptent dans la durée",
+      "Participation aux groupes et interactions communautaires",
+      "KYC et certificats officiels augmentent la crédibilité",
+    ],
+    cta_identity: "Voir mon Trust Score",
+    cta_credit: "Microcrédit instantané",
+  },
+  en: {
+    eyebrow: "TRUST SCORE",
+    title: "How it works — and why it matters",
+    sub: "Your score tracks punctuality, regularity, seniority and community participation. It becomes a financial asset.",
+    benefits: [
+      { emoji: "🤝", title: "Join tontines more easily", body: "Public groups require a minimum score — yours unlocks access." },
+      { emoji: "💳", title: "Access loans", body: "Instant microcredit tied to your Trust Score and HODIX history." },
+      { emoji: "🛡️", title: "Lower collateral", body: "Fewer guarantees when your reputation is high and verifiable." },
+      { emoji: "🏦", title: "Partner access", body: "PDF certificates and exportable score for banks and fintechs." },
+    ],
+    how_title: "Score calculation (out of 1000)",
+    how_steps: [
+      "On-time contributions and deposits boost regularity",
+      "Account age and activity frequency matter over time",
+      "Group participation and community interactions",
+      "KYC and official certificates increase credibility",
+    ],
+    cta_identity: "View my Trust Score",
+    cta_credit: "Instant microcredit",
   },
 };
