@@ -12,6 +12,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { CheckCircle2, XCircle, CreditCard, Smartphone, ArrowRight, Lock } from "lucide-react-native";
 
 import { api, ApiError, formatXAF } from "@/src/api";
+import { paynoteMtnEnabled } from "@/src/db/paynote-mtn";
 import { paymentReturnRoute, type PaymentKind } from "@/src/payment-nav";
 import { Button, Card, Field } from "@/src/ui";
 import { Colors, Radius, Spacing, Shadow } from "@/src/theme";
@@ -25,7 +26,11 @@ interface CinetpayInit {
   payment_url?: string | null;
   sandbox_mode?: boolean;
   amount_xaf?: number;
+  gateway?: "cinetpay" | "paynote";
+  message?: string;
 }
+
+const MTN_PAYNOTE = paynoteMtnEnabled();
 
 const METHODS = [
   {
@@ -39,7 +44,7 @@ const METHODS = [
   {
     key: "mtn" as Method,
     label: "MTN Mobile Money",
-    sub: "Paiement mobile instantané",
+    sub: MTN_PAYNOTE ? "MTN MoMo via Paynote (direct)" : "Paiement mobile instantané",
     color: "#FFCC00",
     dark: "#CC9900",
     icon: "🟡",
@@ -90,21 +95,27 @@ export default function PayContribution() {
     tontine_id?: string; goal_id?: string; association_id?: string;
     cooperative_id?: string; fund_id?: string; amount: string; label?: string; kind?: PaymentKind;
     cert_kind?: "identity" | "trust-score" | "savings";
+    provider?: string; phone?: string;
   }>();
-  const { tontine_id, goal_id, association_id, cooperative_id, fund_id, amount, label, cert_kind } = params;
+  const { tontine_id, goal_id, association_id, cooperative_id, fund_id, amount, label, cert_kind, provider: paramProvider, phone: paramPhone } = params;
   const paymentKind = inferKind(params);
   const amt = parseFloat(amount || "0");
   const returnRoute = paymentReturnRoute({
     amount: amt, kind: paymentKind, cert_kind, tontine_id, goal_id, association_id, cooperative_id, fund_id, label,
   });
 
-  const [method, setMethod] = useState<Method | null>(null);
-  const [stage, setStage] = useState<Stage>("select");
-  const [phone, setPhone] = useState("");
+  const [method, setMethod] = useState<Method | null>(
+    paramProvider === "mtn" ? "mtn" : null,
+  );
+  const [stage, setStage] = useState<Stage>(
+    paramProvider === "mtn" && paramPhone ? "form" : "select",
+  );
+  const [phone, setPhone] = useState(paramPhone ?? "");
   const [otp, setOtp] = useState("");
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [sandboxMode, setSandboxMode] = useState(false);
+  const [gateway, setGateway] = useState<"cinetpay" | "paynote" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [webviewOpen, setWebviewOpen] = useState(false);
@@ -133,9 +144,9 @@ export default function PayContribution() {
     return () => clearTimeout(t);
   }, [countdown, stage, method]);
 
-  // Auto-poll payment status (webhook confirms in background)
+  // Auto-poll CinetPay status (webhook confirms in background)
   useEffect(() => {
-    if (stage !== "processing" || !paymentId || sandboxMode) return;
+    if (stage !== "processing" || !paymentId || sandboxMode || gateway === "paynote") return;
 
     let cancelled = false;
     const poll = async () => {
@@ -152,7 +163,7 @@ export default function PayContribution() {
     poll();
     const interval = setInterval(poll, 4000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [stage, paymentId, sandboxMode]);
+  }, [stage, paymentId, sandboxMode, gateway]);
 
   // Navigate when webhook/poll confirms payment
   useEffect(() => {
@@ -169,6 +180,34 @@ export default function PayContribution() {
       } as any);
     }
   }, [stage, finalStatus, paymentId, paymentKind, cert_kind, router]);
+
+  // Auto-poll Paynote MTN after USSD push
+  useEffect(() => {
+    if (stage !== "processing" || method !== "mtn" || gateway !== "paynote" || !paymentId) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        await api.post("/payments/paynote/confirm", { payment_id: paymentId });
+        if (cancelled) return;
+        if (paymentKind === "certified_report") {
+          router.replace({
+            pathname: "/certificate-delivery",
+            params: { cert_kind: cert_kind ?? "identity", paymentId },
+          } as any);
+        } else {
+          router.replace({
+            pathname: "/receipt",
+            params: { paymentId, type: paymentKind },
+          } as any);
+        }
+      } catch {
+        /* still pending on phone */
+      }
+    };
+    const interval = setInterval(poll, 4000);
+    poll();
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [stage, method, gateway, paymentId, paymentKind, cert_kind, router]);
 
   const selectedMethod = METHODS.find((m) => m.key === method);
 
@@ -195,6 +234,7 @@ export default function PayContribution() {
       const r = await api.post<CinetpayInit>("/payments/cinetpay/initiate", buildInitPayload());
       setPaymentId(r.payment_id);
       setSandboxMode(!!r.sandbox_mode);
+      setGateway(r.gateway ?? "cinetpay");
       if (r.payment_url) {
         setCheckoutUrl(r.payment_url);
         setStage("processing");
@@ -211,6 +251,26 @@ export default function PayContribution() {
 
   const confirmPayment = async () => {
     if (!paymentId) { setError("Paiement introuvable"); return; }
+    if (gateway === "paynote") {
+      setError(null); setBusy(true);
+      try {
+        await api.post("/payments/paynote/confirm", { payment_id: paymentId });
+        if (paymentKind === "certified_report") {
+          router.replace({
+            pathname: "/certificate-delivery",
+            params: { cert_kind: cert_kind ?? "identity", paymentId },
+          } as any);
+        } else {
+          router.replace({
+            pathname: "/receipt",
+            params: { paymentId, type: paymentKind },
+          } as any);
+        }
+      } catch (e) {
+        setError(e instanceof ApiError ? e.detail : "Paiement MTN MoMo non confirmé — aucun crédit appliqué.");
+      } finally { setBusy(false); }
+      return;
+    }
     if (!otp || otp.length < 4) { setError("Référence de transaction invalide"); return; }
     setError(null); setBusy(true);
     try {
@@ -427,13 +487,17 @@ export default function PayContribution() {
             </Card>
           ) : (
             <Card style={{ marginTop: 20, gap: 12 }}>
-              <Text style={styles.formTitle}>Paiement {selectedMethod?.label}</Text>
+              <Text style={styles.formTitle}>Paiement {selectedMethod?.label}{method === "mtn" && MTN_PAYNOTE ? " (Paynote)" : ""}</Text>
               <View style={[styles.infoBoxOrange, { borderColor: (selectedMethod?.color ?? "#ccc") + "55", backgroundColor: (selectedMethod?.color ?? "#ccc") + "11" }]}>
                 <Text style={[styles.infoBoxTitle, { color: selectedMethod?.dark }]}>Comment ça marche ?</Text>
                 <Text style={styles.infoBoxStep}>1. Entrez votre numéro Mobile Money ci-dessous</Text>
                 <Text style={styles.infoBoxStep}>2. Vous recevrez une demande de paiement sur votre téléphone</Text>
                 <Text style={styles.infoBoxStep}>3. Validez avec votre code PIN sur votre téléphone</Text>
-                <Text style={styles.infoBoxStep}>4. Entrez le code de confirmation reçu par SMS</Text>
+                {method === "mtn" && MTN_PAYNOTE ? (
+                  <Text style={styles.infoBoxStep}>4. HODIX confirme automatiquement via Paynote</Text>
+                ) : (
+                  <Text style={styles.infoBoxStep}>4. Entrez le code de confirmation reçu par SMS</Text>
+                )}
               </View>
 
               <Field
@@ -475,17 +539,36 @@ export default function PayContribution() {
 
           <Text style={styles.processingTitle}>Paiement en attente</Text>
           <Text style={styles.processingDesc}>
-            {sandboxMode
-              ? "Mode test CinetPay : entrez la référence de transaction reçue après paiement."
-              : `Validez le paiement ${selectedMethod?.label} sur votre téléphone (${phone}). La confirmation est automatique — vous pouvez aussi entrer la référence manuellement.`}
+            {gateway === "paynote"
+              ? `Une demande de paiement a été envoyée sur votre téléphone MTN (${phone}). Validez avec votre code PIN — nous vérifions automatiquement.`
+              : sandboxMode
+                ? "Mode test CinetPay : entrez la référence de transaction reçue après paiement."
+                : `Validez le paiement ${selectedMethod?.label} sur votre téléphone (${phone}). La confirmation est automatique — vous pouvez aussi entrer la référence manuellement.`}
             {"\n"}Aucun crédit ne sera appliqué sans confirmation.
           </Text>
 
-          <View style={styles.countdownWrap}>
-            <Text style={[styles.countdown, countdown <= 30 ? { color: Colors.danger } : {}]}>{countdown}s</Text>
-            <Text style={styles.countdownLabel}>temps restant</Text>
-          </View>
-
+          {gateway === "paynote" ? (
+            <Card style={{ gap: 12, marginTop: 8, alignItems: "center" }}>
+              <ActivityIndicator color={selectedMethod?.color ?? Colors.secondary} size="large" />
+              <Text style={{ color: Colors.textMuted, textAlign: "center", fontWeight: "600" }}>
+                En attente de validation sur votre téléphone MTN MoMo
+              </Text>
+              {error ? <Text style={styles.error}>{error}</Text> : null}
+              <Button
+                testID="pay-mm-confirm"
+                label="J'ai validé sur mon téléphone"
+                loading={busy}
+                onPress={confirmPayment}
+                icon={<CheckCircle2 color="#fff" size={16} />}
+              />
+              <Button
+                label="Annuler"
+                variant="ghost"
+                onPress={() => { setStage("select"); setMethod(null); setGateway(null); }}
+                testID="pay-mm-cancel"
+              />
+            </Card>
+          ) : (
           <Card style={{ gap: 12, marginTop: 8 }}>
             <Field
               label="Référence transaction CinetPay"
@@ -510,6 +593,7 @@ export default function PayContribution() {
               testID="pay-mm-cancel"
             />
           </Card>
+          )}
           <Text style={styles.disclaimer}>Le code expire dans {countdown} secondes. Pas reçu ? Vérifiez votre solde {selectedMethod?.label}.</Text>
         </ScrollView>
       </SafeAreaView>

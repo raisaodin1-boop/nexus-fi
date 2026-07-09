@@ -232,6 +232,8 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
       return (await db.initiateCinetpayPayment(body)) as T;
     if (method === "POST" && s[0] === "payments" && s[1] === "cinetpay" && s[2] === "confirm")
       return (await db.confirmCinetpayPayment(body)) as T;
+    if (method === "POST" && s[0] === "payments" && s[1] === "paynote" && s[2] === "confirm")
+      return (await db.confirmPaynoteMtnPayment(body)) as T;
     if (method === "POST" && s[0] === "payments" && s[1] === "contributions" && s[2] === "checkout")
       return (await db.createContributionCheckout(body)) as T;
     if (method === "POST" && s[0] === "payments" && s[1] === "mobile-money" && s[2] === "initiate")

@@ -42,12 +42,21 @@ export default function TopupScreen() {
     setError(null);
     const amt = parsedAmt;
     if (!amt || amt <= 0) { setError("Entrez un montant valide."); return; }
-    // Always send XAF to CinetPay — convert if needed
+    if (!phone || phone.replace(/\D/g, "").length < 9) {
+      setError("Entrez un numéro de téléphone valide.");
+      return;
+    }
     const amtXaf = rates && currency !== "XAF" ? Math.round(convert(amt, currency, "XAF", rates)) : amt;
+    const providerKey = provider === "MTN MoMo" ? "mtn" as const
+      : provider === "Orange Money" ? "orange" as const
+      : provider === "Moov Money" ? "moov" as const
+      : undefined;
     openPaymentScreen(router, {
       kind: "wallet_topup",
       amount: amtXaf,
       label: `Recharge wallet ${provider}${currency !== "XAF" ? ` (${formatAmount(amt, currency)} → ${formatAmount(amtXaf, "XAF")})` : ""}`,
+      ...(providerKey ? { provider: providerKey } : {}),
+      phone,
     });
   };
 
@@ -112,7 +121,7 @@ export default function TopupScreen() {
         <Button label="Continuer vers le paiement" onPress={submit} />
 
         <Text style={styles.note}>
-          Paiement électronique CinetPay requis. Après confirmation, votre wallet sera crédité et un reçu s'affichera avec le statut « Confirmé » ou « En attente ».
+          MTN MoMo utilise Paynote lorsque activé. Orange, Moov et carte passent par CinetPay. Après confirmation, votre wallet sera crédité.
         </Text>
       </ScrollView>
       </KeyboardAvoidingView>

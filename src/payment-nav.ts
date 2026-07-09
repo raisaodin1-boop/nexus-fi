@@ -20,6 +20,8 @@ export interface PaymentNavParams {
   association_id?: string;
   cooperative_id?: string;
   fund_id?: string;
+  provider?: "mtn" | "orange" | "moov";
+  phone?: string;
 }
 
 /** Navigate to the unified electronic payment screen. */
@@ -37,6 +39,8 @@ export function openPaymentScreen(router: Router, params: PaymentNavParams) {
       ...(params.association_id ? { association_id: params.association_id } : {}),
       ...(params.cooperative_id ? { cooperative_id: params.cooperative_id } : {}),
       ...(params.fund_id ? { fund_id: params.fund_id } : {}),
+      ...(params.provider ? { provider: params.provider } : {}),
+      ...(params.phone ? { phone: params.phone } : {}),
     },
   } as any);
 }
