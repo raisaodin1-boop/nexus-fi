@@ -120,7 +120,7 @@ export interface TopupPayload {
 }
 
 export async function topupFromMobileMoney(_payload: TopupPayload): Promise<WalletTx> {
-  throw new Error("Recharge wallet via la page de paiement CinetPay uniquement.");
+  throw new Error("Recharge wallet via MTN MoMo (page de paiement Paynote) uniquement.");
 }
 
 // ─── Withdrawal to Mobile Money ───────────────────────────────────────────────

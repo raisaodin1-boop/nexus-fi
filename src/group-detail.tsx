@@ -235,7 +235,7 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
               )}
               {error ? <Text style={styles.error}>{error}</Text> : null}
               <Text style={styles.paySubLabel}>
-                Paiement CinetPay uniquement — Orange, MTN, Moov ou carte. Aucun crédit sans débit confirmé.
+                Paiement MTN MoMo via Paynote uniquement — aucun crédit sans validation USSD.
               </Text>
             </Card>
           </View>

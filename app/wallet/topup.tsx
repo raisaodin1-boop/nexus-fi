@@ -12,17 +12,14 @@ import { Colors, Radius, Spacing } from "@/src/theme";
 import { computeRoundUpSpare } from "@/src/momo-roundup";
 import type { MomoRoundUpSettings } from "@/src/db/momo-roundup";
 import { api, formatXAF } from "@/src/api";
-import type { MobileMoneyProvider } from "@/src/wallet-db";
 import { getRates, convert, formatAmount, type Currency, type Rates } from "@/src/exchange-rates";
 
-const PROVIDERS: MobileMoneyProvider[] = ["MTN MoMo", "Orange Money", "Moov Money", "Wave"];
 const CURRENCIES: Currency[] = ["XAF", "EUR", "USD"];
 
 export default function TopupScreen() {
   const router = useRouter();
   const { currency, setCurrency } = useDisplayCurrency();
   const [amount, setAmount]       = useState("");
-  const [provider, setProvider]   = useState<MobileMoneyProvider>("MTN MoMo");
   const [phone, setPhone]         = useState("");
   const [error, setError]         = useState<string | null>(null);
   const [rates, setRates]         = useState<Rates | null>(null);
@@ -47,15 +44,11 @@ export default function TopupScreen() {
       return;
     }
     const amtXaf = rates && currency !== "XAF" ? Math.round(convert(amt, currency, "XAF", rates)) : amt;
-    const providerKey = provider === "MTN MoMo" ? "mtn" as const
-      : provider === "Orange Money" ? "orange" as const
-      : provider === "Moov Money" ? "moov" as const
-      : undefined;
     openPaymentScreen(router, {
       kind: "wallet_topup",
       amount: amtXaf,
-      label: `Recharge wallet ${provider}${currency !== "XAF" ? ` (${formatAmount(amt, currency)} → ${formatAmount(amtXaf, "XAF")})` : ""}`,
-      ...(providerKey ? { provider: providerKey } : {}),
+      label: `Recharge wallet MTN MoMo${currency !== "XAF" ? ` (${formatAmount(amt, currency)} → ${formatAmount(amtXaf, "XAF")})` : ""}`,
+      provider: "mtn",
       phone,
     });
   };
@@ -87,7 +80,7 @@ export default function TopupScreen() {
           keyboardType="decimal-pad" placeholder={currency === "XAF" ? "ex: 25000" : "ex: 50"} />
         {amountXAF !== null && (
           <Text style={styles.conversion}>
-            ≈ {new Intl.NumberFormat("fr-FR").format(amountXAF)} FCFA débités via CinetPay
+            ≈ {new Intl.NumberFormat("fr-FR").format(amountXAF)} FCFA débités via MTN MoMo
           </Text>
         )}
         {roundup?.enabled && parsedAmt > 0 && (() => {
@@ -101,15 +94,10 @@ export default function TopupScreen() {
           );
         })()}
 
-        {/* Provider */}
-        <Text style={styles.label}>Opérateur Mobile Money</Text>
-        <View style={styles.providerGrid}>
-          {PROVIDERS.map(p => (
-            <TouchableOpacity key={p} onPress={() => setProvider(p)}
-              style={[styles.providerChip, provider === p && styles.chipActive]}>
-              <Text style={[styles.chipText, provider === p && styles.chipTextActive]}>{p}</Text>
-            </TouchableOpacity>
-          ))}
+        {/* MTN MoMo uniquement */}
+        <Text style={styles.label}>Paiement</Text>
+        <View style={[styles.providerChip, styles.chipActive, { alignSelf: "flex-start", marginBottom: 16 }]}>
+          <Text style={[styles.chipText, styles.chipTextActive]}>MTN MoMo (Paynote)</Text>
         </View>
 
         <Field label="Numéro de téléphone" value={phone} onChangeText={setPhone}
@@ -121,7 +109,7 @@ export default function TopupScreen() {
         <Button label="Continuer vers le paiement" onPress={submit} />
 
         <Text style={styles.note}>
-          MTN MoMo utilise Paynote lorsque activé. Orange, Moov et carte passent par CinetPay. Après confirmation, votre wallet sera crédité.
+          Paiement MTN Mobile Money via Paynote. Orange Money bientôt disponible. Après validation USSD, votre wallet sera crédité.
         </Text>
       </ScrollView>
       </KeyboardAvoidingView>

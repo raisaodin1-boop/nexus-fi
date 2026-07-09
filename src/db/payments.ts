@@ -8,7 +8,7 @@ import type { PaymentKind } from "@/src/payment-nav";
 import { parsePaymentMetaSafe } from "@/src/payment-meta-schema";
 import { paymentToReceipt } from "@/src/payment-receipt";
 import { notifyUser } from "./notifications";
-import { invokePaynoteMtn, paynoteMtnEnabled } from "./paynote-mtn";
+import { invokePaynoteMtn } from "./paynote-mtn";
 
 const PAYMENT_BLOCKED =
   "Paiement électronique requis. Utilisez la page de paiement — aucun crédit sans débit confirmé.";
@@ -52,12 +52,6 @@ type ConfirmPayload = {
   provider?: string;
   phone?: string;
 };
-
-function cinetpayConfigured() {
-  const apiKey = process.env.EXPO_PUBLIC_CINETPAY_API_KEY?.trim();
-  const siteId = process.env.EXPO_PUBLIC_CINETPAY_SITE_ID?.trim();
-  return !!(apiKey && siteId);
-}
 
 function encodeMeta(meta: PaymentMeta) {
   return JSON.stringify(meta);
@@ -186,7 +180,7 @@ async function fulfillPayment(meta: PaymentMeta, paymentId: string) {
       break;
     case "savings_deposit":
       if (!meta.goal_id) break;
-      await depositSaving(meta.goal_id, amount, "Dépôt CinetPay", paymentId);
+      await depositSaving(meta.goal_id, amount, "Dépôt MTN Paynote", paymentId);
       break;
     case "association_contribution":
       if (!meta.association_id) break;
@@ -230,64 +224,6 @@ async function fulfillPayment(meta: PaymentMeta, paymentId: string) {
       break;
     }
   }
-}
-
-async function createCinetpayCheckout(
-  paymentId: string,
-  amount: number,
-  meta: PaymentMeta,
-  provider: PaymentProvider,
-  notifyUrl?: string,
-) {
-  const apiKey = process.env.EXPO_PUBLIC_CINETPAY_API_KEY?.trim();
-  const siteId = process.env.EXPO_PUBLIC_CINETPAY_SITE_ID?.trim();
-  if (!apiKey || !siteId) return null;
-
-  const resolvedNotify = notifyUrl
-    ?? process.env.EXPO_PUBLIC_CINETPAY_NOTIFY_URL?.trim()
-    ?? undefined;
-
-  const channels = provider === "card" ? "CREDIT_CARD" : "MOBILE_MONEY";
-  const response = await fetch("https://api-checkout.cinetpay.com/v2/payment", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      apikey: apiKey,
-      site_id: siteId,
-      transaction_id: paymentId,
-      amount,
-      currency: "XAF",
-      description: meta.label ?? "Paiement Hodix",
-      channels,
-      customer_phone_number: meta.phone ?? "",
-      notify_url: resolvedNotify,
-      return_url: process.env.EXPO_PUBLIC_CINETPAY_RETURN_URL ?? undefined,
-      metadata: meta,
-    }),
-  });
-
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok || body?.code !== "201") {
-    throw { status: 502, detail: body?.message ?? "Erreur CinetPay lors de l'initialisation." };
-  }
-  return {
-    payment_url: body.data?.payment_url as string | undefined,
-    cinetpay_transaction_id: body.data?.payment_token as string | undefined,
-  };
-}
-
-async function verifyCinetpayTransaction(paymentId: string) {
-  const apiKey = process.env.EXPO_PUBLIC_CINETPAY_API_KEY?.trim();
-  const siteId = process.env.EXPO_PUBLIC_CINETPAY_SITE_ID?.trim();
-  if (!apiKey || !siteId) return false;
-
-  const response = await fetch("https://api-checkout.cinetpay.com/v2/payment/check", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ apikey: apiKey, site_id: siteId, transaction_id: paymentId }),
-  });
-  const body = await response.json().catch(() => ({}));
-  return body?.data?.status === "ACCEPTED";
 }
 
 async function initiatePaynoteMtnPayment(payload: InitiatePayload, amount: number, me: string) {
@@ -341,70 +277,27 @@ async function initiatePaynoteMtnPayment(payload: InitiatePayload, amount: numbe
   };
 }
 
-export async function initiateCinetpayPayment(payload: InitiatePayload) {
+export async function initiateMtnPayment(payload: InitiatePayload) {
   const me = await uid();
-  const provider = (payload.provider ?? "").toLowerCase() as PaymentProvider;
-  if (!["orange", "mtn", "moov", "card"].includes(provider)) {
-    throw { status: 400, detail: "Mode de paiement invalide." };
+  const provider = (payload.provider ?? "mtn").toLowerCase() as PaymentProvider;
+  if (provider !== "mtn") {
+    throw {
+      status: 400,
+      detail: provider === "orange"
+        ? "Orange Money arrive bientôt. Utilisez MTN MoMo pour l'instant."
+        : "Seul MTN Mobile Money est disponible pour le moment.",
+    };
   }
-  if (provider !== "card" && !(payload.phone ?? "").trim()) {
-    throw { status: 400, detail: "Numéro de téléphone requis." };
+  if (!(payload.phone ?? "").trim()) {
+    throw { status: 400, detail: "Numéro MTN requis." };
   }
 
   const amount = await validatePaymentTarget(me, payload);
-
-  if (provider === "mtn" && paynoteMtnEnabled()) {
-    return initiatePaynoteMtnPayment(payload, amount, me);
-  }
-
-  const paymentId = crypto.randomUUID();
-  const meta: PaymentMeta = {
-    kind: payload.kind,
-    amount_xaf: amount,
-    label: payload.label,
-    tontine_id: payload.tontine_id ?? null,
-    goal_id: payload.goal_id ?? null,
-    association_id: payload.association_id ?? null,
-    cooperative_id: payload.cooperative_id ?? null,
-    fund_id: payload.fund_id ?? null,
-    provider,
-    phone: payload.phone?.trim(),
-    gateway: "cinetpay",
-    cinetpay_transaction_id: null,
-    cert_kind: payload.cert_kind,
-  };
-
-  const webhookUrl = process.env.EXPO_PUBLIC_CINETPAY_NOTIFY_URL?.trim()
-    || (process.env.EXPO_PUBLIC_SUPABASE_URL
-      ? `${process.env.EXPO_PUBLIC_SUPABASE_URL.replace(/\/$/, "")}/functions/v1/cinetpay-webhook`
-      : undefined);
-
-  const checkout = await createCinetpayCheckout(paymentId, amount, meta, provider, webhookUrl);
-  if (checkout?.cinetpay_transaction_id) meta.cinetpay_transaction_id = checkout.cinetpay_transaction_id;
-
-  const { error } = await getSupabase().from("payments").insert({
-    id: paymentId,
-    user_id: me,
-    amount,
-    currency: "XAF",
-    direction: "out",
-    description: encodeMeta(meta),
-    status: "pending_cinetpay",
-  });
-  throwSb(error);
-
-  return {
-    payment_id: paymentId,
-    status: "pending_cinetpay",
-    amount_xaf: amount,
-    payment_url: checkout?.payment_url ?? null,
-    gateway: "cinetpay" as const,
-    sandbox_mode: !cinetpayConfigured(),
-    message: cinetpayConfigured()
-      ? "Redirection vers CinetPay pour finaliser le paiement."
-      : "Mode test : validez avec la référence de transaction reçue après paiement.",
-  };
+  return initiatePaynoteMtnPayment({ ...payload, provider: "mtn" }, amount, me);
 }
+
+/** @deprecated Alias — MTN Paynote uniquement */
+export const initiateCinetpayPayment = initiateMtnPayment;
 
 async function finalizePaynotePayment(
   payment: { id: string; description: string },
@@ -486,64 +379,7 @@ export async function confirmPaynoteMtnPayment(payload: { payment_id: string }) 
 }
 
 export async function confirmCinetpayPayment(payload: ConfirmPayload) {
-  const me = await uid();
-  const transactionId = (payload.transaction_id ?? "").trim();
-
-  const { data: payment, error } = await getSupabase()
-    .from("payments")
-    .select("*")
-    .eq("id", payload.payment_id)
-    .eq("user_id", me)
-    .maybeSingle();
-  throwSb(error);
-  if (!payment) throw { status: 404, detail: "Paiement introuvable." };
-  if (payment.status === "succeeded") {
-    if (!payment.receipt_email_sent_at) {
-      try { await sendPaymentReceiptEmail(payment.id); } catch { /* best-effort */ }
-    }
-    const meta = parsePaymentMeta(payment.description);
-    return { payment_id: payment.id, status: "succeeded", already_fulfilled: true, meta };
-  }
-  if (payment.status === "pending_paynote") {
-    return confirmPaynoteMtnPayment({ payment_id: payment.id });
-  }
-  if (payment.status !== "pending_cinetpay") {
-    throw { status: 400, detail: "Ce paiement n'est plus en attente." };
-  }
-  if (!transactionId) throw { status: 400, detail: "Référence de transaction obligatoire." };
-
-  const sandboxAllowed = typeof __DEV__ !== "undefined" && __DEV__
-    && process.env.EXPO_PUBLIC_PAYMENT_SANDBOX === "true";
-  const verified = cinetpayConfigured()
-    ? await verifyCinetpayTransaction(payment.id)
-    : sandboxAllowed && transactionId.length >= 8;
-
-  if (!verified) {
-    throw { status: 402, detail: "Paiement non confirmé par CinetPay. L'opération n'a pas été créditée." };
-  }
-
-  const { data: result, error: rpcErr } = await getSupabase().rpc("confirm_cinetpay_payment", {
-    p_payment_id: payment.id,
-    p_reference: transactionId,
-  });
-  throwSb(rpcErr);
-  const meta = parsePaymentMeta(payment.description);
-
-  let receiptEmail: { delivery?: string } | null = null;
-  try {
-    receiptEmail = await sendPaymentReceiptEmail(payment.id);
-  } catch {
-    // Reçu toujours disponible dans l'app même si l'email échoue.
-  }
-
-  return {
-    payment_id: payment.id,
-    status: "succeeded",
-    meta,
-    result,
-    receipt_email: receiptEmail,
-    already_fulfilled: !!(result as { already_fulfilled?: boolean })?.already_fulfilled,
-  };
+  return confirmPaynoteMtnPayment({ payment_id: payload.payment_id });
 }
 
 export async function getPaymentReceipt(paymentId: string) {
@@ -601,11 +437,19 @@ export const confirmMobileMoneyPayment = (payload: any) =>
     provider: payload.provider,
     phone: payload.phone,
   });
-export const createContributionCheckout = async (payload: { tontine_id?: string; amount_xaf?: number }) => {
-  return initiateCinetpayPayment({
+export const createContributionCheckout = async (payload: {
+  tontine_id?: string;
+  amount_xaf?: number;
+  phone?: string;
+}) => {
+  if (!payload.phone?.trim()) {
+    throw { status: 400, detail: "Numéro MTN requis pour la cotisation." };
+  }
+  return initiateMtnPayment({
     kind: "tontine_contribution",
     amount_xaf: Number(payload.amount_xaf ?? 0),
-    provider: "card",
+    provider: "mtn",
+    phone: payload.phone,
     tontine_id: payload.tontine_id,
   });
 };

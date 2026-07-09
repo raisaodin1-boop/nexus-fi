@@ -228,8 +228,10 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "POST" && s[0] === "payments" && s[1] && s[2] === "receipt" && s[3] === "email")
       return (await db.sendPaymentReceiptEmail(s[1], !!body?.force)) as T;
     if (method === "GET"  && s[0] === "payments" && s[1] && s[2] === "status")          return (await db.getPaymentStatus(s[1])) as T;
+    if (method === "POST" && s[0] === "payments" && s[1] === "mtn" && s[2] === "initiate")
+      return (await db.initiateMtnPayment(body)) as T;
     if (method === "POST" && s[0] === "payments" && s[1] === "cinetpay" && s[2] === "initiate")
-      return (await db.initiateCinetpayPayment(body)) as T;
+      return (await db.initiateMtnPayment(body)) as T;
     if (method === "POST" && s[0] === "payments" && s[1] === "cinetpay" && s[2] === "confirm")
       return (await db.confirmCinetpayPayment(body)) as T;
     if (method === "POST" && s[0] === "payments" && s[1] === "paynote" && s[2] === "confirm")
@@ -237,7 +239,7 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "POST" && s[0] === "payments" && s[1] === "contributions" && s[2] === "checkout")
       return (await db.createContributionCheckout(body)) as T;
     if (method === "POST" && s[0] === "payments" && s[1] === "mobile-money" && s[2] === "initiate")
-      return (await db.initiateCinetpayPayment(body)) as T;
+      return (await db.initiateMtnPayment(body)) as T;
     if (method === "POST" && s[0] === "payments" && s[1] === "mobile-money" && s[2] === "confirm")
       return (await db.confirmCinetpayPayment(body)) as T;
     if (method === "GET"  && s[0] === "payments" && s[1] === "qr-data")                   return (await db.getPaymentQrData()) as T;

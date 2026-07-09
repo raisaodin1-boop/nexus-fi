@@ -581,7 +581,7 @@ export function TontineDetailView({ id }: { id: string }) {
             testID="tontine-pay"
           />
           <Text style={{ color: Colors.textSubtle, fontSize: 11, textAlign: "center" }}>
-            Paiement électronique CinetPay uniquement — crédit après confirmation du débit
+            Paiement MTN MoMo via Paynote — crédit après confirmation sur votre téléphone
           </Text>
         </Card>
       ) : (

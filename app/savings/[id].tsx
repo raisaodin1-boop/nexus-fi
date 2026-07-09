@@ -213,7 +213,7 @@ export default function SavingsDetail() {
             disabled={!amount}
           />
           <Text style={{ color: Colors.textSubtle, fontSize: 11, textAlign: "center", marginTop: 8 }}>
-            Orange Money, MTN, Moov ou carte — crédit uniquement après validation CinetPay
+            MTN Mobile Money via Paynote — crédit uniquement après validation sur votre téléphone
           </Text>
         </Card>
       </ScrollView>
