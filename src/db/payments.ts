@@ -263,7 +263,15 @@ async function initiatePaynoteMtnPayment(payload: InitiatePayload, amount: numbe
     phone: payload.phone?.trim() ?? "",
   });
 
-  if (paynote.message_id) meta.paynote_message_id = paynote.message_id;
+  if (paynote.message_id) {
+    meta.paynote_message_id = paynote.message_id;
+    const { error: updErr } = await getSupabase()
+      .from("payments")
+      .update({ description: encodeMeta(meta) })
+      .eq("id", paymentId)
+      .eq("user_id", me);
+    throwSb(updErr);
+  }
 
   return {
     payment_id: paymentId,
@@ -375,7 +383,26 @@ export async function confirmPaynoteMtnPayment(payload: { payment_id: string }) 
   }
 
   const ref = String(statusRes.payment_ref ?? payment.id);
-  return finalizePaynotePayment(payment, ref);
+  const { data: result, error: rpcErr } = await getSupabase().rpc("confirm_cinetpay_payment", {
+    p_payment_id: payment.id,
+    p_reference: ref,
+  });
+  throwSb(rpcErr);
+
+  let receiptEmail: { delivery?: string } | null = null;
+  try {
+    receiptEmail = await sendPaymentReceiptEmail(payment.id);
+  } catch { /* best-effort */ }
+
+  const meta = parsePaymentMeta(payment.description);
+  return {
+    payment_id: payment.id,
+    status: "succeeded" as const,
+    meta,
+    result,
+    receipt_email: receiptEmail,
+    already_fulfilled: !!(result as { already_fulfilled?: boolean })?.already_fulfilled,
+  };
 }
 
 export async function confirmCinetpayPayment(payload: ConfirmPayload) {

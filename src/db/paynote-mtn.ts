@@ -18,7 +18,18 @@ export async function invokePaynoteMtn<T = unknown>(
   const { data, error } = await getSupabase().functions.invoke("paynote-mtn", {
     body: { action, ...body },
   });
-  if (error) throw { status: 502, detail: error.message ?? "Erreur Paynote MTN." };
+
+  if (error) {
+    let detail = error.message ?? "Erreur Paynote MTN.";
+    const ctx = (error as { context?: Response }).context;
+    if (ctx) {
+      try {
+        const parsed = await ctx.json() as { error?: string };
+        if (parsed?.error) detail = parsed.error;
+      } catch { /* ignore */ }
+    }
+    throw { status: 502, detail };
+  }
   if (!data?.ok) throw { status: 502, detail: data?.error ?? "Erreur Paynote MTN." };
   return data as T;
 }

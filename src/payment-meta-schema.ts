@@ -24,6 +24,8 @@ export const paymentMetaSchema = z.object({
   provider: z.string().optional(),
   phone: z.string().optional(),
   cinetpay_transaction_id: z.string().nullable().optional(),
+  paynote_message_id: z.string().nullable().optional(),
+  gateway: z.enum(["cinetpay", "paynote"]).optional(),
   cert_kind: z.enum(["identity", "trust-score", "savings"]).optional(),
 });
 
