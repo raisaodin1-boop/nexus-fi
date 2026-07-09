@@ -2,8 +2,10 @@ import { useRef } from "react";
 import { Animated, StyleSheet, TouchableOpacity, View } from "react-native";
 import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Users, PiggyBank, User, Award, Home } from "lucide-react-native";
+import { Users, PiggyBank, User, Award, Home, Globe } from "lucide-react-native";
 import { Colors } from "@/src/theme";
+import { useAuth } from "@/src/auth-context";
+import { isDiasporaMember } from "@/src/diaspora-enrollment-config";
 
 function AnimatedTabIcon({ Icon, focused, color }: { Icon: any; focused: boolean; color: string }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -24,6 +26,8 @@ function AnimatedTabIcon({ Icon, focused, color }: { Icon: any; focused: boolean
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const tabBarBottom = Math.max(10, insets.bottom);
+  const { user } = useAuth();
+  const diasporaHome = isDiasporaMember(user);
 
   return (
     <Tabs
@@ -46,8 +50,10 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Accueil",
-          tabBarIcon: ({ color, focused }) => <AnimatedTabIcon Icon={Home} focused={focused} color={color} />,
+          title: diasporaHome ? "Diaspora" : "Accueil",
+          tabBarIcon: ({ color, focused }) => (
+            <AnimatedTabIcon Icon={diasporaHome ? Globe : Home} focused={focused} color={color} />
+          ),
         }}
       />
       <Tabs.Screen

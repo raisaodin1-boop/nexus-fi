@@ -19,6 +19,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { LogOut, Save, Shield, ShieldCheck, Bell, ChevronRight, Edit3, Mail, MapPin, Phone, Briefcase, Sparkles, CreditCard, Moon, Fingerprint, Globe, Gift } from "lucide-react-native";
 
 import { useAuth } from "@/src/auth-context";
+import { isDiasporaMember } from "@/src/diaspora-enrollment-config";
 import { useI18n } from "@/src/i18n";
 import { useTheme } from "@/src/theme-context";
 import { Button, Card, Field, SectionTitle } from "@/src/ui";
@@ -497,7 +498,18 @@ export default function ProfileScreen() {
                   />
                 </View>
               ) : null}
-              <SettingRow icon={<Globe color={Colors.primary} size={18} />} label="HODIX Diaspora" onPress={() => router.push("/diaspora" as any)} testID="profile-go-diaspora" borderColor={borderColor} txtColor={txt} />
+              {isDiasporaMember(user) ? (
+                <SettingRow
+                  icon={<Globe color={Colors.primary} size={18} />}
+                  label={`Mode Diaspora · ${user?.diaspora_country ?? "actif"}`}
+                  onPress={() => router.push("/(tabs)" as any)}
+                  testID="profile-diaspora-active"
+                  borderColor={borderColor}
+                  txtColor={txt}
+                />
+              ) : (
+                <SettingRow icon={<Globe color={Colors.primary} size={18} />} label="HODIX Diaspora — s'inscrire" onPress={() => router.push("/diaspora" as any)} testID="profile-go-diaspora" borderColor={borderColor} txtColor={txt} />
+              )}
               <SettingRow icon={<ShieldCheck color={Colors.accent} size={18} />} label="Vérification KYC" onPress={() => router.push("/kyc")} testID="profile-go-kyc" borderColor={borderColor} txtColor={txt} />
               <SettingRow icon={<CreditCard color={Colors.primary} size={18} />} label="Mes Paiements" onPress={() => router.push("/payments")} testID="profile-go-payments" borderColor={borderColor} txtColor={txt} />
               <SettingRow icon={<Shield color="#7C3AED" size={18} />} label="Mes données & droits" onPress={() => router.push("/data-rights" as any)} testID="profile-go-data-rights" borderColor={borderColor} txtColor={txt} />

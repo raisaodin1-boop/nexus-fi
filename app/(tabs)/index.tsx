@@ -5,8 +5,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
 import { useAuth } from "@/src/auth-context";
+import { useAuth } from "@/src/auth-context";
 import { Colors } from "@/src/theme";
 import { MemberDashboard } from "@/src/member-dashboard";
+import { DiasporaMemberDashboard } from "@/src/diaspora-member-dashboard";
+import { isDiasporaMember } from "@/src/diaspora-enrollment-config";
 import { ManagerDashboard } from "@/src/manager-dashboard";
 import { AdminDashboard } from "@/src/admin-dashboard";
 
@@ -30,5 +33,6 @@ export default function HomeTab() {
 
   if (user.role === "super_admin" || (user.role as string) === "admin") return <AdminDashboard />;
   if (user.role === "tontine_manager") return <ManagerDashboard />;
+  if (isDiasporaMember(user)) return <DiasporaMemberDashboard embeddedInTabs skipGuard />;
   return <MemberDashboard />;
 }

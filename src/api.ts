@@ -277,6 +277,10 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"  && s[0] === "exchange-rates")                                   return (await import("@/src/exchange-rates").then(m => m.getRates())) as T;
 
     // ── Diaspora (manual cotisations depuis l'étranger)
+    if (method === "GET"  && s[0] === "diaspora" && s[1] === "access")                       return (await db.getDiasporaAccess()) as T;
+    if (method === "GET"  && s[0] === "diaspora" && s[1] === "enrollment")                   return (await db.getDiasporaEnrollment()) as T;
+    if (method === "POST" && s[0] === "diaspora" && s[1] === "enrollment")                  return (await db.submitDiasporaEnrollment(body)) as T;
+    if (method === "POST" && s[0] === "diaspora" && s[1] === "enrollment-upload")            return (await db.uploadDiasporaEnrollmentDoc(body?.kind, body?.base64, body?.mime)) as T;
     if (method === "GET"  && s[0] === "diaspora" && s[1] === "home")                      return (await db.getDiasporaHome()) as T;
     if (method === "GET"  && s[0] === "diaspora" && s[1] === "contributions")              return (await db.listDiasporaContributions({ status: query.get("status") ?? undefined, tontine_id: query.get("tontine_id") ?? undefined })) as T;
     if (method === "POST" && s[0] === "diaspora" && s[1] === "requests")                   return (await db.ensureDiasporaRequest(body?.tontine_id)) as T;
@@ -339,6 +343,12 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "POST"  && s[0] === "admin" && s[1] === "diaspora" && s[2] === "needs-info") return (await db.adminRequestDiasporaInfo(body?.request_id, body?.message)) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "diaspora" && s[2] === "suspicious") return (await db.adminMarkDiasporaSuspicious(body?.request_id, body?.note)) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "diaspora" && s[2] === "assign")     return (await db.adminAssignDiaspora(body?.request_id, body?.agent_id)) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "diaspora" && s[2] === "enrollments" && s[3] === "stats") return (await db.adminDiasporaEnrollmentStats()) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "diaspora" && s[2] === "enrollments" && s[3])
+      return (await db.adminGetDiasporaEnrollment(s[3])) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "diaspora" && s[2] === "enrollments") return (await db.adminListDiasporaEnrollments(query.get("status") ?? undefined)) as T;
+    if (method === "POST"  && s[0] === "admin" && s[1] === "diaspora" && s[2] === "enrollment-approve") return (await db.adminApproveDiasporaEnrollment(body?.enrollment_id, body?.note)) as T;
+    if (method === "POST"  && s[0] === "admin" && s[1] === "diaspora" && s[2] === "enrollment-reject") return (await db.adminRejectDiasporaEnrollment(body?.enrollment_id, body?.reason, body?.note)) as T;
 
     // ── Messages
     if (method === "GET"  && s[0] === "messages" && s[1] === "conversations")                   return (await db.listConversations()) as T;

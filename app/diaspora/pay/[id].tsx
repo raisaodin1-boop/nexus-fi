@@ -20,9 +20,12 @@ import { convert, getRates, type Currency } from "@/src/exchange-rates";
 
 type Method = "mtn_momo" | "orange_money" | "bank_transfer";
 
+import { useDiasporaGuard, DiasporaGuardSpinner } from "@/src/use-diaspora-guard";
+
 export default function DiasporaPayScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { checking } = useDiasporaGuard();
   const { show } = useToast();
   const { user } = useAuth();
   const [req, setReq] = useState<DiasporaRequest | null>(null);
@@ -80,7 +83,9 @@ export default function DiasporaPayScreen() {
     }
   };
 
-  if (!req) return null;
+  if (!req) return checking ? (
+    <SafeAreaView style={styles.safe}><DiasporaGuardSpinner checking={checking} /></SafeAreaView>
+  ) : null;
 
   const momo = method === "orange_money" ? DIASPORA_MOMO.orange : DIASPORA_MOMO.mtn;
 

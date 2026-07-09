@@ -12,6 +12,8 @@ import {
 } from "lucide-react-native";
 
 import { api } from "@/src/api";
+import { useAuth } from "@/src/auth-context";
+import { isDiasporaMember } from "@/src/diaspora-enrollment-config";
 import { useDisplayCurrency } from "@/src/hooks/use-display-currency";
 import { useResponsive } from "@/src/hooks/use-responsive";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
@@ -82,6 +84,7 @@ const TxRow = memo(function TxRow({ tx, router }: { tx: WalletTx; router: Return
 
 export default function WalletScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const { currency, setCurrency } = useDisplayCurrency();
   const { horizontalPad, heroSize, isCompact } = useResponsive();
   const [wallet, setWallet]   = useState<WalletBalance | null>(null);
@@ -90,6 +93,13 @@ export default function WalletScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (isDiasporaMember(user) && user?.diaspora_currency) {
+      const c = user.diaspora_currency as Currency;
+      if (CURRENCIES.includes(c)) setCurrency(c);
+    }
+  }, [user?.diaspora_status, user?.diaspora_currency, setCurrency]);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -197,7 +207,7 @@ export default function WalletScreen() {
                 { label: "Recharger",  icon: ArrowDownLeft,  route: "/wallet/topup",    color: "#10B981" },
                 { label: "Retirer",    icon: ArrowUpRight,   route: "/wallet/withdraw",  color: "#EF4444" },
                 { label: "Transférer", icon: ArrowLeftRight, route: "/wallet/transfer",  color: "#1D4ED8" },
-                { label: "Diaspora",  icon: Globe,         route: "/diaspora",           color: "#0F766E" },
+                { label: "Diaspora",  icon: Globe,         route: isDiasporaMember(user) ? "/(tabs)" : "/diaspora", color: "#0F766E" },
                 { label: "Sécurité",  icon: Shield,        route: "/wallet/security", color: "#8B5CF6" },
               ].map(({ label, icon: Icon, route, color }) => (
                 <TouchableOpacity

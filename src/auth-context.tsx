@@ -32,6 +32,9 @@ export interface User {
   push_consent?: boolean | null;
   kyc_status?: string | null;
   trust_score?: number | null;
+  diaspora_status?: string | null;
+  diaspora_country?: string | null;
+  diaspora_currency?: string | null;
   marketing_consent?: boolean | null;
   created_at: string;
 }
@@ -59,7 +62,7 @@ async function fetchProfile(userId: string): Promise<Partial<User>> {
     const timeout = new Promise<null>((res) => setTimeout(() => res(null), 2500));
     const query = supabase
       .from("profiles")
-      .select("full_name,role,phone,gender,country,city,occupation,date_of_birth,birth_place,neighborhood,address,kyc_status,trust_score,email,push_consent,marketing_consent")
+      .select("full_name,role,phone,gender,country,city,occupation,date_of_birth,birth_place,neighborhood,address,kyc_status,trust_score,email,push_consent,marketing_consent,diaspora_status,diaspora_country,diaspora_currency")
       .eq("id", userId)
       .single();
     const result = await Promise.race([query, timeout]);

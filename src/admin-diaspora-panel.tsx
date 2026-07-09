@@ -1,10 +1,10 @@
 import { useCallback, useState } from "react";
 import {
-  ActivityIndicator, Alert, Image, Linking, ScrollView,
+  ActivityIndicator, Alert, Image, ScrollView,
   StyleSheet, Text, TouchableOpacity, View,
 } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { CheckCircle, XCircle, AlertTriangle, MessageSquare } from "lucide-react-native";
+import { CheckCircle, XCircle, AlertTriangle, MessageSquare, UserCheck, Receipt } from "lucide-react-native";
 
 import { api, ApiError, formatXAF } from "@/src/api";
 import type { DiasporaRequest } from "@/src/db/diaspora";
@@ -36,7 +36,158 @@ const REJECT_REASONS = [
   "Informations supplémentaires nécessaires",
 ];
 
+const ENROLL_REJECT = [
+  "Document illisible ou incomplet",
+  "Preuve de résidence à l'étranger insuffisante",
+  "Pays de résidence incompatible (Cameroun)",
+  "Identité non concordante",
+  "Document suspect ou falsifié",
+  "Informations complémentaires requises",
+];
+
 export function AdminDiasporaPanel({ embedded }: { embedded?: boolean }) {
+  const { show } = useToast();
+  const [section, setSection] = useState<"enrollments" | "contributions">("enrollments");
+
+  return (
+    <View style={{ flex: embedded ? undefined : 1 }}>
+      <View style={styles.sectionTabs}>
+        <TouchableOpacity style={[styles.sectionTab, section === "enrollments" && styles.sectionTabActive]} onPress={() => setSection("enrollments")}>
+          <UserCheck size={14} color={section === "enrollments" ? Colors.primary : Colors.textMuted} />
+          <Text style={[styles.sectionTabText, section === "enrollments" && styles.sectionTabTextActive]}>Inscriptions</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.sectionTab, section === "contributions" && styles.sectionTabActive]} onPress={() => setSection("contributions")}>
+          <Receipt size={14} color={section === "contributions" ? Colors.primary : Colors.textMuted} />
+          <Text style={[styles.sectionTabText, section === "contributions" && styles.sectionTabTextActive]}>Cotisations</Text>
+        </TouchableOpacity>
+      </View>
+      {section === "enrollments" ? <AdminDiasporaEnrollments /> : <AdminDiasporaContributions embedded={embedded} />}
+    </View>
+  );
+}
+
+function AdminDiasporaEnrollments() {
+  const { show } = useToast();
+  const [items, setItems] = useState<any[]>([]);
+  const [filter, setFilter] = useState("pending_review");
+  const [selected, setSelected] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState({ pending: 0, approved: 0, rejected: 0 });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [list, st] = await Promise.all([
+        api.get<any[]>(`/admin/diaspora/enrollments?status=${filter === "all" ? "" : filter}`),
+        api.get<{ pending: number; approved: number; rejected: number }>("/admin/diaspora/enrollments/stats"),
+      ]);
+      setItems(list);
+      setStats(st);
+    } catch { setItems([]); }
+    finally { setLoading(false); }
+  }, [filter]);
+
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const openDetail = async (id: string) => {
+    try {
+      setSelected(await api.get<any>(`/admin/diaspora/enrollments/${id}`));
+    } catch { show("Erreur chargement dossier", "error"); }
+  };
+
+  const approve = () => {
+    if (!selected) return;
+    Alert.alert("Approuver l'inscription Diaspora", "Activer le mode Diaspora pour ce membre ?", [
+      { text: "Annuler", style: "cancel" },
+      { text: "Approuver", onPress: async () => {
+        try {
+          await api.post("/admin/diaspora/enrollment-approve", { enrollment_id: selected.id });
+          show("Inscription approuvée", "success");
+          setSelected(null);
+          load();
+        } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
+      }},
+    ]);
+  };
+
+  const reject = () => {
+    if (!selected) return;
+    Alert.alert("Rejeter l'inscription", "Choisissez un motif", [
+      ...ENROLL_REJECT.map((reason) => ({
+        text: reason,
+        onPress: async () => {
+          try {
+            await api.post("/admin/diaspora/enrollment-reject", { enrollment_id: selected.id, reason });
+            show("Inscription rejetée", "success");
+            setSelected(null);
+            load();
+          } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
+        },
+      })),
+      { text: "Annuler", style: "cancel" },
+    ]);
+  };
+
+  if (selected) {
+    return (
+      <ScrollView contentContainerStyle={styles.detailScroll}>
+        <TouchableOpacity onPress={() => setSelected(null)}><Text style={styles.back}>← Retour</Text></TouchableOpacity>
+        <Text style={styles.detailTitle}>Inscription Diaspora</Text>
+        <Card>
+          <Text style={styles.member}>{selected.full_name}</Text>
+          <Text style={styles.meta}>{selected.user?.email} · KYC: {selected.user?.kyc_status ?? "—"}</Text>
+          <Text style={styles.meta}>{selected.address_line1}, {selected.postal_code} {selected.city}</Text>
+          <Text style={styles.meta}>{selected.country_of_residence} · {selected.preferred_currency}</Text>
+          <Text style={styles.meta}>Tél. {selected.phone} · Doc: {selected.id_document_type}</Text>
+          {selected.id_front_url ? <Image source={{ uri: selected.id_front_url }} style={styles.proofImg} resizeMode="contain" /> : null}
+          {selected.selfie_url ? <Image source={{ uri: selected.selfie_url }} style={styles.proofImg} resizeMode="contain" /> : null}
+          {selected.proof_abroad_url ? <Image source={{ uri: selected.proof_abroad_url }} style={styles.proofImg} resizeMode="contain" /> : null}
+        </Card>
+        <View style={styles.actions}>
+          <TouchableOpacity style={[styles.actionBtn, styles.validateBtn]} onPress={approve}>
+            <CheckCircle color="#fff" size={18} /><Text style={styles.actionText}>Activer Diaspora</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={reject}>
+            <XCircle color="#fff" size={18} /><Text style={styles.actionText}>Rejeter</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    );
+  }
+
+  return (
+    <>
+      <View style={styles.statsRow}>
+        <StatPill label="En attente" value={stats.pending} color={Colors.warning} />
+        <StatPill label="Approuvées" value={stats.approved} color={Colors.success} />
+        <StatPill label="Rejetées" value={stats.rejected} color={Colors.danger} />
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
+        {[{ key: "pending_review", label: "En attente" }, { key: "approved", label: "Approuvées" }, { key: "rejected", label: "Rejetées" }, { key: "all", label: "Toutes" }].map((f) => (
+          <TouchableOpacity key={f.key} style={[styles.chip, filter === f.key && styles.chipActive]} onPress={() => setFilter(f.key)}>
+            <Text style={[styles.chipText, filter === f.key && styles.chipTextActive]}>{f.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+      {loading ? <ActivityIndicator style={{ marginTop: 40 }} color={Colors.primary} /> : (
+        <ScrollView contentContainerStyle={{ padding: Spacing.lg, gap: 10, paddingBottom: 80 }}>
+          {items.map((item) => (
+            <TouchableOpacity key={item.id} onPress={() => openDetail(item.id)}>
+              <Card>
+                <Text style={styles.itemName}>{item.full_name ?? item.user?.full_name}</Text>
+                <Text style={styles.itemTontine}>{item.country_of_residence} · {item.preferred_currency}</Text>
+                <Text style={styles.itemAmount}>{item.status}</Text>
+              </Card>
+            </TouchableOpacity>
+          ))}
+          {!items.length ? <Text style={styles.empty}>Aucune inscription.</Text> : null}
+        </ScrollView>
+      )}
+    </>
+  );
+}
+
+function AdminDiasporaContributions({ embedded }: { embedded?: boolean }) {
   const { show } = useToast();
   const [items, setItems] = useState<AdminItem[]>([]);
   const [filter, setFilter] = useState("under_review");
@@ -177,7 +328,7 @@ export function AdminDiasporaPanel({ embedded }: { embedded?: boolean }) {
   }
 
   return (
-    <View style={{ flex: embedded ? undefined : 1 }}>
+    <>
       <View style={styles.statsRow}>
         <StatPill label="En attente" value={stats.pending} color={Colors.warning} />
         <StatPill label="Aujourd'hui" value={stats.received_today} color={Colors.info} />
@@ -209,7 +360,7 @@ export function AdminDiasporaPanel({ embedded }: { embedded?: boolean }) {
           {!items.length ? <Text style={styles.empty}>Aucune demande pour ce filtre.</Text> : null}
         </ScrollView>
       )}
-    </View>
+    </>
   );
 }
 
@@ -223,6 +374,11 @@ function StatPill({ label, value, color }: { label: string; value: number; color
 }
 
 const styles = StyleSheet.create({
+  sectionTabs: { flexDirection: "row", gap: 8, paddingHorizontal: Spacing.lg, paddingTop: Spacing.md },
+  sectionTab: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: Radius.lg, backgroundColor: Colors.surfaceAlt },
+  sectionTabActive: { backgroundColor: Colors.primaryLight },
+  sectionTabText: { fontSize: 12, fontWeight: "800", color: Colors.textMuted },
+  sectionTabTextActive: { color: Colors.primary },
   statsRow: { flexDirection: "row", gap: 8, paddingHorizontal: Spacing.lg, paddingTop: Spacing.md },
   pill: { flex: 1, padding: 10, borderRadius: Radius.lg, borderWidth: 1, backgroundColor: Colors.surface, alignItems: "center" },
   pillValue: { fontSize: 18, fontWeight: "900" },

@@ -4,6 +4,7 @@ import { notifyUser } from "./notifications";
 import { addIdentityEvent, getTrustScore } from "./identity";
 import { listTontines, getPublicTontineProfile } from "./tontines";
 import { secureRandomAlphanumeric } from "./secure-random";
+import { requireDiasporaAccess } from "./diaspora-enrollment";
 
 const PROOF_BUCKET = "diaspora-proofs";
 
@@ -53,6 +54,8 @@ export interface DiasporaHome {
   savings_progress_pct: number;
   todo: { text: string; route?: string; kind: string }[];
   upcoming: DiasporaRequest[];
+  country_of_residence?: string | null;
+  display_currency?: string;
 }
 
 function base64ToUint8Array(base64: string): Uint8Array {
@@ -128,6 +131,7 @@ async function enrichRequests(rows: Record<string, unknown>[]): Promise<Diaspora
 }
 
 export async function uploadDiasporaProof(base64: string, mime = "image/jpeg"): Promise<string> {
+  await requireDiasporaAccess();
   const me = await uid();
   const ext = mime.includes("pdf") ? "pdf" : mime.includes("png") ? "png" : "jpg";
   const path = `${me}/proof-${secureRandomAlphanumeric(12, "abcdefghijklmnopqrstuvwxyz0123456789")}.${ext}`;
@@ -139,6 +143,7 @@ export async function uploadDiasporaProof(base64: string, mime = "image/jpeg"): 
 }
 
 export async function ensureDiasporaRequest(tontineId: string): Promise<DiasporaRequest> {
+  await requireDiasporaAccess();
   const me = await uid();
   const sb = getSupabase();
 
@@ -184,6 +189,7 @@ export async function ensureDiasporaRequest(tontineId: string): Promise<Diaspora
 
 export async function getDiasporaHome(): Promise<DiasporaHome> {
   const me = await uid();
+  const access = await requireDiasporaAccess();
   return cached(`diaspora-home-${me}`, 60_000, async () => {
     const sb = getSupabase();
     const [trust, tontines, requestsRes, savingsRes, storyRes] = await Promise.all([
@@ -242,6 +248,8 @@ export async function getDiasporaHome(): Promise<DiasporaHome> {
       savings_progress_pct: savingsProgress,
       todo,
       upcoming: pending.slice(0, 5),
+      country_of_residence: access.country_of_residence,
+      display_currency: access.preferred_currency ?? "EUR",
     };
   });
 }
@@ -250,6 +258,7 @@ export async function listDiasporaContributions(filters?: {
   status?: string;
   tontine_id?: string;
 }) {
+  await requireDiasporaAccess();
   const me = await uid();
   let q = getSupabase().from("diaspora_contribution_requests").select("*").eq("user_id", me).order("created_at", { ascending: false });
   if (filters?.status && filters.status !== "all") q = q.eq("status", filters.status);
@@ -260,6 +269,7 @@ export async function listDiasporaContributions(filters?: {
 }
 
 export async function getDiasporaContribution(id: string): Promise<DiasporaRequest> {
+  await requireDiasporaAccess();
   const me = await uid();
   const { data, error } = await getSupabase().from("diaspora_contribution_requests")
     .select("*").eq("id", id).eq("user_id", me).single();
@@ -294,6 +304,7 @@ export async function markDiasporaPaymentStarted(id: string, payload: {
   declared_amount?: number;
   declared_currency?: string;
 }) {
+  await requireDiasporaAccess();
   const me = await uid();
   const { data, error } = await getSupabase().from("diaspora_contribution_requests")
     .update({
@@ -327,6 +338,7 @@ export async function submitDiasporaProof(id: string, payload: {
   comment?: string;
   fraud_declaration: boolean;
 }) {
+  await requireDiasporaAccess();
   const me = await uid();
   if (!payload.fraud_declaration) throw { status: 400, detail: "Vous devez confirmer l'exactitude des informations." };
   if (!payload.proof_path) throw { status: 400, detail: "Pièce jointe obligatoire." };
@@ -369,6 +381,7 @@ export async function submitDiasporaProof(id: string, payload: {
 }
 
 export async function getDiasporaReceipt(id: string) {
+  await requireDiasporaAccess();
   const req = await getDiasporaContribution(id);
   if (req.status !== "validated") throw { status: 400, detail: "Reçu disponible uniquement après validation." };
   const { data: profile } = await getSupabase().from("profiles").select("full_name").eq("id", req.user_id).single();
@@ -397,6 +410,7 @@ export async function getDiasporaJoinPreview(inviteCode?: string, tontineId?: st
 }
 
 export async function joinTontineDiaspora(inviteCode: string, diasporaConsent: boolean) {
+  await requireDiasporaAccess();
   if (!diasporaConsent) throw { status: 400, detail: "Vous devez accepter les conditions Diaspora." };
   const { joinTontineSecure } = await import("./tontines");
   return joinTontineSecure(inviteCode);

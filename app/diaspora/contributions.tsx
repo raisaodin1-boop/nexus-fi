@@ -9,6 +9,7 @@ import type { DiasporaRequest } from "@/src/db/diaspora";
 import { Card } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { DiasporaStatusBadge } from "@/src/diaspora-ui";
+import { useDiasporaGuard, DiasporaGuardSpinner } from "@/src/use-diaspora-guard";
 
 const FILTERS = [
   { key: "all", label: "Toutes" },
@@ -20,6 +21,7 @@ const FILTERS = [
 
 export default function DiasporaContributionsScreen() {
   const router = useRouter();
+  const { checking } = useDiasporaGuard();
   const [items, setItems] = useState<DiasporaRequest[]>([]);
   const [filter, setFilter] = useState("all");
 
@@ -33,7 +35,15 @@ export default function DiasporaContributionsScreen() {
     }
   }, [filter]);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => { if (!checking) load(); }, [load, checking]));
+
+  if (checking) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <DiasporaGuardSpinner checking={checking} />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
