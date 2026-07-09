@@ -26,6 +26,7 @@ import { sharePdfCertificate } from "@/src/share";
 import { downloadOrSharePdf } from "@/src/pdf-download";
 import { TrustBenefitsPanel } from "@/src/trust-benefits-panel";
 import { Tooltip } from "@/src/tooltip";
+import { IdentityVerificationCard } from "@/src/identity-verification-card";
 
 interface TS {
   score: number; level: string; risk: string; color: string;
@@ -69,17 +70,22 @@ export default function Identity() {
   const [error, setError] = useState<string | null>(null);
 
   const [purchases, setPurchases] = useState<{ kind: string }[]>([]);
+  const [percentileLine, setPercentileLine] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [id, prof, paid] = await Promise.all([
+      const [id, prof, paid, story] = await Promise.all([
         api.get<Identity>("/identity"),
         api.get<IdentityProfile>("/identity-profile/me").catch(() => null),
         api.get<{ kind: string }[]>("/certificates/purchases").catch(() => []),
+        api.get<{ top_pct: number; users_below_pct: number; trust_quality: string }>("/dashboard/story").catch(() => null),
       ]);
       setIdentity(id);
       setProfile(prof);
       setPurchases(paid ?? []);
+      if (story) {
+        setPercentileLine(`Top ${story.top_pct}% · ${story.users_below_pct}% en dessous`);
+      }
       setError(null);
     } catch (e) {
       setError("Impossible de charger votre identité. Réessayez.");
@@ -210,6 +216,10 @@ export default function Identity() {
         </View>
 
         <View style={{ paddingHorizontal: Spacing.xl, marginTop: 8 }}>
+          <IdentityVerificationCard />
+        </View>
+
+        <View style={{ paddingHorizontal: Spacing.xl, marginTop: 8 }}>
           <TrustBenefitsPanel
             compact
             onCredit={() => router.push("/credit-score" as any)}
@@ -278,8 +288,19 @@ export default function Identity() {
         <SectionTitle>Score de confiance</SectionTitle>
         <View style={{ paddingHorizontal: Spacing.xl }}>
           <Card style={{ alignItems: "center", paddingVertical: 24 }}>
-            <TrustGauge score={ts.score} level={ts.level} color={ts.color} size={240} scoreMax={(ts as any).score_max ?? 1000} />
-            <Text style={styles.riskLabel}>Niveau de risque : <Text style={{ color: ts.color, fontWeight: "800" }}>{ts.risk}</Text></Text>
+            <TrustGauge
+              score={ts.score}
+              level={ts.level}
+              color={ts.color}
+              size={240}
+              scoreMax={(ts as any).score_max ?? 1000}
+              hideOutOf
+              percentileLine={percentileLine ?? undefined}
+            />
+            <Text style={styles.riskLabel}>
+              {percentileLine ? `${percentileLine} · ` : ""}
+              Niveau de risque : <Text style={{ color: ts.color, fontWeight: "800" }}>{ts.risk}</Text>
+            </Text>
           </Card>
         </View>
 

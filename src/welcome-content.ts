@@ -93,8 +93,8 @@ export const WELCOME_I18N = {
 export const DASHBOARD_HERO_I18N = {
   fr: {
     greeting: (name: string) => (name ? `Bonjour, ${name}` : "Bonjour"),
-    headline: "Infrastructure financière communautaire",
-    subline: "Épargne, réputation et réseau — une identité financière portable.",
+    headline: "Votre réputation financière",
+    subline: "Community Trust Score — portable, vérifiable, partout.",
     trust_cta: "Voir mon identité",
     wallet_cta: "Mon portefeuille",
     saved_label: "Épargné",

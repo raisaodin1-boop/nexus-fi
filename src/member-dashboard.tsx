@@ -22,8 +22,11 @@ import { DegradedDataBanner } from "@/src/degraded-banner";
 import { Card, SectionTitle, StatCard, SkeletonBox, SkeletonCard } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { EngagementStrip } from "@/src/engagement-strip";
+import { CeoDashboardHero } from "@/src/ceo-dashboard-hero";
 import { MemberDashboardHero } from "@/src/member-dashboard-hero";
+import { RecommendedActionsPanel } from "@/src/recommended-actions-panel";
 import { QuickSendBar } from "@/src/quick-send-bar";
+import type { DashboardStory } from "@/src/db/dashboard-story";
 import { buildBadgeShareMessage, computeSocialBadges } from "@/src/social-badges";
 import { LineChart } from "@/src/charts";
 import { debounce } from "@/src/utils/debounce";
@@ -63,6 +66,7 @@ export function MemberDashboard() {
   const [streakWeeks, setStreakWeeks] = useState(0);
   const [primaryDegraded, setPrimaryDegraded] = useState(false);
   const [myPlan, setMyPlan] = useState<UserSubscription | null>(null);
+  const [story, setStory] = useState<DashboardStory | null>(null);
 
   const load = useCallback(async (opts?: { secondaryOnly?: boolean }) => {
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
@@ -70,14 +74,16 @@ export function MemberDashboard() {
     };
 
     if (!opts?.secondaryOnly) {
-      const [s, t, n] = await Promise.all([
+      const [s, t, n, st] = await Promise.all([
         safe(() => api.get<Summary>("/savings/summary")),
         safe(() => api.get<TrustScore>("/trust-score")),
         safe(() => api.get<{ unread_count: number }>("/notifications")),
+        safe(() => api.get<DashboardStory>("/dashboard/story")),
       ]);
       if (s) setSummary(s);
       if (t) setTrust(t);
       if (n) setUnread(n.unread_count ?? 0);
+      if (st) setStory(st);
       setPrimaryDegraded(!s && !t);
       setLoading(false);
     }
@@ -168,15 +174,21 @@ export function MemberDashboard() {
         showsVerticalScrollIndicator={false}
       >
         <View style={{ ...contentPad, paddingTop: Spacing.lg }}>
-          <MemberDashboardHero
-            firstName={user?.full_name?.split(" ")[0]}
-            trustScore={trust?.score ?? user?.trust_score ?? undefined}
-            trustLevel={trust?.level}
-            totalSaved={summaryData.total_saved}
-            currency={summaryData.currency}
-            unread={unread}
-          />
+          {story ? (
+            <CeoDashboardHero story={story} unread={unread} />
+          ) : (
+            <MemberDashboardHero
+              firstName={user?.full_name?.split(" ")[0]}
+              trustScore={trust?.score ?? user?.trust_score ?? undefined}
+              trustLevel={trust?.level}
+              totalSaved={summaryData.total_saved}
+              currency={summaryData.currency}
+              unread={unread}
+            />
+          )}
         </View>
+
+        <RecommendedActionsPanel actions={story?.recommended_actions ?? []} />
 
         <QuickSendBar />
 
@@ -352,8 +364,8 @@ export function MemberDashboard() {
           </View>
         ) : null}
 
-        {/* Insights */}
-        <SectionTitle style={contentPad}>Vos insights</SectionTitle>
+        {/* Insights — HODIX AI */}
+        <SectionTitle style={contentPad}>HODIX AI</SectionTitle>
         <View style={contentPad}>
           {insights.slice(0, 4).map((it, i) => (
             <TouchableOpacity

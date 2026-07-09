@@ -10,9 +10,11 @@ interface Props {
   color?: string;
   size?: number;
   scoreMax?: number;
+  hideOutOf?: boolean;
+  percentileLine?: string;
 }
 
-export function TrustGauge({ score, level, color = Colors.accent, size = 220, scoreMax = 1000 }: Props) {
+export function TrustGauge({ score, level, color = Colors.accent, size = 220, scoreMax = 1000, hideOutOf, percentileLine }: Props) {
   const stroke = 18;
   const radius = (size - stroke) / 2;
   const cx = size / 2;
@@ -59,7 +61,8 @@ export function TrustGauge({ score, level, color = Colors.accent, size = 220, sc
         </Svg>
         <View style={[styles.center, { width: size, height: size / 1.6 }]}>
           <RNText style={styles.score}>{clamped.toFixed(0)}</RNText>
-          <RNText style={styles.outOf}>/ {scoreMax}</RNText>
+          {!hideOutOf ? <RNText style={styles.outOf}>/ {scoreMax}</RNText> : null}
+          {percentileLine ? <RNText style={styles.percentile}>{percentileLine}</RNText> : null}
         </View>
       </View>
       <View style={[styles.levelPill, { backgroundColor: color }]}>
@@ -78,6 +81,7 @@ const styles = StyleSheet.create({
   },
   score: { fontSize: 56, fontWeight: "900", color: Colors.text, letterSpacing: -2 },
   outOf: { fontSize: 14, color: Colors.textMuted, marginTop: -8, fontWeight: "600" },
+  percentile: { fontSize: 12, color: Colors.secondary, marginTop: 4, fontWeight: "700", textAlign: "center", maxWidth: 160 },
   levelPill: {
     paddingHorizontal: 18,
     paddingVertical: 8,
