@@ -1,7 +1,8 @@
 import { getSupabase } from "@/src/supabase";
+import { publicEnv } from "@/src/public-env";
 
 export function paynoteMtnEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_PAYNOTE_MTN_ENABLED === "true";
+  return publicEnv("EXPO_PUBLIC_PAYNOTE_MTN_ENABLED") === "true";
 }
 
 export function normalizeMtnMsisdn(phone: string): string {
