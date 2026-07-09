@@ -12,7 +12,7 @@ import {
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { Bell, ChevronRight, PiggyBank, Trophy, Users, Wallet, TrendingUp, Sparkles, QrCode, BarChart2, Brain, Repeat, Receipt, PieChart, MessageCircle, CreditCard, Store, Gavel, Target, Crown } from "lucide-react-native";
+import { Bell, ChevronRight, PiggyBank, Trophy, Users, Wallet, TrendingUp, Sparkles, QrCode, BarChart2, Brain, Repeat, Receipt, PieChart, MessageCircle, CreditCard, Store, Gavel, Target, Crown, Globe } from "lucide-react-native";
 
 import { useAuth } from "@/src/auth-context";
 import { api, formatXAF } from "@/src/api";
@@ -292,6 +292,7 @@ export function MemberDashboard() {
         </View>
         <View style={[styles.qaRow, contentPad]}>
           <QuickAction icon={<BarChart2 color={Colors.secondary} size={22} />} label="Tableau de bord" onPress={() => router.push("/analytics")} testID="home-action-analytics" compact={isCompact} />
+          <QuickAction icon={<Globe color={Colors.secondary} size={22} />} label="HODIX Diaspora" onPress={() => router.push("/diaspora" as any)} testID="home-action-diaspora" compact={isCompact} />
           <QuickAction icon={<Users color={Colors.primary} size={22} />} label="Famille" onPress={() => router.push("/family")} testID="home-action-family" compact={isCompact} />
         </View>
         <View style={[styles.qaRow, contentPad]}>

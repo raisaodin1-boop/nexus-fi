@@ -8,7 +8,7 @@ import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowDownLeft, ArrowUpRight, ArrowLeftRight,
-  RefreshCw, Wallet as WalletIcon, Shield,
+  RefreshCw, Wallet as WalletIcon, Shield, Globe,
 } from "lucide-react-native";
 
 import { api } from "@/src/api";
@@ -197,6 +197,7 @@ export default function WalletScreen() {
                 { label: "Recharger",  icon: ArrowDownLeft,  route: "/wallet/topup",    color: "#10B981" },
                 { label: "Retirer",    icon: ArrowUpRight,   route: "/wallet/withdraw",  color: "#EF4444" },
                 { label: "Transférer", icon: ArrowLeftRight, route: "/wallet/transfer",  color: "#1D4ED8" },
+                { label: "Diaspora",  icon: Globe,         route: "/diaspora",           color: "#0F766E" },
                 { label: "Sécurité",  icon: Shield,        route: "/wallet/security", color: "#8B5CF6" },
               ].map(({ label, icon: Icon, route, color }) => (
                 <TouchableOpacity

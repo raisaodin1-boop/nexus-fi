@@ -21,3 +21,4 @@ export * from "./compliance";
 export * from "./verify";
 export * from "./platform-stats";
 export * from "./dashboard-story";
+export * from "./diaspora";

@@ -276,6 +276,22 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     // ── Exchange rates (extended)
     if (method === "GET"  && s[0] === "exchange-rates")                                   return (await import("@/src/exchange-rates").then(m => m.getRates())) as T;
 
+    // ── Diaspora (manual cotisations depuis l'étranger)
+    if (method === "GET"  && s[0] === "diaspora" && s[1] === "home")                      return (await db.getDiasporaHome()) as T;
+    if (method === "GET"  && s[0] === "diaspora" && s[1] === "contributions")              return (await db.listDiasporaContributions({ status: query.get("status") ?? undefined, tontine_id: query.get("tontine_id") ?? undefined })) as T;
+    if (method === "POST" && s[0] === "diaspora" && s[1] === "requests")                   return (await db.ensureDiasporaRequest(body?.tontine_id)) as T;
+    if (method === "GET"  && s[0] === "diaspora" && s[1] === "join-preview")               return (await db.getDiasporaJoinPreview(query.get("code") ?? undefined, query.get("tontine_id") ?? undefined)) as T;
+    if (method === "POST" && s[0] === "diaspora" && s[1] === "join")                      return (await db.joinTontineDiaspora(body?.invite_code, !!body?.diaspora_consent)) as T;
+    if (method === "POST" && s[0] === "diaspora" && s[1] === "proof-upload")             return (await db.uploadDiasporaProof(body?.base64, body?.mime)) as T;
+    if (method === "GET"  && s[0] === "diaspora" && s[1] === "requests" && s[2] && s[3] === "receipt")
+      return (await db.getDiasporaReceipt(s[2])) as T;
+    if (method === "GET"  && s[0] === "diaspora" && s[1] === "requests" && s[2])
+      return (await db.getDiasporaContribution(s[2])) as T;
+    if (method === "POST" && s[0] === "diaspora" && s[1] === "requests" && s[2] && s[3] === "payment-started")
+      return (await db.markDiasporaPaymentStarted(s[2], body)) as T;
+    if (method === "POST" && s[0] === "diaspora" && s[1] === "requests" && s[2] && s[3] === "proof")
+      return (await db.submitDiasporaProof(s[2], body)) as T;
+
     // ── Admin
     if (method === "GET" && s[0] === "admin" && s[1] === "stats")                      return (await db.getAdminStats()) as T;
     if (method === "GET"   && s[0] === "admin" && s[1] === "payment-config")                   return (await db.getPaymentConfig()) as T;
@@ -314,6 +330,15 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"   && s[0] === "admin" && s[1] === "messages")                          return (await db.adminListAllMessages()) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "messages")                          return (await db.adminSendMessageToUser(body?.user_id, body?.content)) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "advertisement")                     return (await db.adminSendAdvertisement(body?.title, body?.content)) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "diaspora" && s[2] === "stats")      return (await db.adminDiasporaStats()) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "diaspora" && s[2] === "requests")   return (await db.adminListDiasporaRequests({ status: query.get("status") ?? undefined, method: query.get("method") ?? undefined, overdue: query.get("overdue") === "1" })) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "diaspora" && s[2] === "requests" && s[3])
+      return (await db.getDiasporaContributionAdmin(s[3])) as T;
+    if (method === "POST"  && s[0] === "admin" && s[1] === "diaspora" && s[2] === "validate")   return (await db.adminValidateDiaspora(body?.request_id, body?.note)) as T;
+    if (method === "POST"  && s[0] === "admin" && s[1] === "diaspora" && s[2] === "reject")     return (await db.adminRejectDiaspora(body?.request_id, body?.reason, body?.note)) as T;
+    if (method === "POST"  && s[0] === "admin" && s[1] === "diaspora" && s[2] === "needs-info") return (await db.adminRequestDiasporaInfo(body?.request_id, body?.message)) as T;
+    if (method === "POST"  && s[0] === "admin" && s[1] === "diaspora" && s[2] === "suspicious") return (await db.adminMarkDiasporaSuspicious(body?.request_id, body?.note)) as T;
+    if (method === "POST"  && s[0] === "admin" && s[1] === "diaspora" && s[2] === "assign")     return (await db.adminAssignDiaspora(body?.request_id, body?.agent_id)) as T;
 
     // ── Messages
     if (method === "GET"  && s[0] === "messages" && s[1] === "conversations")                   return (await db.listConversations()) as T;

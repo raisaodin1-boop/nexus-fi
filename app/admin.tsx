@@ -18,7 +18,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowLeft, Users, ShieldCheck, Crown, BarChart3, Bell,
   CheckCircle, XCircle, Send, ChevronRight, ShieldAlert,
-  Search, Zap, MessageCircle,
+  Search, Zap, MessageCircle, Globe,
 } from "lucide-react-native";
 
 import { api, ApiError } from "@/src/api";
@@ -31,8 +31,9 @@ import { MIN_TOUCH, useResponsive } from "@/src/hooks/use-responsive";
 import { KycReviewModal, type KycReviewTarget } from "@/src/admin-kyc-review-modal";
 import { AdminCompliancePanel } from "@/src/admin-compliance-panel";
 import { AdminPromotionRequestsPanel } from "@/src/admin-promotion-requests";
+import { AdminDiasporaPanel } from "@/src/admin-diaspora-panel";
 
-type Tab = "users" | "kyc" | "promotions" | "tontines" | "messages" | "broadcast" | "compliance";
+type Tab = "users" | "kyc" | "promotions" | "tontines" | "messages" | "broadcast" | "compliance" | "diaspora";
 
 interface AdminUser {
   id: string; email: string; full_name: string; role: string;
@@ -145,7 +146,7 @@ export default function AdminConsole() {
   const { isCompact, horizontalPad } = useResponsive();
   const [tab, setTab] = useState<Tab>(() => {
     const t = params.tab;
-    if (t === "compliance" || t === "kyc" || t === "users" || t === "promotions" || t === "tontines" || t === "messages" || t === "broadcast") {
+    if (t === "compliance" || t === "kyc" || t === "users" || t === "promotions" || t === "tontines" || t === "messages" || t === "broadcast" || t === "diaspora") {
       return t;
     }
     return "users";
@@ -348,6 +349,7 @@ export default function AdminConsole() {
     { key: "promotions", label: "Promos", icon: Crown, count: promos.filter(p => p.status === "pending").length || undefined },
     { key: "tontines", label: "Tontines", icon: BarChart3 },
     { key: "messages", label: "Messages", icon: MessageCircle, count: msgUnreadTotal || undefined },
+    { key: "diaspora", label: "Diaspora", icon: Globe },
     { key: "compliance", label: "Compliance", icon: ShieldAlert, count: openFraudAlerts || undefined },
     { key: "broadcast", label: "Annonces", icon: Bell },
   ];
@@ -699,6 +701,8 @@ export default function AdminConsole() {
         </View>
       ) : tab === "compliance" ? (
         <AdminCompliancePanel embedded />
+      ) : tab === "diaspora" ? (
+        <AdminDiasporaPanel embedded />
       ) : (
         <ScrollView contentContainerStyle={{ padding: Spacing.xl, gap: 16, paddingBottom: 100 }}>
           <View style={styles.broadcastCard}>
