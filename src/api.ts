@@ -85,6 +85,14 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "escrow-dispute")        return (await db.reportEscrowDispute(s[1], body?.reason ?? "")) as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "reserve")               return (await db.getTontineReserveFund(s[1])) as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "overdue")               return (await db.getOverdueMembers(s[1])) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "claim-proof" && s[3] === "upload")
+      return ({ path: await db.uploadTontineClaimProof(body?.base64, body?.mime) }) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "claims")
+      return (await db.submitTontinePaymentClaim(s[1], body ?? {})) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] === "claims" && s[2] && s[3] === "validate")
+      return (await db.validateTontinePaymentClaim(s[2], body?.note)) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] === "claims" && s[2] && s[3] === "reject")
+      return (await db.rejectTontinePaymentClaim(s[2], body?.reason ?? "")) as T;
     if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "advance")             return (await db.advanceTontineCycle(s[1])) as T;
     if (method === "PATCH" && s[0] === "tontines" && s[1] && s[2] === "rotation")           return (await db.updateTontineRotation(s[1], body)) as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "disbursements")        return (await db.listTontineDisbursements(s[1])) as T;

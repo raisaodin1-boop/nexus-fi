@@ -46,6 +46,13 @@ export async function getTontine(id: string) {
     .limit(100);
   throwSb(contribErr);
 
+  const { data: claims } = await sb
+    .from("tontine_payment_claims")
+    .select("*")
+    .eq("tontine_id", id)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
   const contribProfiles = await profileDisplayMap((contributions ?? []).map((c: { user_id: string }) => c.user_id));
 
   const membersList = (members ?? [])
@@ -84,6 +91,36 @@ export async function getTontine(id: string) {
   const paidThisCycle = contributionsList.filter((c) => c.cycle === currentCycle).length;
   const compliancePct = membersCount > 0 ? Math.round((paidThisCycle / membersCount) * 100) : 0;
 
+  const deadline = tontine.cycle_deadline ? new Date(tontine.cycle_deadline) : null;
+  const now = new Date();
+  const isPastDeadline = !!(deadline && now > deadline);
+  const openClaims = (claims ?? []).filter((c: any) => c.cycle === currentCycle && c.status === "proof_submitted");
+  const paidUserIds = new Set(
+    contributionsList.filter((c) => c.cycle === currentCycle).map((c) => c.user_id),
+  );
+
+  const cycleBoard = membersList
+    .filter((m) => m.status !== "exclu")
+    .map((m) => {
+      const claim = openClaims.find((c: any) => c.user_id === m.user_id)
+        ?? (claims ?? []).find((c: any) => c.user_id === m.user_id && c.cycle === currentCycle);
+      let pay_status: "paid" | "proof_submitted" | "pending" | "late" | "rejected" = "pending";
+      if (paidUserIds.has(m.user_id)) pay_status = "paid";
+      else if (claim?.status === "proof_submitted") pay_status = "proof_submitted";
+      else if (claim?.status === "rejected") pay_status = "rejected";
+      else if (isPastDeadline) pay_status = "late";
+      return {
+        user_id: m.user_id,
+        full_name: m.full_name,
+        kyc_verified: m.kyc_verified,
+        role: m.role,
+        pay_status,
+        claim_id: claim?.id ?? null,
+        claim_status: claim?.status ?? null,
+        rejection_reason: claim?.rejection_reason ?? null,
+      };
+    });
+
   const myMember = membersList.find((m) => m.user_id === me);
   const isAdmin = tontine.owner_id === me || myMember?.role === "admin";
 
@@ -102,6 +139,7 @@ export async function getTontine(id: string) {
       total_collected: totalCollected,
       total_cycles: totalCycles,
       current_cycle: currentCycle,
+      cycle_deadline: tontine.cycle_deadline ?? null,
       status: tontine.status ?? (tontine.is_active ? "active" : "inactive"),
       rotation_mode: tontine.rotation_mode ?? "rotation",
       currency: tontine.currency ?? "XAF",
@@ -109,18 +147,20 @@ export async function getTontine(id: string) {
     is_admin: isAdmin,
     members: membersList,
     contributions: contributionsList,
+    cycle_board: cycleBoard,
     compliance_pct: compliancePct,
     cycle: {
       current_cycle: currentCycle,
       total_cycles: totalCycles,
+      deadline: tontine.cycle_deadline ?? null,
+      is_past_deadline: isPastDeadline,
+      paid_count: paidThisCycle,
+      pending_proofs: openClaims.length,
       current_beneficiary_id: currentBeneficiary?.user_id ?? null,
       current_beneficiary_name: currentBeneficiary?.full_name ?? null,
       next_beneficiary_name: nextBeneficiary?.full_name ?? null,
       current_beneficiary_kyc_verified: currentBeneficiary?.kyc_verified ?? false,
       next_beneficiary_kyc_verified: nextBeneficiary?.kyc_verified ?? false,
-      rotation_mode: (tontine.rotation_mode ?? "rotation") as "rotation" | "random" | "custom",
-      cycle_start_date: null,
-      compliance_pct: compliancePct,
     },
   };
 }
@@ -327,6 +367,8 @@ export async function createTontineSecure(body: Record<string, any>) {
     frequency: body.frequency ?? "monthly",
     max_members: Number(body.max_members ?? 12), is_public: body.is_public ?? false,
     owner_id: me,
+    current_cycle: 1,
+    cycle_deadline: nextCycleDeadline(body.frequency ?? "monthly"),
   };
   if (body.language) insertRow.language = body.language;
   if (body.country) insertRow.country = body.country;
@@ -743,3 +785,109 @@ export async function getTontineLeaderboard(tontineId: string) {
       return { rank: i + 1, display_name: masked, country: v.country, total: v.total };
     });
 }
+
+/* ── Payment claims / proofs (Phase 1 P0) ───────────────────── */
+
+const CLAIM_BUCKET = "tontine-proofs";
+
+function base64ToUint8Array(base64: string): Uint8Array {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  const clean = base64.replace(/[^A-Za-z0-9+/]/g, "");
+  const len = clean.length;
+  const bytes = new Uint8Array(Math.floor(len * 3 / 4));
+  let idx = 0;
+  for (let i = 0; i < len; i += 4) {
+    const a = chars.indexOf(clean[i]);
+    const b = chars.indexOf(clean[i + 1]);
+    const c = chars.indexOf(clean[i + 2]);
+    const d = chars.indexOf(clean[i + 3]);
+    bytes[idx++] = (a << 2) | (b >> 4);
+    if (c !== -1) bytes[idx++] = ((b & 0xf) << 4) | (c >> 2);
+    if (d !== -1) bytes[idx++] = ((c & 0x3) << 6) | d;
+  }
+  return bytes.slice(0, idx);
+}
+
+export async function uploadTontineClaimProof(base64: string, mime = "image/jpeg"): Promise<string> {
+  const me = await uid();
+  const ext = mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : mime.includes("pdf") ? "pdf" : "jpg";
+  const path = `${me}/${Date.now()}.${ext}`;
+  const data = base64ToUint8Array(base64);
+  const { error } = await getSupabase().storage.from(CLAIM_BUCKET).upload(path, data, { contentType: mime, upsert: false });
+  if (error) throw { status: 500, detail: error.message };
+  return path;
+}
+
+export async function submitTontinePaymentClaim(
+  tontineId: string,
+  payload: { proof_path: string; note?: string; payment_method?: string; amount?: number },
+) {
+  const me = await uid();
+  const sb = getSupabase();
+  const { data: tontine } = await sb.from("tontines")
+    .select("id, owner_id, name, current_cycle, amount_per_cycle, contribution_amount")
+    .eq("id", tontineId).single();
+  if (!tontine) throw { status: 404, detail: "Tontine introuvable." };
+
+  const { data: membership } = await sb.from("tontine_members")
+    .select("user_id, status").eq("tontine_id", tontineId).eq("user_id", me).maybeSingle();
+  if (!membership || membership.status === "exclu") throw { status: 403, detail: "Vous n'êtes pas membre actif." };
+
+  const cycle = tontine.current_cycle ?? 1;
+  const { count: alreadyPaid } = await sb.from("tontine_contributions")
+    .select("*", { count: "exact", head: true })
+    .eq("tontine_id", tontineId).eq("user_id", me).eq("cycle", cycle);
+  if ((alreadyPaid ?? 0) > 0) throw { status: 400, detail: "Cotisation déjà enregistrée pour ce cycle." };
+
+  if (!payload.proof_path) throw { status: 400, detail: "Preuve obligatoire (photo ou PDF)." };
+  const amount = Number(payload.amount ?? tontine.amount_per_cycle ?? tontine.contribution_amount ?? 0);
+  if (!Number.isFinite(amount) || amount <= 0) throw { status: 400, detail: "Montant invalide." };
+
+  const { data: existing } = await sb.from("tontine_payment_claims")
+    .select("id").eq("tontine_id", tontineId).eq("user_id", me).eq("cycle", cycle)
+    .eq("status", "proof_submitted").maybeSingle();
+  if (existing) throw { status: 400, detail: "Une preuve est déjà en attente de validation." };
+
+  const { data: claim, error } = await sb.from("tontine_payment_claims").insert({
+    tontine_id: tontineId,
+    user_id: me,
+    cycle,
+    amount,
+    status: "proof_submitted",
+    proof_path: payload.proof_path,
+    note: payload.note?.trim() || null,
+    payment_method: payload.payment_method ?? "manual_proof",
+  }).select().single();
+  throwSb(error);
+
+  if (tontine.owner_id) {
+    await notifyUser({
+      user_id: tontine.owner_id,
+      title: "Preuve de cotisation à valider",
+      body: `Un membre a soumis une preuve pour « ${tontine.name} » (cycle ${cycle}).`,
+      type: "tontine_claim_pending",
+    });
+  }
+
+  return claim;
+}
+
+export async function validateTontinePaymentClaim(claimId: string, note?: string) {
+  const { data, error } = await getSupabase().rpc("validate_tontine_payment_claim", {
+    p_claim_id: claimId,
+    p_note: note ?? null,
+  });
+  if (error) throw { status: 400, detail: error.message };
+  invalidateCache("tontines");
+  return data;
+}
+
+export async function rejectTontinePaymentClaim(claimId: string, reason: string) {
+  const { data, error } = await getSupabase().rpc("reject_tontine_payment_claim", {
+    p_claim_id: claimId,
+    p_reason: reason,
+  });
+  if (error) throw { status: 400, detail: error.message };
+  return data;
+}
+

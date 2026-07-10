@@ -200,31 +200,30 @@ export async function updateTontineRotation(
 export async function sendTontineReminders(tontineId: string) {
   await assertTontineAdmin(tontineId);
   const sb = getSupabase();
-  const { data: t } = await sb.from("tontines").select("name, current_cycle, amount_per_cycle, contribution_amount").eq("id", tontineId).single();
+  const { data: t } = await sb.from("tontines")
+    .select("name, current_cycle, amount_per_cycle, contribution_amount, cycle_deadline")
+    .eq("id", tontineId).single();
   if (!t) throw { status: 404, detail: "Tontine introuvable." };
 
+  const cycle = t.current_cycle ?? 1;
   const amount = Number(t.amount_per_cycle ?? t.contribution_amount ?? 0);
   const { data: members } = await sb
     .from("tontine_members")
-    .select("user_id, profiles(full_name, phone)")
-    .eq("tontine_id", tontineId);
+    .select("user_id, last_paid_cycle, status")
+    .eq("tontine_id", tontineId)
+    .neq("status", "exclu");
 
   let sent = 0;
   let skipped = 0;
   let failed = 0;
 
   for (const m of members ?? []) {
-    const phone = (m as any).profiles?.phone;
-    const name = ((m as any).profiles?.full_name ?? "Membre").split(" ")[0];
-    if (!phone || String(phone).trim().length < 8) {
-      skipped++;
-      continue;
-    }
+    if ((m.last_paid_cycle ?? 0) >= cycle) { skipped++; continue; }
     try {
       await notifyUser({
         user_id: m.user_id,
         title: `Rappel cotisation — ${t.name}`,
-        body: `Bonjour ${name}, votre contribution de ${amount.toLocaleString("fr-FR")} XAF (cycle ${t.current_cycle ?? 1}) est attendue.`,
+        body: `Votre contribution de ${amount.toLocaleString("fr-FR")} XAF (cycle ${cycle}) est attendue.`,
         type: "tontine_reminder",
       });
       sent++;

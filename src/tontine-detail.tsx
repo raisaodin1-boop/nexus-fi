@@ -79,9 +79,24 @@ interface CycleInfo {
   next_beneficiary_name: string | null;
   current_beneficiary_kyc_verified?: boolean;
   next_beneficiary_kyc_verified?: boolean;
-  rotation_mode: "rotation" | "random" | "custom";
-  cycle_start_date: string | null;
-  compliance_pct: number;
+  rotation_mode?: "rotation" | "random" | "custom";
+  cycle_start_date?: string | null;
+  compliance_pct?: number;
+  deadline?: string | null;
+  is_past_deadline?: boolean;
+  paid_count?: number;
+  pending_proofs?: number;
+}
+
+interface CycleBoardRow {
+  user_id: string;
+  full_name: string;
+  kyc_verified?: boolean;
+  role: string;
+  pay_status: "paid" | "proof_submitted" | "pending" | "late" | "rejected";
+  claim_id?: string | null;
+  claim_status?: string | null;
+  rejection_reason?: string | null;
 }
 
 interface TontineData {
@@ -99,10 +114,12 @@ interface TontineData {
     total_cycles: number;
     rotation_mode: string;
     status: string;
+    cycle_deadline?: string | null;
   };
   is_admin: boolean;
   members: Member[];
   contributions: Contribution[];
+  cycle_board?: CycleBoardRow[];
   disbursements?: Disbursement[];
   cycle?: CycleInfo;
   compliance_pct?: number;
@@ -123,6 +140,70 @@ function statusLabel(s: string) {
   if (s === "suspendu") return "Suspendu";
   if (s === "en_retard") return "En retard";
   return "À jour";
+}
+
+function payStatusMeta(s: CycleBoardRow["pay_status"]) {
+  switch (s) {
+    case "paid": return { label: "Payé", color: Colors.accent };
+    case "proof_submitted": return { label: "Preuve soumise", color: Colors.secondary };
+    case "late": return { label: "En retard", color: Colors.warning };
+    case "rejected": return { label: "Preuve refusée", color: Colors.danger };
+    default: return { label: "En attente", color: Colors.textMuted };
+  }
+}
+
+function CycleBoard({
+  rows, isAdmin, onValidate, onReject, busyId,
+}: {
+  rows: CycleBoardRow[];
+  isAdmin: boolean;
+  onValidate: (claimId: string) => void;
+  onReject: (claimId: string) => void;
+  busyId: string | null;
+}) {
+  if (!rows.length) return null;
+  return (
+    <Card style={{ gap: 10, padding: 14 }}>
+      <Text style={{ fontSize: 14, fontWeight: "800", color: Colors.text }}>Cotisations du cycle</Text>
+      <Text style={{ fontSize: 11, color: Colors.textMuted, marginBottom: 4 }}>
+        Payé · En attente · En retard · Preuve soumise · Validée
+      </Text>
+      {rows.map((r) => {
+        const meta = payStatusMeta(r.pay_status);
+        return (
+          <View key={r.user_id} style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 6, borderTopWidth: 1, borderTopColor: Colors.border }}>
+            <View style={{ flex: 1 }}>
+              <VerifiedName name={r.full_name} kycVerified={r.kyc_verified} style={{ fontSize: 13, fontWeight: "700", color: Colors.text }} />
+              {r.rejection_reason ? (
+                <Text style={{ fontSize: 10, color: Colors.danger, marginTop: 2 }}>{r.rejection_reason}</Text>
+              ) : null}
+            </View>
+            <View style={{ backgroundColor: meta.color + "18", borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 }}>
+              <Text style={{ color: meta.color, fontSize: 10, fontWeight: "800" }}>{meta.label}</Text>
+            </View>
+            {isAdmin && r.pay_status === "proof_submitted" && r.claim_id ? (
+              <View style={{ flexDirection: "row", gap: 4 }}>
+                <TouchableOpacity
+                  disabled={busyId === r.claim_id}
+                  onPress={() => onValidate(r.claim_id!)}
+                  style={{ backgroundColor: Colors.accent, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6 }}
+                >
+                  <Text style={{ color: "#fff", fontSize: 10, fontWeight: "800" }}>OK</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  disabled={busyId === r.claim_id}
+                  onPress={() => onReject(r.claim_id!)}
+                  style={{ backgroundColor: Colors.danger, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6 }}
+                >
+                  <Text style={{ color: "#fff", fontSize: 10, fontWeight: "800" }}>Non</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
+    </Card>
+  );
 }
 
 /* ─── Sub-components ─────────────────────────────────── */
@@ -445,6 +526,8 @@ export function TontineDetailView({ id }: { id: string }) {
   const [graduationInvite, setGraduationInvite] = useState<GraduationInvite | null>(null);
   const [showGraduation, setShowGraduation] = useState(false);
   const [activeTab, setActiveTab] = useState<"cycle" | "rotation" | "history" | "members" | "contributions">("cycle");
+  const [claimBusyId, setClaimBusyId] = useState<string | null>(null);
+  const [proofBusy, setProofBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -550,23 +633,109 @@ export function TontineDetailView({ id }: { id: string }) {
     );
   }
 
-  const { tontine, is_admin, members, contributions, cycle } = data;
+  const { tontine, is_admin, members, contributions, cycle, cycle_board = [] } = data;
   const currentCycle = tontine.current_cycle ?? 1;
-  const hasPaidCurrentCycle = !!user?.id && contributions.some(
-    (c) => c.user_id === user.id && c.cycle === currentCycle,
-  );
+  const myBoard = cycle_board.find((r) => r.user_id === user?.id);
+  const hasPaidCurrentCycle = myBoard?.pay_status === "paid"
+    || (!!user?.id && contributions.some((c) => c.user_id === user.id && c.cycle === currentCycle));
+  const hasPendingProof = myBoard?.pay_status === "proof_submitted";
   const canContribute = !!tontine.contribution_amount && tontine.contribution_amount > 0;
+
+  const submitProof = async () => {
+    try {
+      setProofBusy(true);
+      const ImagePicker = await import("expo-image-picker");
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Permission", "Autorisez l'accès aux photos pour joindre une preuve.");
+        return;
+      }
+      const picked = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.7,
+        base64: true,
+      });
+      if (picked.canceled || !picked.assets?.[0]?.base64) return;
+      const asset = picked.assets[0];
+      const mime = asset.mimeType ?? "image/jpeg";
+      const up = await api.post<{ path: string }>(`/tontines/${id}/claim-proof/upload`, {
+        base64: asset.base64,
+        mime,
+      });
+      await api.post(`/tontines/${id}/claims`, {
+        proof_path: up.path,
+        payment_method: "manual_proof",
+        note: "Preuve de paiement soumise depuis l'app",
+      });
+      Alert.alert("Preuve envoyée", "Le gestionnaire va vérifier et valider votre cotisation.");
+      await load();
+    } catch (e) {
+      Alert.alert("Erreur", e instanceof ApiError ? e.detail : "Impossible d'envoyer la preuve.");
+    } finally {
+      setProofBusy(false);
+    }
+  };
+
+  const validateClaim = async (claimId: string) => {
+    setClaimBusyId(claimId);
+    try {
+      await api.post(`/tontines/claims/${claimId}/validate`, {});
+      await load();
+    } catch (e) {
+      Alert.alert("Erreur", e instanceof ApiError ? e.detail : "Validation impossible.");
+    } finally {
+      setClaimBusyId(null);
+    }
+  };
+
+  const rejectClaim = (claimId: string) => {
+    Alert.alert(
+      "Refuser la preuve",
+      "Confirmer le rejet (motif : preuve illisible ou non conforme) ?",
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Refuser",
+          style: "destructive",
+          onPress: async () => {
+            setClaimBusyId(claimId);
+            try {
+              await api.post(`/tontines/claims/${claimId}/reject`, { reason: "Preuve illisible ou non conforme" });
+              await load();
+            } catch (e) {
+              Alert.alert("Erreur", e instanceof ApiError ? e.detail : "Rejet impossible.");
+            } finally {
+              setClaimBusyId(null);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const ContributePanel = () => (
     <View style={{ marginTop: 16, gap: 10 }}>
       <Text style={styles.sectionTitle}>
         {hasPaidCurrentCycle ? "Cotisation du cycle" : "Payer ma cotisation"}
       </Text>
+      {cycle?.deadline ? (
+        <Text style={{ color: Colors.textMuted, fontSize: 12 }}>
+          Échéance : {formatDate(cycle.deadline)}
+          {cycle.is_past_deadline ? " · en retard" : ""}
+        </Text>
+      ) : null}
       {hasPaidCurrentCycle ? (
         <Card style={{ padding: 14, gap: 6, borderColor: Colors.accent, borderWidth: 1 }}>
           <Text style={{ color: Colors.accent, fontWeight: "800" }}>✓ Cotisation enregistrée pour le cycle {currentCycle}</Text>
           <Text style={{ color: Colors.textMuted, fontSize: 12 }}>
             Montant : {formatXAF(tontine.contribution_amount, tontine.currency)}
+          </Text>
+        </Card>
+      ) : hasPendingProof ? (
+        <Card style={{ padding: 14, gap: 6, borderColor: Colors.secondary, borderWidth: 1 }}>
+          <Text style={{ color: Colors.secondary, fontWeight: "800" }}>Preuve en cours de validation</Text>
+          <Text style={{ color: Colors.textMuted, fontSize: 12 }}>
+            Le gestionnaire vérifiera votre paiement avant d'enregistrer la cotisation.
           </Text>
         </Card>
       ) : canContribute ? (
@@ -580,8 +749,15 @@ export function TontineDetailView({ id }: { id: string }) {
             icon={<Smartphone color="#fff" size={16} />}
             testID="tontine-pay"
           />
+          <Button
+            label={proofBusy ? "Envoi…" : "J'ai déjà payé — joindre une preuve"}
+            onPress={submitProof}
+            variant="secondary"
+            loading={proofBusy}
+            testID="tontine-submit-proof"
+          />
           <Text style={{ color: Colors.textSubtle, fontSize: 11, textAlign: "center" }}>
-            Paiement MTN MoMo via Paynote — crédit après confirmation sur votre téléphone
+            MoMo via Paynote, ou preuve manuelle validée par le gestionnaire
           </Text>
         </Card>
       ) : (
@@ -667,6 +843,14 @@ export function TontineDetailView({ id }: { id: string }) {
             </TouchableOpacity>
 
             <ContributePanel />
+
+            <CycleBoard
+              rows={cycle_board}
+              isAdmin={is_admin}
+              onValidate={validateClaim}
+              onReject={rejectClaim}
+              busyId={claimBusyId}
+            />
 
             {/* PDF certificate */}
             <View style={{ marginTop: 16 }}>
