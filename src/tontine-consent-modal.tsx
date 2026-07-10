@@ -3,10 +3,11 @@
  * Shows the full Charte du Créateur with a scrollable reader,
  * a checkbox, and a typed confirmation phrase.
  */
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -23,12 +24,13 @@ import {
   CONSENT_FOOTER,
   CONSENT_VERSION,
   CONFIRM_PHRASE,
+  matchesConfirmPhrase,
 } from "@/src/tontine-consent";
 
 interface Props {
   visible: boolean;
-  onAccepted: () => void;   // called when user signs — proceed with creation
-  onDeclined: () => void;   // called when user closes without signing
+  onAccepted: () => void;
+  onDeclined: () => void;
 }
 
 export function TontineConsentModal({ visible, onAccepted, onDeclined }: Props) {
@@ -36,13 +38,43 @@ export function TontineConsentModal({ visible, onAccepted, onDeclined }: Props) 
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
   const [hasScrolledToEnd, setHasScrolledToEnd] = useState(false);
+  const [phraseHint, setPhraseHint] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+  const viewportH = useRef(0);
+  const contentH = useRef(0);
 
-  const isValid = checked && typed.trim().toUpperCase() === CONFIRM_PHRASE;
+  const phraseOk = matchesConfirmPhrase(typed);
+  const isValid = checked && phraseOk;
+
+  useEffect(() => {
+    if (!visible) {
+      setChecked(false);
+      setTyped("");
+      setHasScrolledToEnd(false);
+      setPhraseHint(null);
+      setBusy(false);
+    }
+  }, [visible]);
+
+  // If charter fits without scrolling (common on web/desktop), unlock signature.
+  useEffect(() => {
+    if (!visible || hasScrolledToEnd) return;
+    if (contentH.current > 0 && viewportH.current > 0 && contentH.current <= viewportH.current + 8) {
+      setHasScrolledToEnd(true);
+    }
+  }, [visible, hasScrolledToEnd]);
 
   const handleSign = async () => {
-    if (!isValid) return;
+    if (!checked) {
+      setPhraseHint("Cochez d'abord la case d'acceptation.");
+      return;
+    }
+    if (!phraseOk) {
+      setPhraseHint(`Saisissez exactement : ${CONFIRM_PHRASE} (ou jaccepte)`);
+      return;
+    }
     setBusy(true);
+    setPhraseHint(null);
     try {
       await api.post("/consent/tontine", { version: CONSENT_VERSION });
       setChecked(false);
@@ -50,7 +82,6 @@ export function TontineConsentModal({ visible, onAccepted, onDeclined }: Props) 
       setHasScrolledToEnd(false);
       onAccepted();
     } catch {
-      // consent storage failed — allow anyway (best-effort)
       onAccepted();
     } finally {
       setBusy(false);
@@ -59,8 +90,10 @@ export function TontineConsentModal({ visible, onAccepted, onDeclined }: Props) 
 
   const handleScroll = (e: any) => {
     const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
-    const atEnd = layoutMeasurement.height + contentOffset.y >= contentSize.height - 40;
-    if (atEnd && !hasScrolledToEnd) setHasScrolledToEnd(true);
+    viewportH.current = layoutMeasurement.height;
+    contentH.current = contentSize.height;
+    const atEnd = layoutMeasurement.height + contentOffset.y >= contentSize.height - 48;
+    if (atEnd) setHasScrolledToEnd(true);
   };
 
   return (
@@ -71,7 +104,6 @@ export function TontineConsentModal({ visible, onAccepted, onDeclined }: Props) 
       onRequestClose={onDeclined}
     >
       <View style={styles.root}>
-        {/* ── Header */}
         <View style={styles.header}>
           <View style={styles.headerIcon}>
             <FileText size={22} color={Colors.primary} />
@@ -85,16 +117,27 @@ export function TontineConsentModal({ visible, onAccepted, onDeclined }: Props) 
           </TouchableOpacity>
         </View>
 
-        {/* ── Scrollable charter */}
         <ScrollView
           ref={scrollRef}
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           onScroll={handleScroll}
-          scrollEventThrottle={200}
+          onLayout={(e) => {
+            viewportH.current = e.nativeEvent.layout.height;
+            if (contentH.current > 0 && contentH.current <= viewportH.current + 8) {
+              setHasScrolledToEnd(true);
+            }
+          }}
+          onContentSizeChange={(_w, h) => {
+            contentH.current = h;
+            if (viewportH.current > 0 && h <= viewportH.current + 8) {
+              setHasScrolledToEnd(true);
+            }
+          }}
+          scrollEventThrottle={100}
           showsVerticalScrollIndicator
+          keyboardShouldPersistTaps="handled"
         >
-          {/* Read-me nudge */}
           {!hasScrolledToEnd && (
             <View style={styles.readNudge}>
               <AlertTriangle size={14} color="#D97706" />
@@ -111,24 +154,32 @@ export function TontineConsentModal({ visible, onAccepted, onDeclined }: Props) 
             </View>
           ))}
 
-          {/* Footer */}
           <View style={styles.footerBox}>
             <ShieldCheck size={18} color={Colors.secondary} />
             <Text style={styles.footerTxt}>{CONSENT_FOOTER}</Text>
           </View>
+
+          {!hasScrolledToEnd && (
+            <TouchableOpacity
+              style={styles.unlockBtn}
+              onPress={() => setHasScrolledToEnd(true)}
+              testID="tontine-consent-unlock"
+            >
+              <Text style={styles.unlockBtnTxt}>J'ai lu la charte — passer à la signature</Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
 
-        {/* ── Signature zone */}
         <View style={[styles.signZone, !hasScrolledToEnd && styles.signZoneLocked]}>
           {!hasScrolledToEnd ? (
             <Text style={styles.lockedHint}>↑ Lisez l'intégralité de la charte pour signer</Text>
           ) : (
             <>
-              {/* Checkbox */}
               <TouchableOpacity
                 style={styles.checkRow}
-                onPress={() => setChecked(v => !v)}
+                onPress={() => setChecked((v) => !v)}
                 activeOpacity={0.7}
+                testID="tontine-consent-check"
               >
                 <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
                   {checked && <Text style={styles.checkmark}>✓</Text>}
@@ -139,28 +190,33 @@ export function TontineConsentModal({ visible, onAccepted, onDeclined }: Props) 
                 </Text>
               </TouchableOpacity>
 
-              {/* Typed confirmation */}
               <Text style={styles.typePrompt}>
                 Pour confirmer, saisissez{" "}
-                <Text style={styles.typePhrase}>{CONFIRM_PHRASE}</Text>{" "}
-                ci-dessous :
+                <Text style={styles.typePhrase}>{CONFIRM_PHRASE}</Text>
+                {" "}(ou <Text style={styles.typePhrase}>jaccepte</Text>) :
               </Text>
               <TextInput
-                style={[styles.typeInput, typed.trim().toUpperCase() === CONFIRM_PHRASE && styles.typeInputValid]}
+                style={[styles.typeInput, phraseOk && styles.typeInputValid]}
                 value={typed}
-                onChangeText={setTyped}
+                onChangeText={(t) => {
+                  setTyped(t);
+                  setPhraseHint(null);
+                }}
                 placeholder={CONFIRM_PHRASE}
                 placeholderTextColor={Colors.textMuted}
                 autoCapitalize="characters"
                 autoCorrect={false}
+                autoComplete="off"
+                testID="tontine-consent-phrase"
               />
+              {phraseHint ? <Text style={styles.hintErr}>{phraseHint}</Text> : null}
 
-              {/* Sign button */}
               <TouchableOpacity
                 style={[styles.signBtn, !isValid && styles.signBtnDisabled]}
                 onPress={handleSign}
-                disabled={!isValid || busy}
+                disabled={busy}
                 activeOpacity={0.85}
+                testID="tontine-consent-sign"
               >
                 {busy ? (
                   <ActivityIndicator color="#fff" />
@@ -229,10 +285,18 @@ const styles = StyleSheet.create({
   },
   footerTxt: { flex: 1, color: Colors.textMuted, fontSize: 12, lineHeight: 18, fontWeight: "500" },
 
+  unlockBtn: {
+    marginTop: 16, marginBottom: 8, padding: 14, borderRadius: 12,
+    backgroundColor: Colors.secondary + "18", borderWidth: 1, borderColor: Colors.secondary,
+    alignItems: "center",
+  },
+  unlockBtnTxt: { color: Colors.secondary, fontWeight: "800", fontSize: 13 },
+
   signZone: {
     padding: Spacing.xl,
     borderTopWidth: 1, borderTopColor: Colors.border ?? "#E5E7EB",
     backgroundColor: Colors.bg,
+    ...Platform.select({ web: { maxHeight: "42%" as any }, default: {} }),
   },
   signZoneLocked: { alignItems: "center", paddingVertical: 20 },
   lockedHint: { color: Colors.textMuted, fontSize: 13, fontWeight: "600", textAlign: "center" },
@@ -255,14 +319,15 @@ const styles = StyleSheet.create({
     borderRadius: 12, padding: 12,
     fontSize: 18, fontWeight: "900", color: Colors.text,
     letterSpacing: 2, textAlign: "center",
-    marginBottom: 16,
+    marginBottom: 8,
   },
   typeInputValid: { borderColor: "#10B981" },
+  hintErr: { color: Colors.danger, fontSize: 12, fontWeight: "600", marginBottom: 10, textAlign: "center" },
 
   signBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
     backgroundColor: Colors.primary, borderRadius: 14, padding: 16,
-    marginBottom: 12,
+    marginBottom: 12, marginTop: 8,
   },
   signBtnDisabled: { backgroundColor: Colors.textMuted ?? "#94A3B8", opacity: 0.6 },
   signBtnTxt: { color: "#fff", fontSize: 16, fontWeight: "900" },

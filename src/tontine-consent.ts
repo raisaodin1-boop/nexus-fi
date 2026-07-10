@@ -81,3 +81,16 @@ export const CONSENT_FOOTER =
   "Elle constitue une preuve de votre engagement et pourra être produite en cas de litige.";
 
 export const CONFIRM_PHRASE = "J'ACCEPTE";
+
+/** Accept common variants: jaccepte, J'ACCEPTE, J’ACCEPTE (curly apostrophe), etc. */
+export function matchesConfirmPhrase(input: string): boolean {
+  const normalized = input
+    .normalize("NFKC")
+    .trim()
+    .toUpperCase()
+    .replace(/[\u2018\u2019\u201A\u2032\u00B4`]/g, "'") // curly / accent → '
+    .replace(/[^A-Z0-9']/g, ""); // drop spaces and punctuation noise
+  const expected = CONFIRM_PHRASE.replace(/[^A-Z0-9']/g, "");
+  const withoutApos = expected.replace(/'/g, "");
+  return normalized === expected || normalized === withoutApos;
+}

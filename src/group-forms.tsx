@@ -93,6 +93,7 @@ export function GroupCreateForm({ title, subtitle, endpoint, showContribution, s
             setShowConsent(false);
             const body = buildBody();
             if (body) doCreate(body);
+            else setError("Vérifiez le formulaire avant de créer la tontine.");
           }}
           onDeclined={() => setShowConsent(false)}
         />
