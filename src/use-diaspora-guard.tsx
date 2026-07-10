@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { ActivityIndicator } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 
-import { api, ApiError } from "@/src/api";
+import { api } from "@/src/api";
 import type { DiasporaAccess } from "@/src/diaspora-enrollment-config";
 
 /** Redirects unverified users away from protected diaspora routes. */
