@@ -54,7 +54,7 @@ function detectLang(): "fr" | "en" {
 }
 
 // ── Animated fade-in wrapper ────────────────────────────────────────
-function FadeIn({ delay = 0, children }: { delay?: number; children: React.ReactNode }) {
+function FadeIn({ delay = 0, children, style }: { delay?: number; children: React.ReactNode; style?: object }) {
   const anim = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(24)).current;
   useEffect(() => {
@@ -64,7 +64,7 @@ function FadeIn({ delay = 0, children }: { delay?: number; children: React.React
     ]).start();
   }, []);
   return (
-    <Animated.View style={{ opacity: anim, transform: [{ translateY: slide }] }}>
+    <Animated.View style={[{ width: "100%", opacity: anim, transform: [{ translateY: slide }] }, style]}>
       {children}
     </Animated.View>
   );
@@ -143,8 +143,29 @@ export default function LandingScreen() {
   const copy  = LANDING_I18N[lang];
   const welcome = WELCOME_I18N[lang];
   const trustCopy = TRUST_BLOCK_COPY[lang];
-  const isWide = width >= 768;
+  // Layout must use the phone-frame content width (≤ APP_MAX_WIDTH), not the
+  // desktop window — otherwise isWide=true squeezes the hero title into ~40px.
+  const layoutWidth = Math.min(width, APP_MAX_WIDTH);
+  const isWide = layoutWidth >= 640;
   const [stats, setStats] = useState<PublicPlatformStats | null>(null);
+  const [layoutProbe, setLayoutProbe] = useState<{
+    heroInner?: number;
+    heroCopy?: number;
+    heroTitle?: number;
+  }>({});
+
+  // #region agent log
+  useEffect(() => {
+    const frameLikely = width >= 768 && layoutWidth <= APP_MAX_WIDTH;
+    fetch('http://127.0.0.1:7842/ingest/bacca6bb-32fd-4ae4-b209-004a107b7849',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b6b3ca'},body:JSON.stringify({sessionId:'b6b3ca',runId:'post-fix',hypothesisId:'A',location:'landing.tsx:dims',message:'landing layout dimensions',data:{windowWidth:width,appMaxWidth:APP_MAX_WIDTH,layoutWidth,isWide,frameLikely,legacyIsWideWouldBe:width>=768,platform:Platform.OS},timestamp:Date.now()})}).catch(()=>{});
+  }, [width, layoutWidth, isWide]);
+
+  useEffect(() => {
+    if (!layoutProbe.heroInner && !layoutProbe.heroCopy && !layoutProbe.heroTitle) return;
+    const squeezed = (layoutProbe.heroCopy ?? 999) < 120 || (layoutProbe.heroTitle ?? 999) < 120;
+    fetch('http://127.0.0.1:7842/ingest/bacca6bb-32fd-4ae4-b209-004a107b7849',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b6b3ca'},body:JSON.stringify({sessionId:'b6b3ca',runId:'post-fix',hypothesisId:'B',location:'landing.tsx:onLayout',message:'hero measured widths',data:{...layoutProbe,isWide,squeezed,rowLayoutActive:isWide},timestamp:Date.now()})}).catch(()=>{});
+  }, [layoutProbe, isWide]);
+  // #endregion
 
   useEffect(() => {
     getPublicPlatformStats().then(setStats).catch(() => setStats(null));
@@ -212,8 +233,24 @@ export default function LandingScreen() {
             <View style={ss.glowG} pointerEvents="none" />
             <View style={ss.glowB} pointerEvents="none" />
 
-            <View style={[ss.heroInner, isWide && ss.heroInnerWide]}>
-              <View style={ss.heroCopy}>
+            <View
+              style={[ss.heroInner, isWide && ss.heroInnerWide]}
+              onLayout={(e) => {
+                const w = e.nativeEvent.layout.width;
+                // #region agent log
+                setLayoutProbe((p) => (p.heroInner === w ? p : { ...p, heroInner: w }));
+                // #endregion
+              }}
+            >
+              <View
+                style={[ss.heroCopy, isWide && ss.heroCopyWide]}
+                onLayout={(e) => {
+                  const w = e.nativeEvent.layout.width;
+                  // #region agent log
+                  setLayoutProbe((p) => (p.heroCopy === w ? p : { ...p, heroCopy: w }));
+                  // #endregion
+                }}
+              >
                 <FadeIn delay={0}>
                   <View style={ss.chip}>
                     <Text style={ss.chipText}>{copy.hero_badge}</Text>
@@ -221,7 +258,16 @@ export default function LandingScreen() {
                 </FadeIn>
 
                 <FadeIn delay={100}>
-                  <Text style={[ss.heroTitle, isWide && ss.heroTitleWide]}>
+                  <Text
+                    style={[ss.heroTitle, isWide && ss.heroTitleWide]}
+                    onLayout={(e) => {
+                      const w = e.nativeEvent.layout.width;
+                      // #region agent log
+                      setLayoutProbe((p) => (p.heroTitle === w ? p : { ...p, heroTitle: w }));
+                      fetch('http://127.0.0.1:7842/ingest/bacca6bb-32fd-4ae4-b209-004a107b7849',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b6b3ca'},body:JSON.stringify({sessionId:'b6b3ca',runId:'post-fix',hypothesisId:'C',location:'landing.tsx:heroTitle',message:'hero title layout',data:{titleWidth:w,titleLen:copy.hero_title.length,isWide},timestamp:Date.now()})}).catch(()=>{});
+                      // #endregion
+                    }}
+                  >
                     {copy.hero_title}
                   </Text>
                 </FadeIn>
@@ -257,8 +303,8 @@ export default function LandingScreen() {
                 </FadeIn>
               </View>
 
-              <FadeIn delay={200}>
-                <View style={ss.heroVisual}>
+              <FadeIn delay={200} style={isWide ? undefined : { alignItems: "center" }}>
+                <View style={[ss.heroVisual, !isWide && ss.heroVisualNarrow]}>
                   <PremiumVisualStack />
                 </View>
               </FadeIn>
@@ -603,17 +649,25 @@ const ss = StyleSheet.create({
   glowE: { position: "absolute", width: 320, height: 320, borderRadius: 160, backgroundColor: EMERALD, opacity: 0.09, top: -100, right: -80 },
   glowG: { position: "absolute", width: 200, height: 200, borderRadius: 100, backgroundColor: GOLD, opacity: 0.07, bottom: -60, left: -40 },
   glowB: { position: "absolute", width: 180, height: 180, borderRadius: 90, backgroundColor: "#3B82F6", opacity: 0.06, top: 40, left: -60 },
-  heroInner: { gap: 28, width: "100%" },
+  heroInner: { gap: 28, width: "100%", flexDirection: "column" },
   heroInnerWide: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  heroCopy: { flex: 1, minWidth: 0 },
+  heroCopy: { width: "100%", maxWidth: "100%" },
+  heroCopyWide: { flex: 1, minWidth: 0, paddingRight: 16 },
   heroVisual: { alignItems: "center", width: 300, flexShrink: 0 },
+  heroVisualNarrow: { width: "100%", maxWidth: 320, alignSelf: "center" },
   chip: { alignSelf: "flex-start", backgroundColor: "rgba(16,185,129,0.14)", borderWidth: 1, borderColor: "rgba(16,185,129,0.3)", paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, marginBottom: 18 },
   chipText: { color: EMERALD, fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
-  heroTitle: { fontSize: 30, fontWeight: "900", color: "#F8FAFC", lineHeight: 38, letterSpacing: -0.8, marginBottom: 14 },
-  heroTitleWide: { fontSize: 38, lineHeight: 46 },
-  heroSub: { fontSize: 15, color: "rgba(226,232,240,0.88)", lineHeight: 24, marginBottom: 10 },
-  heroVision: { fontSize: 14, color: "rgba(226,232,240,0.92)", lineHeight: 21, marginBottom: 10, fontWeight: "600" },
-  heroTagline: { fontSize: 13, color: GOLD, fontWeight: "700", fontStyle: "italic", marginBottom: 22, letterSpacing: 0.3 },
+  heroTitle: {
+    fontSize: 28, fontWeight: "900", color: "#F8FAFC", lineHeight: 36,
+    letterSpacing: -0.6, marginBottom: 14, width: "100%",
+    ...(Platform.OS === "web"
+      ? ({ wordBreak: "normal", overflowWrap: "break-word", whiteSpace: "normal" } as object)
+      : {}),
+  },
+  heroTitleWide: { fontSize: 36, lineHeight: 44 },
+  heroSub: { fontSize: 15, color: "rgba(226,232,240,0.88)", lineHeight: 24, marginBottom: 10, width: "100%" },
+  heroVision: { fontSize: 14, color: "rgba(226,232,240,0.92)", lineHeight: 21, marginBottom: 10, fontWeight: "600", width: "100%" },
+  heroTagline: { fontSize: 13, color: GOLD, fontWeight: "700", fontStyle: "italic", marginBottom: 22, letterSpacing: 0.3, width: "100%" },
   heroCtas: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 22 },
   ctaPrimary: { backgroundColor: EMERALD, paddingHorizontal: 22, paddingVertical: 14, borderRadius: 12 },
   ctaPrimaryText: { color: "#fff", fontWeight: "800", fontSize: 15 },
