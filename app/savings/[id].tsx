@@ -3,11 +3,11 @@ import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacit
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { Lock, TrendingUp } from "lucide-react-native";
+import { ArrowDownLeft, ArrowUpRight, Lock, Receipt, TrendingUp } from "lucide-react-native";
 import { api, formatXAF } from "@/src/api";
 import { openPaymentScreen } from "@/src/payment-nav";
 import { Button, Card, Field } from "@/src/ui";
-import { Colors, Spacing } from "@/src/theme";
+import { Colors, Radius, Spacing } from "@/src/theme";
 
 const TYPE_LABELS: Record<string, string> = {
   flexible: "Flexible",
@@ -15,10 +15,36 @@ const TYPE_LABELS: Record<string, string> = {
   recurring: "Récurrent",
 };
 
+type Tx = {
+  id: string;
+  amount: number;
+  direction: "in" | "out";
+  type: string;
+  note?: string | null;
+  created_at: string;
+};
+
+function formatTxDate(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function formatTxTime(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleTimeString("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function SavingsDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const [data, setData] = useState<any | null>(null);
+  const [data, setData] = useState<{ goal: any; transactions: Tx[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [amount, setAmount] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
@@ -27,15 +53,17 @@ export default function SavingsDetail() {
 
   const load = useCallback(async () => {
     try {
-      const d = await api.get<any>(`/savings/${id}`);
+      const d = await api.get<{ goal: any; transactions: Tx[] }>(`/savings/${id}`);
       setData(d);
-    } catch {}
+    } catch {
+      setData(null);
+    }
     setLoading(false);
   }, [id]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  if (loading || !data) {
+  if (loading) {
     return (
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <View style={styles.center}><ActivityIndicator color={Colors.secondary} /></View>
@@ -43,7 +71,21 @@ export default function SavingsDetail() {
     );
   }
 
-  const goal = data.savings_goal ?? data.goal ?? data;
+  if (!data?.goal) {
+    return (
+      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+        <View style={styles.center}>
+          <Text style={{ color: Colors.textMuted, fontWeight: "600" }}>Objectif introuvable</Text>
+          <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 12 }}>
+            <Text style={styles.back}>← Retour</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const goal = data.goal;
+  const transactions = data.transactions ?? [];
   const savingsType = goal.savings_type ?? goal.type;
   const isLocked = savingsType === "locked";
   const deadline = goal.deadline ? new Date(goal.deadline) : null;
@@ -158,9 +200,56 @@ export default function SavingsDetail() {
           </View>
         </Card>
 
-        {/* ── Analytics CTA ── */}
-        <TouchableOpacity onPress={() => router.push(`/savings/analytics?id=${id}` as any)} activeOpacity={0.85} style={{ marginHorizontal: 0, marginBottom: 0 }}>
-          <LinearGradient colors={["#0B1F3A", "#1D4ED8"]} style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14, marginHorizontal: 0, borderRadius: 14, marginBottom: 12 }}>
+        {/* Relevé des transactions */}
+        <View style={styles.statementHead}>
+          <Receipt size={16} color={Colors.primary} />
+          <Text style={styles.sectionInline}>Relevé de l'objectif</Text>
+          <Text style={styles.txCount}>{transactions.length} opération(s)</Text>
+        </View>
+        <Card style={{ padding: 0, overflow: "hidden" }}>
+          {transactions.length === 0 ? (
+            <View style={styles.emptyTx}>
+              <Text style={styles.emptyTxTitle}>Aucune transaction</Text>
+              <Text style={styles.emptyTxSub}>
+                Vos dépôts et retraits apparaîtront ici avec la date et l'heure.
+              </Text>
+            </View>
+          ) : (
+            transactions.map((tx, idx) => {
+              const isIn = tx.direction === "in";
+              return (
+                <View
+                  key={tx.id}
+                  style={[
+                    styles.txRow,
+                    idx < transactions.length - 1 ? styles.txRowBorder : null,
+                  ]}
+                >
+                  <View style={[styles.txIcon, { backgroundColor: isIn ? `${Colors.accent}18` : `${Colors.danger}18` }]}>
+                    {isIn
+                      ? <ArrowDownLeft size={16} color={Colors.accent} />
+                      : <ArrowUpRight size={16} color={Colors.danger} />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.txLabel}>
+                      {tx.note?.trim()
+                        || (isIn ? "Dépôt" : "Retrait")}
+                    </Text>
+                    <Text style={styles.txDate}>
+                      {formatTxDate(tx.created_at)} · {formatTxTime(tx.created_at)}
+                    </Text>
+                  </View>
+                  <Text style={[styles.txAmount, { color: isIn ? Colors.accent : Colors.danger }]}>
+                    {isIn ? "+" : "−"}{formatXAF(tx.amount)}
+                  </Text>
+                </View>
+              );
+            })
+          )}
+        </Card>
+
+        <TouchableOpacity onPress={() => router.push(`/savings/analytics?id=${id}` as any)} activeOpacity={0.85}>
+          <LinearGradient colors={["#0B1F3A", "#1D4ED8"]} style={styles.analyticsCta}>
             <TrendingUp size={20} color="#fff" />
             <View style={{ flex: 1 }}>
               <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>Analyse IA de l'objectif</Text>
@@ -246,6 +335,31 @@ const styles = StyleSheet.create({
   },
   lockBannerText: { flex: 1, fontSize: 12, color: "#92400E", lineHeight: 18, fontWeight: "600" },
   section: { fontSize: 14, fontWeight: "800", color: Colors.text, marginTop: 24, marginBottom: 10 },
+  statementHead: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    marginTop: 24, marginBottom: 10,
+  },
+  sectionInline: { flex: 1, fontSize: 14, fontWeight: "800", color: Colors.text },
+  txCount: { fontSize: 11, fontWeight: "700", color: Colors.textMuted },
+  emptyTx: { padding: 20, alignItems: "center", gap: 6 },
+  emptyTxTitle: { fontSize: 14, fontWeight: "800", color: Colors.text },
+  emptyTxSub: { fontSize: 12, color: Colors.textMuted, textAlign: "center", lineHeight: 18 },
+  txRow: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingHorizontal: 14, paddingVertical: 12,
+  },
+  txRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.border },
+  txIcon: {
+    width: 36, height: 36, borderRadius: 18,
+    alignItems: "center", justifyContent: "center",
+  },
+  txLabel: { fontSize: 13, fontWeight: "700", color: Colors.text },
+  txDate: { fontSize: 11, color: Colors.textMuted, marginTop: 2, fontWeight: "600" },
+  txAmount: { fontSize: 14, fontWeight: "900" },
+  analyticsCta: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    padding: 14, borderRadius: Radius.lg, marginTop: 16,
+  },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   label: { fontSize: 13, color: Colors.textMuted, fontWeight: "600" },
   value: { fontSize: 15, color: Colors.text, fontWeight: "800" },

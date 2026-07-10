@@ -161,6 +161,7 @@ export default function SavingsList() {
                       <Text style={styles.goalAmount}>{formatXAF(g.current_amount, g.currency)}</Text>
                       <Text style={styles.goalTarget}>/ {formatXAF(g.target_amount, g.currency)}</Text>
                     </View>
+                    <Text style={styles.releveHint}>Voir le relevé →</Text>
                     {/* ── AI prediction chip ── */}
                     {predictions[g.id] && (() => {
                       const pred = predictions[g.id];
@@ -233,6 +234,7 @@ const styles = StyleSheet.create({
   goalFooter: { flexDirection: "row", alignItems: "baseline", marginTop: 8 },
   goalAmount: { color: Colors.text, fontSize: 18, fontWeight: "800" },
   goalTarget: { color: Colors.textMuted, fontSize: 13, fontWeight: "600", marginLeft: 4 },
+  releveHint: { color: Colors.primary, fontSize: 12, fontWeight: "700", marginTop: 10 },
   goalProgress: { height: 8, backgroundColor: Colors.surfaceAlt, borderRadius: 4, overflow: "hidden", marginTop: 4 },
   goalProgressFill: { height: "100%", borderRadius: 4 },
   goalProgressText: { color: Colors.textMuted, fontSize: 11, fontWeight: "600", marginTop: 4 },

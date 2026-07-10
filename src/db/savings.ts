@@ -27,10 +27,45 @@ export async function listSavings() {
 }
 
 export async function getSaving(id: string) {
-  const { data, error } = await getSupabase()
-    .from("savings_goals").select("*, savings_transactions(*)").eq("id", id).single();
+  const me = await uid();
+  const sb = getSupabase();
+  const { data: goal, error } = await sb
+    .from("savings_goals")
+    .select("*")
+    .eq("id", id)
+    .eq("user_id", me)
+    .single();
   throwSb(error);
-  return data;
+
+  const { data: txs, error: txErr } = await sb
+    .from("savings_transactions")
+    .select("id, amount, note, type, created_at")
+    .eq("goal_id", id)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  throwSb(txErr);
+
+  const transactions = (txs ?? []).map((t: any) => {
+    const amount = Number(t.amount ?? 0);
+    const rawType = String(t.type ?? "").toLowerCase();
+    const note = String(t.note ?? "").toLowerCase();
+    const isWithdraw =
+      rawType === "withdraw"
+      || rawType === "withdrawal"
+      || amount < 0
+      || note.includes("retrait")
+      || note.includes("withdraw");
+    return {
+      id: t.id as string,
+      amount: Math.abs(amount),
+      direction: isWithdraw ? "out" as const : "in" as const,
+      type: isWithdraw ? "withdraw" : "deposit",
+      note: t.note as string | null,
+      created_at: t.created_at as string,
+    };
+  });
+
+  return { goal, transactions };
 }
 
 export async function createSaving(body: Record<string, any>) {
