@@ -29,6 +29,7 @@ function mapNotification(row: Record<string, unknown>) {
     type,
     is_read: !!row.is_read,
     created_at: String(row.created_at ?? new Date().toISOString()),
+    metadata: metadata ?? null,
     action_url: metadata?.action_url ? String(metadata.action_url) : undefined,
   };
 }
