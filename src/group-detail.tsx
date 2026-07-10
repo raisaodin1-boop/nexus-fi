@@ -24,6 +24,8 @@ import {
   CommunityDocumentsPlaceholder,
   CommunityProjectsPlaceholder,
 } from "@/src/community-module-placeholders";
+import { requestMemberRemovalPrompt } from "@/src/creator-manage-dashboard";
+import { useAuth } from "@/src/auth-context";
 
 interface Member {
   id: string; user_id: string; full_name: string; kyc_verified?: boolean; role: string;
@@ -44,6 +46,8 @@ interface Props {
 
 export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testIDPrefix, showRotation, advanceEndpoint }: Props) {
   const router = useRouter();
+  const { user } = useAuth();
+  const isPlatformAdmin = user?.role === "admin" || user?.role === "super_admin";
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [amount, setAmount] = useState("");
@@ -51,6 +55,7 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
   const [busy, setBusy] = useState(false);
   const [modulesOpen, setModulesOpen] = useState(false);
   const [modules, setModules] = useState<CommunityModulesState>({ ...DEFAULT_COMMUNITY_MODULES });
+  const [joinReqs, setJoinReqs] = useState<any[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -61,13 +66,19 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
       setData(d);
       const gid = d?.[detailKey]?.id;
       if (gid) setModules(await loadCommunityModules(String(gid)));
+      if (detailKey === "association" && gid && (d.is_admin || isPlatformAdmin)) {
+        const jr = await api.get<any[]>(`/associations/join-requests?association_id=${gid}`).catch(() => []);
+        setJoinReqs(jr ?? []);
+      } else {
+        setJoinReqs([]);
+      }
     } catch (e) {
       setData(null);
       setError(e instanceof ApiError ? e.detail : "Impossible de charger ce groupe");
     } finally {
       setLoading(false);
     }
-  }, [endpoint, detailKey]);
+  }, [endpoint, detailKey, isPlatformAdmin]);
 
   useEffectOnFocus(load);
 
@@ -93,7 +104,7 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
 
   const shareWhatsApp = async () => {
     const appLink = "https://www.hodix.app";
-    const message = `🏦 Rejoignez la tontine *"${item.name}"* sur Hodix !\n\n📌 Code d'invitation : *${item.invite_code}*\n\n📱 Téléchargez l'app : ${appLink}\n\nOu rejoignez directement : hodix://join?code=${item.invite_code}`;
+const message = `Rejoignez « ${item.name} » sur Hodix !\n\nCode d'invitation : ${item.invite_code}\n\nTéléchargez : ${appLink}\nOu : hodix://join?code=${item.invite_code}&type=${detailKey === "association" ? "associations" : detailKey === "cooperative" ? "cooperatives" : "tontines"}`;
     const url = `whatsapp://send?text=${encodeURIComponent(message)}`;
     try {
       const canOpen = await Linking.canOpenURL(url);
@@ -192,6 +203,46 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
             <MessageSquare color="#fff" size={18} />
             <Text style={styles.whatsappBtnText}>Partager le lien sur WhatsApp</Text>
           </TouchableOpacity>
+
+          {isAdmin && joinReqs.length > 0 ? (
+            <View style={{ marginTop: 16, gap: 8 }}>
+              <Text style={styles.section}>Demandes d'adhésion ({joinReqs.length})</Text>
+              {joinReqs.map((r) => (
+                <Card key={r.id} style={{ padding: 12, gap: 8 }}>
+                  <Text style={{ fontWeight: "800", color: Colors.text }}>{r.requester_name}</Text>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <Button
+                      label="Accepter"
+                      fullWidth={false}
+                      style={{ paddingHorizontal: 12, paddingVertical: 8 }}
+                      onPress={async () => {
+                        try {
+                          await api.post("/associations/respond-join", { request_id: r.id, approve: true });
+                          await load();
+                        } catch (e: any) {
+                          Alert.alert("Erreur", e?.detail ?? "Impossible");
+                        }
+                      }}
+                    />
+                    <Button
+                      label="Refuser"
+                      variant="danger"
+                      fullWidth={false}
+                      style={{ paddingHorizontal: 12, paddingVertical: 8 }}
+                      onPress={async () => {
+                        try {
+                          await api.post("/associations/respond-join", { request_id: r.id, approve: false });
+                          await load();
+                        } catch (e: any) {
+                          Alert.alert("Erreur", e?.detail ?? "Impossible");
+                        }
+                      }}
+                    />
+                  </View>
+                </Card>
+              ))}
+            </View>
+          ) : null}
 
           <View style={styles.serviceRow}>
             <TouchableOpacity
@@ -307,6 +358,21 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
                     <View style={[styles.statusPill, { backgroundColor: statusMeta.c + "20", borderColor: statusMeta.c }]}>
                       <Text style={[styles.statusText, { color: statusMeta.c }]}>{statusMeta.lbl}</Text>
                     </View>
+                  ) : null}
+                  {isAdmin && m.user_id !== user?.id && m.role !== "admin" ? (
+                    <TouchableOpacity
+                      onPress={() =>
+                        requestMemberRemovalPrompt({
+                          group_type: detailKey === "cooperative" ? "cooperative" : detailKey === "association" ? "association" : "tontine",
+                          group_id: item.id,
+                          target_user_id: m.user_id,
+                          target_name: m.full_name,
+                        })
+                      }
+                      style={{ marginLeft: 6, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: Colors.warningLight, borderRadius: 8 }}
+                    >
+                      <Text style={{ fontSize: 10, fontWeight: "800", color: Colors.warning }}>Exclure</Text>
+                    </TouchableOpacity>
                   ) : null}
                 </Card>
               );

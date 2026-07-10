@@ -128,12 +128,24 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"  && s[0] === "wallet" && s[1] === "security-log")                    return (await db.getSecurityLog()) as T;
 
     // ── Associations
+    if (method === "GET"  && s[0] === "associations" && s[1] === "directory")           return (await db.listPublicAssociations()) as T;
+    if (method === "GET"  && s[0] === "associations" && s[1] === "join-requests")      return (await db.listAssociationJoinRequests(query.get("association_id") ?? undefined)) as T;
+    if (method === "POST" && s[0] === "associations" && s[1] === "request-join")       return (await db.requestJoinAssociation(body?.association_id, body?.message)) as T;
+    if (method === "POST" && s[0] === "associations" && s[1] === "respond-join")       return (await db.respondAssociationJoin(body?.request_id, !!body?.approve)) as T;
     if (method === "GET"  && s[0] === "associations" && !s[1])                         return (await db.listAssociations()) as T;
     if (method === "POST" && s[0] === "associations" && !s[1])                         return (await db.createAssociation(body)) as T;
     if (method === "POST" && s[0] === "associations" && s[1] === "join")               return (await db.joinAssociation(body?.invite_code)) as T;
     if (method === "GET"  && s[0] === "associations" && s[1] && !s[2])                 return (await db.getAssociation(s[1])) as T;
     if (method === "POST" && s[0] === "associations" && s[1] && s[2] === "contribute")
       return db.rejectDirectPaymentRedirect("association_contribution", { association_id: s[1] }) as T;
+
+    // ── Creator / governance
+    if (method === "GET"  && s[0] === "creator" && s[1] === "owned")                   return (await db.listOwnedGroups()) as T;
+    if (method === "POST" && s[0] === "governance" && s[1] === "request-removal")      return (await db.requestMemberRemoval(body)) as T;
+    if (method === "GET"  && s[0] === "governance" && s[1] === "removal-requests")     return (await db.listMemberRemovalRequests()) as T;
+    if (method === "POST" && s[0] === "governance" && s[1] === "respond-removal")      return (await db.adminExecuteMemberRemoval(body?.request_id, !!body?.approve)) as T;
+    if (method === "POST" && s[0] === "admin" && s[1] === "associations" && s[2] === "delete")
+      return (await db.adminDeleteAssociation(body?.association_id, body?.reason)) as T;
 
     // ── Cooperatives
     if (method === "GET"  && s[0] === "cooperatives" && !s[1])                         return (await db.listCooperatives()) as T;

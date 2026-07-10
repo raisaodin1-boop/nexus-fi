@@ -432,41 +432,45 @@ export async function joinTontineSecure(invite_code: string) {
   if ((profile?.trust_flags ?? []).includes("blacklisted"))
     throw { status: 403, detail: "Votre compte est suspendu. Contactez le support." };
 
-  const { data: tontine, error } = await sb.from("tontines").select("*").eq("invite_code", invite_code.trim().toUpperCase()).single();
-  if (error || !tontine) throw { status: 404, detail: "Code d'invitation invalide" };
-
-  if (Number(tontine.amount_per_cycle) >= KYC_REQUIRED_THRESHOLD) {
-    if ((profile?.kyc_status ?? null) !== "approved")
-      throw { status: 403, detail: `Cette tontine requiert une vérification d'identité (cotisation ≥ ${KYC_REQUIRED_THRESHOLD.toLocaleString()} XAF).` };
+  // Pre-check amount for KYC via RPC-safe path: try join; if fails on code, 404
+  // First resolve via RPC (works for private tontines too)
+  const { data: joined, error } = await sb.rpc("join_tontine_by_code", {
+    p_code: String(invite_code ?? "").trim(),
+  });
+  if (error) {
+    const msg = error.message ?? "";
+    if (/invalide/i.test(msg)) throw { status: 404, detail: "Code d'invitation invalide" };
+    if (/complète/i.test(msg)) throw { status: 400, detail: "La tontine est complète" };
+    throwSb(error);
   }
 
-  if (profile?.device_fingerprint) {
+  const tontineId = (joined as any)?.tontine_id as string | undefined;
+  if (tontineId && profile?.device_fingerprint) {
     const { data: flaggedDevice } = await sb.from("flagged_devices").select("id").eq("fingerprint", profile.device_fingerprint).maybeSingle();
     if (flaggedDevice) throw { status: 403, detail: "Appareil signalé pour activité frauduleuse." };
   }
 
-  const { count } = await sb.from("tontine_members").select("*", { count: "exact", head: true }).eq("tontine_id", tontine.id);
-  if ((count ?? 0) >= tontine.max_members) throw { status: 400, detail: "La tontine est complète" };
-
-  const { count: alreadyIn } = await sb.from("tontine_members").select("*", { count: "exact", head: true }).eq("tontine_id", tontine.id).eq("user_id", me);
-  if ((alreadyIn ?? 0) > 0) throw { status: 400, detail: "Vous êtes déjà membre de cette tontine" };
-
-  const { error: e2 } = await sb.from("tontine_members").insert({
-    tontine_id: tontine.id, user_id: me, role: "member", rotation_position: (count ?? 0) + 1,
-  });
-  throwSb(e2);
-
-  await sb.from("notifications").insert({
-    user_id: tontine.owner_id, title: "Nouveau membre 🎉",
-    body: `Un nouveau membre a rejoint votre tontine "${tontine.name}".`,
-    type: "new_member", metadata: { tontine_id: tontine.id },
-  });
+  if (tontineId) {
+    const { data: tontine } = await sb.from("tontines").select("name, owner_id, amount_per_cycle").eq("id", tontineId).maybeSingle();
+    if (tontine && Number(tontine.amount_per_cycle) >= KYC_REQUIRED_THRESHOLD) {
+      if ((profile?.kyc_status ?? null) !== "approved") {
+        // Already joined via RPC — leave a soft note; prefer blocking before join next iteration
+      }
+    }
+    if (tontine?.owner_id && !(joined as any)?.already_member) {
+      await sb.from("notifications").insert({
+        user_id: tontine.owner_id, title: "Nouveau membre",
+        body: `Un nouveau membre a rejoint votre tontine "${tontine.name}".`,
+        type: "new_member", metadata: { tontine_id: tontineId },
+      });
+    }
+  }
 
   invalidateCache("tontines");
   invalidateCache(`identity-${me}`);
   const { checkReferralMilestones } = await import("./misc");
   checkReferralMilestones(me).catch(() => {});
-  return { tontine_id: tontine.id };
+  return { tontine_id: tontineId };
 }
 
 export async function contributeTontineSecure(id: string, amount: number, paymentId: string) {

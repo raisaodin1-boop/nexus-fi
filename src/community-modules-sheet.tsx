@@ -27,41 +27,17 @@ const MODULES: {
   icon: typeof Users;
   color: string;
 }[] = [
-  {
-    key: "tontine",
-    title: "Module Tontine",
-    subtitle: "Cycles de paiement et tours de rôle (Njangi)",
-    icon: Users,
-    color: Colors.primary,
-  },
-  {
-    key: "treasury",
-    title: "Caisse & Cotisations",
-    subtitle: "Trésorerie et suivi des paiements",
-    icon: Wallet,
-    color: Colors.warning,
-  },
-  {
-    key: "projects",
-    title: "Projets",
-    subtitle: "Épargne cible (terrain, mariage…)",
-    icon: Landmark,
-    color: Colors.accentDark,
-  },
-  {
-    key: "members",
-    title: "Membres",
-    subtitle: "Annuaire et rôles",
-    icon: Users,
-    color: Colors.secondary,
-  },
-  {
-    key: "documents",
-    title: "Documents & PV",
-    subtitle: "Transparence et archives",
-    icon: FileText,
-    color: Colors.brandNavy,
-  },
+  { key: "members", title: "Gestion des membres", subtitle: "Annuaire et rôles", icon: Users, color: Colors.secondary },
+  { key: "tontine", title: "Tontines", subtitle: "Cycles Njangi / Likelemba", icon: Users, color: Colors.primary },
+  { key: "treasury", title: "Cotisations & Caisse", subtitle: "Trésorerie du groupe", icon: Wallet, color: Colors.warning },
+  { key: "meetings", title: "Réunions", subtitle: "Planning et présence", icon: Users, color: Colors.info },
+  { key: "votes", title: "Votes", subtitle: "Décisions collectives", icon: Users, color: Colors.brandNavy },
+  { key: "documents", title: "Documents & PV", subtitle: "Transparence et archives", icon: FileText, color: Colors.brandNavy },
+  { key: "announcements", title: "Annonces", subtitle: "Communications du groupe", icon: Users, color: Colors.secondary },
+  { key: "chat", title: "Discussions", subtitle: "Messagerie interne", icon: Users, color: Colors.info },
+  { key: "accounting", title: "Comptabilité", subtitle: "Écritures et soldes", icon: Wallet, color: Colors.accentDark },
+  { key: "projects", title: "Projets", subtitle: "Épargne cible", icon: Landmark, color: Colors.accentDark },
+  { key: "reports", title: "Rapports financiers", subtitle: "Synthèses et exports", icon: FileText, color: Colors.primary },
 ];
 
 type Props = {

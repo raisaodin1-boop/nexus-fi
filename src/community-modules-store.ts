@@ -5,7 +5,13 @@ export type CommunityModuleKey =
   | "treasury"
   | "projects"
   | "members"
-  | "documents";
+  | "documents"
+  | "meetings"
+  | "votes"
+  | "announcements"
+  | "chat"
+  | "accounting"
+  | "reports";
 
 export type CommunityModulesState = Record<CommunityModuleKey, boolean>;
 
@@ -15,6 +21,12 @@ export const DEFAULT_COMMUNITY_MODULES: CommunityModulesState = {
   projects: false,
   members: true,
   documents: false,
+  meetings: false,
+  votes: false,
+  announcements: true,
+  chat: false,
+  accounting: false,
+  reports: false,
 };
 
 const keyFor = (groupId: string) => `hodix:community-modules:${groupId}`;
@@ -37,6 +49,6 @@ export async function saveCommunityModules(
   try {
     await AsyncStorage.setItem(keyFor(groupId), JSON.stringify(state));
   } catch {
-    // ignore persistence errors
+    // ignore
   }
 }

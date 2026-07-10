@@ -131,6 +131,13 @@ export default function Groups() {
           </Text>
         </View>
         <TouchableOpacity
+          testID="groups-manage-dash"
+          onPress={() => router.push("/manage" as any)}
+          style={styles.manageBtn}
+        >
+          <Settings2 color={Colors.primary} size={18} />
+        </TouchableOpacity>
+        <TouchableOpacity
           testID="groups-create-fab"
           onPress={() => setCreateOpen(true)}
           style={styles.fab}
@@ -274,6 +281,11 @@ const styles = StyleSheet.create({
   fab: {
     width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.primary,
     alignItems: "center", justifyContent: "center", ...Shadow.card,
+  },
+  manageBtn: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: Colors.primaryLight, alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: Colors.primary + "33",
   },
   tabsRow: {
     flexDirection: "row",

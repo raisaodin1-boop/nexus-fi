@@ -40,7 +40,7 @@ export function GroupCreateForm({ title, subtitle, endpoint, showContribution, s
   const [frequency, setFrequency] = useState("monthly");
   const [maxMembers, setMaxMembers] = useState("10");
   const [rotationMode, setRotationMode] = useState("rotation");
-  const [isPublic, setIsPublic] = useState(false);
+  const [isPublic, setIsPublic] = useState(endpoint === "/associations" || endpoint === "/tontines");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   // Consent gate — only shown for tontine creation
@@ -61,6 +61,7 @@ export function GroupCreateForm({ title, subtitle, endpoint, showContribution, s
     } else if (endpoint === "/associations") {
       body.contribution_amount = parseFloat(fee) || 0;
       body.frequency = "monthly";
+      body.is_public = isPublic;
     }
     // cooperatives: fee field is informational only (no fee column in schema)
     return body;
@@ -170,7 +171,26 @@ export function GroupCreateForm({ title, subtitle, endpoint, showContribution, s
               ) : null}
             </>
           ) : endpoint === "/associations" ? (
-            <Field testID={`${testIDPrefix}-fee`} label="Cotisation membre (XAF) — 0 si gratuit" placeholder="5000" value={fee} onChangeText={setFee} keyboardType="number-pad" />
+            <>
+              <Field testID={`${testIDPrefix}-fee`} label="Cotisation membre (XAF) — 0 si gratuit" placeholder="5000" value={fee} onChangeText={setFee} keyboardType="number-pad" />
+              <Text style={styles.label}>Visibilité</Text>
+              <View style={styles.visibilityRow}>
+                <TouchableOpacity
+                  onPress={() => setIsPublic(true)}
+                  style={[styles.visBtn, isPublic ? styles.visBtnActive : null]}
+                >
+                  <Text style={[styles.visBtnLabel, isPublic ? styles.visBtnLabelActive : null]}>Publique</Text>
+                  <Text style={[styles.visBtnDesc, isPublic ? { color: Colors.secondary } : null]}>Visible — les membres demandent à rejoindre</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setIsPublic(false)}
+                  style={[styles.visBtn, !isPublic ? styles.visBtnActive : null]}
+                >
+                  <Text style={[styles.visBtnLabel, !isPublic ? styles.visBtnLabelActive : null]}>Privée</Text>
+                  <Text style={[styles.visBtnDesc, !isPublic ? { color: Colors.secondary } : null]}>Code d'invitation uniquement</Text>
+                </TouchableOpacity>
+              </View>
+            </>
           ) : null}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
