@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Platform, ScrollView,
   Share, StyleSheet, Text, TouchableOpacity, View,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Copy, Crown, Users as UsersIcon, CreditCard, MessageSquare, Settings2, ShieldCheck } from "lucide-react-native";
@@ -353,7 +353,6 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
 }
 
 // Tiny helper to call load on focus without circular imports
-import { useFocusEffect } from "expo-router";
 function useEffectOnFocus(fn: () => void) {
   useFocusEffect(useCallback(() => { fn(); }, [fn]));
 }
