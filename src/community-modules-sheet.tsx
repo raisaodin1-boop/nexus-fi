@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal, Pressable, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
 import {
   FileText,
@@ -10,13 +10,15 @@ import {
 } from "lucide-react-native";
 
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
+import {
+  CommunityModuleKey,
+  CommunityModulesState,
+  DEFAULT_COMMUNITY_MODULES,
+  loadCommunityModules,
+  saveCommunityModules,
+} from "@/src/community-modules-store";
 
-export type CommunityModuleKey =
-  | "tontine"
-  | "treasury"
-  | "projects"
-  | "members"
-  | "documents";
+export type { CommunityModuleKey, CommunityModulesState };
 
 const MODULES: {
   key: CommunityModuleKey;
@@ -24,15 +26,13 @@ const MODULES: {
   subtitle: string;
   icon: typeof Users;
   color: string;
-  defaultOn: boolean;
 }[] = [
   {
     key: "tontine",
     title: "Module Tontine",
-    subtitle: "Cycles de paiement et tours de rôle",
+    subtitle: "Cycles de paiement et tours de rôle (Njangi)",
     icon: Users,
     color: Colors.primary,
-    defaultOn: true,
   },
   {
     key: "treasury",
@@ -40,7 +40,6 @@ const MODULES: {
     subtitle: "Trésorerie et suivi des paiements",
     icon: Wallet,
     color: Colors.warning,
-    defaultOn: true,
   },
   {
     key: "projects",
@@ -48,7 +47,6 @@ const MODULES: {
     subtitle: "Épargne cible (terrain, mariage…)",
     icon: Landmark,
     color: Colors.accentDark,
-    defaultOn: false,
   },
   {
     key: "members",
@@ -56,7 +54,6 @@ const MODULES: {
     subtitle: "Annuaire et rôles",
     icon: Users,
     color: Colors.secondary,
-    defaultOn: true,
   },
   {
     key: "documents",
@@ -64,20 +61,35 @@ const MODULES: {
     subtitle: "Transparence et archives",
     icon: FileText,
     color: Colors.brandNavy,
-    defaultOn: false,
   },
 ];
 
 type Props = {
   visible: boolean;
   onClose: () => void;
+  groupId?: string | null;
   groupName?: string;
+  onChange?: (state: CommunityModulesState) => void;
 };
 
-export function CommunityModulesSheet({ visible, onClose, groupName }: Props) {
-  const [enabled, setEnabled] = useState<Record<CommunityModuleKey, boolean>>(() =>
-    Object.fromEntries(MODULES.map((m) => [m.key, m.defaultOn])) as Record<CommunityModuleKey, boolean>,
-  );
+export function CommunityModulesSheet({ visible, onClose, groupId, groupName, onChange }: Props) {
+  const [enabled, setEnabled] = useState<CommunityModulesState>({ ...DEFAULT_COMMUNITY_MODULES });
+
+  useEffect(() => {
+    if (!visible || !groupId) return;
+    let cancelled = false;
+    loadCommunityModules(groupId).then((state) => {
+      if (!cancelled) setEnabled(state);
+    });
+    return () => { cancelled = true; };
+  }, [visible, groupId]);
+
+  const toggle = async (key: CommunityModuleKey, value: boolean) => {
+    const next = { ...enabled, [key]: value };
+    setEnabled(next);
+    onChange?.(next);
+    if (groupId) await saveCommunityModules(groupId, next);
+  };
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -116,7 +128,7 @@ export function CommunityModulesSheet({ visible, onClose, groupName }: Props) {
                   </View>
                   <Switch
                     value={enabled[m.key]}
-                    onValueChange={(v) => setEnabled((s) => ({ ...s, [m.key]: v }))}
+                    onValueChange={(v) => toggle(m.key, v)}
                     trackColor={{ false: Colors.border, true: Colors.primary + "88" }}
                     thumbColor={enabled[m.key] ? Colors.primary : Colors.surfaceAlt}
                   />

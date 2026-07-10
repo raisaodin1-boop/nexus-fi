@@ -28,14 +28,13 @@ type PublicTontine = {
   frequency?: string;
 };
 
-const CITIES = ["Douala", "Yaoundé", "Bafoussam", "Paris", "Montréal", "CM"] as const;
+const CITIES = ["Douala", "Yaoundé", "Bafoussam", "Diaspora", "CM"] as const;
 const CITY_LABELS: Record<string, string> = {
   Douala: "Douala",
   Yaoundé: "Yaoundé",
   Bafoussam: "Bafoussam",
-  Paris: "Paris",
-  Montréal: "Montréal",
-  CM: "National / Diaspora",
+  Diaspora: "Diaspora (Paris, Montréal…)",
+  CM: "National",
 };
 
 const CATEGORIES = [
@@ -123,7 +122,9 @@ export function CommunityDiscoverTab() {
       if (verifiedOnly && !t.is_hodix_verified) return false;
       if (city) {
         if (city === "CM") {
-          if (t.country && !["CM", "Paris", "Montréal"].includes(t.country)) return false;
+          if (t.country && t.country !== "CM") return false;
+        } else if (city === "Diaspora") {
+          if (!["Paris", "Montréal", "France", "Canada", "Diaspora"].includes(t.country ?? "")) return false;
         } else if (t.country !== city) {
           return false;
         }

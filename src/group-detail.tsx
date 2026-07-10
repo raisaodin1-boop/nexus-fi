@@ -7,13 +7,23 @@ import {
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { Copy, Crown, Users as UsersIcon, ChevronRight, CreditCard, MessageSquare } from "lucide-react-native";
+import { Copy, Crown, Users as UsersIcon, CreditCard, MessageSquare, Settings2, ShieldCheck } from "lucide-react-native";
 
 import { api, ApiError, formatXAF } from "@/src/api";
 import { openPaymentScreen, type PaymentKind } from "@/src/payment-nav";
 import { Button, Card, Field } from "@/src/ui";
 import { VerifiedName } from "@/src/verified-name";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
+import { CommunityModulesSheet } from "@/src/community-modules-sheet";
+import {
+  CommunityModulesState,
+  DEFAULT_COMMUNITY_MODULES,
+  loadCommunityModules,
+} from "@/src/community-modules-store";
+import {
+  CommunityDocumentsPlaceholder,
+  CommunityProjectsPlaceholder,
+} from "@/src/community-module-placeholders";
 
 interface Member {
   id: string; user_id: string; full_name: string; kyc_verified?: boolean; role: string;
@@ -39,6 +49,8 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
   const [amount, setAmount] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [modulesOpen, setModulesOpen] = useState(false);
+  const [modules, setModules] = useState<CommunityModulesState>({ ...DEFAULT_COMMUNITY_MODULES });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -47,6 +59,8 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
       const d = await api.get<any>(endpoint);
       if (!d?.[detailKey]) throw new Error("Groupe introuvable");
       setData(d);
+      const gid = d?.[detailKey]?.id;
+      if (gid) setModules(await loadCommunityModules(String(gid)));
     } catch (e) {
       setData(null);
       setError(e instanceof ApiError ? e.detail : "Impossible de charger ce groupe");
@@ -176,10 +190,32 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
 
           <TouchableOpacity onPress={shareWhatsApp} style={styles.whatsappBtn} testID={`${testIDPrefix}-whatsapp-share`}>
             <MessageSquare color="#fff" size={18} />
-            <Text style={styles.whatsappBtnText}>📲 Partager le lien sur WhatsApp</Text>
+            <Text style={styles.whatsappBtnText}>Partager le lien sur WhatsApp</Text>
           </TouchableOpacity>
 
-          {isAdmin && showRotation && advanceEndpoint ? (
+          <View style={styles.serviceRow}>
+            <TouchableOpacity
+              style={styles.serviceBtn}
+              onPress={() => setModulesOpen(true)}
+              testID={`${testIDPrefix}-modules`}
+            >
+              <Settings2 size={15} color={Colors.primary} />
+              <Text style={styles.serviceBtnText}>Centre de services</Text>
+            </TouchableOpacity>
+            {showRotation && data.compliance_pct !== undefined ? (
+              <View style={styles.trustChip}>
+                <ShieldCheck size={13} color={Colors.success} />
+                <Text style={styles.trustChipText}>Trust {data.compliance_pct}%</Text>
+              </View>
+            ) : (
+              <View style={styles.trustChip}>
+                <ShieldCheck size={13} color={Colors.success} />
+                <Text style={styles.trustChipText}>Trust Score</Text>
+              </View>
+            )}
+          </View>
+
+          {isAdmin && modules.tontine && showRotation && advanceEndpoint ? (
             <View style={{ marginTop: 16, gap: 10 }}>
               <Button testID={`${testIDPrefix}-advance`} label={`Faire avancer le cycle (Cycle ${item.current_cycle})`} variant="accent" onPress={advanceRotation} loading={busy} />
               <Button
@@ -202,6 +238,7 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
             </View>
           ) : null}
 
+          {modules.treasury ? (
           <View style={{ marginTop: 16 }}>
             <Text style={styles.section}>
               {detailKey === "tontine" ? "Cotiser" : "Contribuer"}
@@ -239,7 +276,10 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
               </Text>
             </Card>
           </View>
+          ) : null}
 
+          {modules.members ? (
+          <>
           <Text style={styles.section}>Membres ({members.length})</Text>
           <View style={{ gap: 8 }}>
             {members.map((m) => {
@@ -247,7 +287,7 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
                 ? { c: Colors.danger, lbl: "Suspendu" }
                 : m.status === "en_retard"
                 ? { c: Colors.warning, lbl: "En retard" }
-                : { c: Colors.accent, lbl: "À jour" };
+                : { c: Colors.success, lbl: "À jour" };
               return (
                 <Card key={m.id} style={styles.memberRow}>
                   <View style={styles.avatar}>
@@ -272,7 +312,11 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
               );
             })}
           </View>
+          </>
+          ) : null}
 
+          {modules.treasury ? (
+          <>
           <Text style={styles.section}>Contributions ({contribs.length})</Text>
           {contribs.length === 0 ? (
             <Card><Text style={styles.empty}>Aucune contribution pour l'instant.</Text></Card>
@@ -289,8 +333,21 @@ export function GroupDetailView({ endpoint, contributeEndpoint, detailKey, testI
               ))}
             </View>
           )}
+          </>
+          ) : null}
+
+          {modules.projects ? <CommunityProjectsPlaceholder /> : null}
+          {modules.documents ? <CommunityDocumentsPlaceholder /> : null}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <CommunityModulesSheet
+        visible={modulesOpen}
+        onClose={() => setModulesOpen(false)}
+        groupId={item.id}
+        groupName={item.name}
+        onChange={setModules}
+      />
     </SafeAreaView>
   );
 }
@@ -323,6 +380,22 @@ const styles = StyleSheet.create({
   whatsappCodeBtnText: { color: "#fff", fontWeight: "800", fontSize: 12 },
   whatsappBtn: { backgroundColor: "#25D366", borderRadius: 14, padding: 14, flexDirection: "row", gap: 10, alignItems: "center", marginTop: 12 },
   whatsappBtnText: { color: "#fff", fontWeight: "800", fontSize: 15 },
+  serviceRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    marginTop: 12, gap: 10,
+  },
+  serviceBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: Colors.primaryLight, paddingHorizontal: 12, paddingVertical: 10,
+    borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.primary + "33",
+  },
+  serviceBtnText: { fontSize: 12, fontWeight: "800", color: Colors.primary },
+  trustChip: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    backgroundColor: Colors.successLight, paddingHorizontal: 10, paddingVertical: 8,
+    borderRadius: Radius.full,
+  },
+  trustChipText: { fontSize: 12, fontWeight: "800", color: Colors.success },
   paySubLabel: { color: Colors.textMuted, fontSize: 12, fontWeight: "600", textAlign: "center", marginTop: 6 },
   adminNote: { color: Colors.textMuted, fontSize: 12, fontWeight: "600", marginBottom: 8, marginTop: -4 },
   section: { color: Colors.text, fontSize: 14, fontWeight: "800", marginTop: 24, marginBottom: 10, letterSpacing: -0.3 },

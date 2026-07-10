@@ -21,7 +21,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowLeft, ArrowDown, ArrowUp, Award, CheckCircle, ChevronRight,
-  Copy, Crown, MessageSquare, RefreshCw, Shield, Shuffle, Smartphone, Trophy, Users as UsersIcon,
+  Copy, Crown, MessageSquare, RefreshCw, Settings2, Shield, Shuffle, Smartphone, Trophy, Users as UsersIcon,
   Wallet, X,
 } from "lucide-react-native";
 
@@ -34,6 +34,16 @@ import { VerifiedName } from "@/src/verified-name";
 import { TontineGraduationModal, type GraduationInvite } from "@/src/tontine-graduation-modal";
 import { DocumentButton } from "@/src/document-button";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
+import { CommunityModulesSheet } from "@/src/community-modules-sheet";
+import {
+  CommunityModulesState,
+  DEFAULT_COMMUNITY_MODULES,
+  loadCommunityModules,
+} from "@/src/community-modules-store";
+import {
+  CommunityDocumentsPlaceholder,
+  CommunityProjectsPlaceholder,
+} from "@/src/community-module-placeholders";
 
 /* ─── Types ─────────────────────────────────────────── */
 
@@ -528,16 +538,20 @@ export function TontineDetailView({ id }: { id: string }) {
   const [activeTab, setActiveTab] = useState<"cycle" | "rotation" | "history" | "members" | "contributions">("cycle");
   const [claimBusyId, setClaimBusyId] = useState<string | null>(null);
   const [proofBusy, setProofBusy] = useState(false);
+  const [modulesOpen, setModulesOpen] = useState(false);
+  const [modules, setModules] = useState<CommunityModulesState>({ ...DEFAULT_COMMUNITY_MODULES });
 
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const [d, disbs] = await Promise.all([
+      const [d, disbs, mods] = await Promise.all([
         api.get<TontineData>(`/tontines/${id}`),
         api.get<Disbursement[]>(`/tontines/${id}/disbursements`).catch(() => [] as Disbursement[]),
+        id ? loadCommunityModules(id) : Promise.resolve({ ...DEFAULT_COMMUNITY_MODULES }),
       ]);
       setData(d);
       setDisbursements(Array.isArray(disbs) ? disbs : []);
+      setModules(mods);
     } catch (e) {
       setData(null);
       setLoadError(e instanceof ApiError ? e.detail : "Impossible de charger la tontine.");
@@ -767,12 +781,23 @@ export function TontineDetailView({ id }: { id: string }) {
   );
 
   const TABS = [
-    { key: "cycle" as const, label: "Cycle" },
-    { key: "rotation" as const, label: "Rotation" },
-    { key: "history" as const, label: "Remises" },
-    { key: "members" as const, label: "Membres" },
-    { key: "contributions" as const, label: "Cotisations" },
-  ];
+    modules.tontine ? { key: "cycle" as const, label: "Cycle" } : null,
+    modules.tontine ? { key: "rotation" as const, label: "Rotation" } : null,
+    modules.tontine ? { key: "history" as const, label: "Remises" } : null,
+    modules.members ? { key: "members" as const, label: "Membres" } : null,
+    modules.treasury ? { key: "contributions" as const, label: "Cotisations" } : null,
+  ].filter(Boolean) as { key: "cycle" | "rotation" | "history" | "members" | "contributions"; label: string }[];
+
+  useEffect(() => {
+    const keys = [
+      modules.tontine ? "cycle" : null,
+      modules.tontine ? "rotation" : null,
+      modules.tontine ? "history" : null,
+      modules.members ? "members" : null,
+      modules.treasury ? "contributions" : null,
+    ].filter(Boolean) as typeof activeTab[];
+    if (keys.length && !keys.includes(activeTab)) setActiveTab(keys[0]);
+  }, [modules.tontine, modules.members, modules.treasury, activeTab]);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -785,6 +810,9 @@ export function TontineDetailView({ id }: { id: string }) {
           <Text style={styles.headerTitle} numberOfLines={1}>{tontine.name}</Text>
           <Text style={styles.headerSub}>{tontine.members_count} membres · {tontine.frequency}</Text>
         </View>
+        <TouchableOpacity onPress={() => setModulesOpen(true)} style={styles.settingsBtn} testID="tontine-modules">
+          <Settings2 color={Colors.primary} size={18} />
+        </TouchableOpacity>
         <TouchableOpacity onPress={shareWhatsApp} style={styles.waBtn}>
           <MessageSquare color="#fff" size={16} />
         </TouchableOpacity>
@@ -842,15 +870,17 @@ export function TontineDetailView({ id }: { id: string }) {
               <Text style={styles.codeCta}>Partager</Text>
             </TouchableOpacity>
 
-            <ContributePanel />
+            {modules.treasury ? <ContributePanel /> : null}
 
-            <CycleBoard
-              rows={cycle_board}
-              isAdmin={is_admin}
-              onValidate={validateClaim}
-              onReject={rejectClaim}
-              busyId={claimBusyId}
-            />
+            {modules.tontine ? (
+              <CycleBoard
+                rows={cycle_board}
+                isAdmin={is_admin}
+                onValidate={validateClaim}
+                onReject={rejectClaim}
+                busyId={claimBusyId}
+              />
+            ) : null}
 
             {/* PDF certificate */}
             <View style={{ marginTop: 16 }}>
@@ -968,7 +998,7 @@ export function TontineDetailView({ id }: { id: string }) {
         {/* ── TAB: CONTRIBUTIONS ── */}
         {activeTab === "contributions" && (
           <View style={{ gap: 8 }}>
-            <ContributePanel />
+            {modules.treasury ? <ContributePanel /> : null}
             {contributions.length === 0
               ? <Card><Text style={styles.emptyText}>Aucune cotisation enregistrée.</Text></Card>
               : contributions.map((c) => (
@@ -984,6 +1014,9 @@ export function TontineDetailView({ id }: { id: string }) {
                 ))}
           </View>
         )}
+
+        {modules.projects ? <CommunityProjectsPlaceholder /> : null}
+        {modules.documents ? <CommunityDocumentsPlaceholder /> : null}
       </ScrollView>
 
       {/* Disbursement modal */}
@@ -1000,6 +1033,13 @@ export function TontineDetailView({ id }: { id: string }) {
         visible={showGraduation}
         invite={graduationInvite}
         onClose={() => setShowGraduation(false)}
+      />
+      <CommunityModulesSheet
+        visible={modulesOpen}
+        onClose={() => setModulesOpen(false)}
+        groupId={id}
+        groupName={tontine.name}
+        onChange={setModules}
       />
     </SafeAreaView>
   );
@@ -1021,6 +1061,11 @@ const styles = StyleSheet.create({
   headerTitle: { color: Colors.primary, fontSize: 17, fontWeight: "900", letterSpacing: -0.3 },
   headerSub: { color: Colors.textMuted, fontSize: 12, fontWeight: "600", marginTop: 1 },
   waBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#25D366", alignItems: "center", justifyContent: "center" },
+  settingsBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: Colors.primaryLight, alignItems: "center", justifyContent: "center",
+    marginRight: 6,
+  },
 
   // Tabs
   tabsRow: {

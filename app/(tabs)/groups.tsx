@@ -256,6 +256,7 @@ export default function Groups() {
       <CommunityModulesSheet
         visible={modulesOpen}
         onClose={() => setModulesOpen(false)}
+        groupId={modulesGroup?.id}
         groupName={modulesGroup?.name}
       />
     </SafeAreaView>
