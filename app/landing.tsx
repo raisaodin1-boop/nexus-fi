@@ -148,24 +148,6 @@ export default function LandingScreen() {
   const layoutWidth = Math.min(width, APP_MAX_WIDTH);
   const isWide = layoutWidth >= 640;
   const [stats, setStats] = useState<PublicPlatformStats | null>(null);
-  const [layoutProbe, setLayoutProbe] = useState<{
-    heroInner?: number;
-    heroCopy?: number;
-    heroTitle?: number;
-  }>({});
-
-  // #region agent log
-  useEffect(() => {
-    const frameLikely = width >= 768 && layoutWidth <= APP_MAX_WIDTH;
-    fetch('http://127.0.0.1:7842/ingest/bacca6bb-32fd-4ae4-b209-004a107b7849',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b6b3ca'},body:JSON.stringify({sessionId:'b6b3ca',runId:'post-fix',hypothesisId:'A',location:'landing.tsx:dims',message:'landing layout dimensions',data:{windowWidth:width,appMaxWidth:APP_MAX_WIDTH,layoutWidth,isWide,frameLikely,legacyIsWideWouldBe:width>=768,platform:Platform.OS},timestamp:Date.now()})}).catch(()=>{});
-  }, [width, layoutWidth, isWide]);
-
-  useEffect(() => {
-    if (!layoutProbe.heroInner && !layoutProbe.heroCopy && !layoutProbe.heroTitle) return;
-    const squeezed = (layoutProbe.heroCopy ?? 999) < 120 || (layoutProbe.heroTitle ?? 999) < 120;
-    fetch('http://127.0.0.1:7842/ingest/bacca6bb-32fd-4ae4-b209-004a107b7849',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b6b3ca'},body:JSON.stringify({sessionId:'b6b3ca',runId:'post-fix',hypothesisId:'B',location:'landing.tsx:onLayout',message:'hero measured widths',data:{...layoutProbe,isWide,squeezed,rowLayoutActive:isWide},timestamp:Date.now()})}).catch(()=>{});
-  }, [layoutProbe, isWide]);
-  // #endregion
 
   useEffect(() => {
     getPublicPlatformStats().then(setStats).catch(() => setStats(null));
@@ -233,24 +215,8 @@ export default function LandingScreen() {
             <View style={ss.glowG} pointerEvents="none" />
             <View style={ss.glowB} pointerEvents="none" />
 
-            <View
-              style={[ss.heroInner, isWide && ss.heroInnerWide]}
-              onLayout={(e) => {
-                const w = e.nativeEvent.layout.width;
-                // #region agent log
-                setLayoutProbe((p) => (p.heroInner === w ? p : { ...p, heroInner: w }));
-                // #endregion
-              }}
-            >
-              <View
-                style={[ss.heroCopy, isWide && ss.heroCopyWide]}
-                onLayout={(e) => {
-                  const w = e.nativeEvent.layout.width;
-                  // #region agent log
-                  setLayoutProbe((p) => (p.heroCopy === w ? p : { ...p, heroCopy: w }));
-                  // #endregion
-                }}
-              >
+            <View style={[ss.heroInner, isWide && ss.heroInnerWide]}>
+              <View style={[ss.heroCopy, isWide && ss.heroCopyWide]}>
                 <FadeIn delay={0}>
                   <View style={ss.chip}>
                     <Text style={ss.chipText}>{copy.hero_badge}</Text>
@@ -258,16 +224,7 @@ export default function LandingScreen() {
                 </FadeIn>
 
                 <FadeIn delay={100}>
-                  <Text
-                    style={[ss.heroTitle, isWide && ss.heroTitleWide]}
-                    onLayout={(e) => {
-                      const w = e.nativeEvent.layout.width;
-                      // #region agent log
-                      setLayoutProbe((p) => (p.heroTitle === w ? p : { ...p, heroTitle: w }));
-                      fetch('http://127.0.0.1:7842/ingest/bacca6bb-32fd-4ae4-b209-004a107b7849',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b6b3ca'},body:JSON.stringify({sessionId:'b6b3ca',runId:'post-fix',hypothesisId:'C',location:'landing.tsx:heroTitle',message:'hero title layout',data:{titleWidth:w,titleLen:copy.hero_title.length,isWide},timestamp:Date.now()})}).catch(()=>{});
-                      // #endregion
-                    }}
-                  >
+                  <Text style={[ss.heroTitle, isWide && ss.heroTitleWide]}>
                     {copy.hero_title}
                   </Text>
                 </FadeIn>
