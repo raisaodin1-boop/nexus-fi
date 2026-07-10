@@ -174,7 +174,10 @@ export async function getIdentityProfile() {
 
 export async function getTrustScore() {
   const me = await uid();
-  return cached(`trust-score-${me}`, 120_000, async () => {
+  // Short TTL — membership stats must stay close to DB; invalidateUserStatsCaches clears on changes.
+  return cached(`trust-score-${me}`, 15_000, async () => {
+    // Bypass nested identity cache so counts are fresh when trust-score is rebuilt
+    invalidateCache(`identity-${me}`);
     const identity = await getIdentity();
     const ts = identity.trust_score;
     try {

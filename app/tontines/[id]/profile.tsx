@@ -14,9 +14,10 @@ import Svg, { Rect, Text as SvgText } from "react-native-svg";
 import { ChevronLeft, Clock, Globe, Shield, Star, Users } from "lucide-react-native";
 import { VerifiedBadge } from "@/src/fraud-badge";
 
-import { api, formatXAF } from "@/src/api";
+import { api, formatXAF, ApiError } from "@/src/api";
 import { Button, Card } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
+import { useToast } from "@/src/toast";
 
 /* ── Types ─────────────────────────────────────────────────── */
 
@@ -130,10 +131,13 @@ function maskName(name: string): string {
 
 export default function TontineProfile() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id: idParam } = useLocalSearchParams<{ id: string }>();
+  const id = Array.isArray(idParam) ? idParam[0] : idParam;
+  const { show } = useToast();
   const [data, setData] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
+  const [joinMsg, setJoinMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -142,20 +146,33 @@ export default function TontineProfile() {
       const res = await api.get<ProfileData>(`/tontines/${id}/profile`);
       setData(res);
     } catch (e: any) {
-      Alert.alert("Erreur", e?.detail ?? "Impossible de charger ce profil.");
+      const detail = e instanceof ApiError ? e.detail : (e?.detail ?? "Impossible de charger ce profil.");
+      show(detail, "error");
+      Alert.alert("Erreur", detail);
     }
     setLoading(false);
-  }, [id]);
+  }, [id, show]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const handleJoin = async () => {
+    if (!id) return;
     setJoining(true);
+    setJoinMsg(null);
     try {
       await api.post("/tontines/request-join", { tontine_id: id });
+      const ok = "Demande envoyée — l'administrateur a été notifié.";
+      setJoinMsg(ok);
+      show(ok, "success");
       Alert.alert("Demande envoyée", "Votre demande d'adhésion a été transmise à l'administrateur.");
     } catch (e: any) {
-      Alert.alert("Erreur", e?.detail ?? "Impossible d'envoyer la demande.");
+      const detail = e instanceof ApiError ? e.detail : (e?.detail ?? "Impossible d'envoyer la demande.");
+      setJoinMsg(detail);
+      show(detail, "error");
+      Alert.alert("Erreur", detail);
+      if (/déjà membre/i.test(detail) && id) {
+        router.replace(`/tontines/${id}` as any);
+      }
     }
     setJoining(false);
   };
@@ -323,6 +340,11 @@ export default function TontineProfile() {
             loading={joining}
             onPress={handleJoin}
           />
+          {joinMsg ? (
+            <Text style={{ marginTop: 10, textAlign: "center", color: Colors.textMuted, fontSize: 13 }}>
+              {joinMsg}
+            </Text>
+          ) : null}
         </View>
 
         <View style={{ height: 32 }} />

@@ -110,6 +110,7 @@ export function AdminDashboard() {
   const [exportBusy, setExportBusy] = useState(false);
   const [pendingReqs, setPendingReqs] = useState(0);
   const [promoRequests, setPromoRequests] = useState<PromotionRequestRow[]>([]);
+  const [pendingJoins, setPendingJoins] = useState(0);
   const [openFraudAlerts, setOpenFraudAlerts] = useState(0);
   const [criticalFraudAlerts, setCriticalFraudAlerts] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -119,7 +120,7 @@ export function AdminDashboard() {
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch { return null; }
     };
-    const [a, s, u, p, comp, ik, c90, s90, u90] = await Promise.all([
+    const [a, s, u, p, comp, ik, c90, s90, u90, joins] = await Promise.all([
       safe(() => api.get<Analytics>("/admin/analytics")),
       safe(() => api.get<Series>("/analytics/platform/savings?days=14")),
       safe(() => api.get<Series>("/analytics/platform/users?days=14")),
@@ -129,6 +130,7 @@ export function AdminDashboard() {
       safe(() => api.get<Series>("/analytics/platform/contributions?days=90")),
       safe(() => api.get<Series>("/analytics/platform/savings?days=90")),
       safe(() => api.get<Series>("/analytics/platform/users?days=90")),
+      safe(() => api.get<any[]>("/tontines/join-requests")),
     ]);
     setAnalytics(a ?? DEFAULT_ANALYTICS);
     setAnalyticsDegraded(!a);
@@ -138,6 +140,7 @@ export function AdminDashboard() {
       setPromoRequests(p as PromotionRequestRow[]);
       setPendingReqs(p.filter((r: any) => r.status === "pending").length);
     }
+    setPendingJoins(Array.isArray(joins) ? joins.length : 0);
     if (comp) {
       setOpenFraudAlerts(comp.open_fraud_alerts);
       setCriticalFraudAlerts(comp.critical_fraud_alerts ?? 0);
@@ -241,6 +244,21 @@ export function AdminDashboard() {
         {analyticsDegraded ? <DegradedDataBanner onRetry={retry} testID="admin-retry-analytics" /> : null}
 
         {/* Alert Banners */}
+        {pendingJoins > 0 ? (
+          <TouchableOpacity
+            onPress={() => router.push("/manage" as any)}
+            style={[styles.alertCard, Shadow.card]}
+            testID="admin-join-banner"
+          >
+            <View style={[styles.alertIcon, { backgroundColor: Colors.secondary }]}><Users color="#fff" size={18} /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.alertTitle}>{pendingJoins} demande{pendingJoins > 1 ? "s" : ""} d&apos;adhésion tontine</Text>
+              <Text style={styles.alertDesc}>Accepter ou refuser dans Gestion des communautés.</Text>
+            </View>
+            <ChevronRight color={Colors.text} size={16} />
+          </TouchableOpacity>
+        ) : null}
+
         {pendingReqs > 0 ? (
           <TouchableOpacity
             onPress={() => router.push({ pathname: "/admin", params: { tab: "promotions" } } as any)}

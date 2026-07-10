@@ -74,14 +74,27 @@ export function MemberDashboard() {
     };
 
     if (!opts?.secondaryOnly) {
-      const [s, t, n, st] = await Promise.all([
+      const [s, t, n, st, myTontines, myAssocs] = await Promise.all([
         safe(() => api.get<Summary>("/savings/summary")),
         safe(() => api.get<TrustScore>("/trust-score")),
         safe(() => api.get<{ unread_count: number }>("/notifications")),
         safe(() => api.get<DashboardStory>("/dashboard/story")),
+        safe(() => api.get<unknown[]>("/tontines")),
+        safe(() => api.get<unknown[]>("/associations")),
       ]);
       if (s) setSummary(s);
-      if (t) setTrust(t);
+      if (t) {
+        const liveTontines = Array.isArray(myTontines) ? myTontines.length : t.stats?.tontines;
+        const liveAssocs = Array.isArray(myAssocs) ? myAssocs.length : t.stats?.associations;
+        setTrust({
+          ...t,
+          stats: {
+            ...t.stats,
+            tontines: liveTontines ?? t.stats?.tontines ?? 0,
+            associations: liveAssocs ?? t.stats?.associations ?? 0,
+          },
+        });
+      }
       if (n) setUnread(n.unread_count ?? 0);
       if (st) setStory(st);
       setPrimaryDegraded(!s && !t);

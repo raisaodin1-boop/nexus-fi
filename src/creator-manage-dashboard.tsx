@@ -79,8 +79,8 @@ export function CreatorManageDashboard({ embed = false }: { embed?: boolean }) {
     try {
       const [o, assocJr, tontineJr] = await Promise.all([
         api.get<Owned>("/creator/owned"),
-        api.get<JoinReq[]>("/associations/join-requests").catch(() => []),
-        api.get<JoinReq[]>("/tontines/join-requests").catch(() => []),
+        api.get<JoinReq[]>("/associations/join-requests"),
+        api.get<JoinReq[]>("/tontines/join-requests"),
       ]);
       setOwned(o);
       const merged = [
@@ -92,8 +92,10 @@ export function CreatorManageDashboard({ embed = false }: { embed?: boolean }) {
         const rr = await api.get<RemovalReq[]>("/governance/removal-requests").catch(() => []);
         setRemovals(rr ?? []);
       }
-    } catch {
+    } catch (e: any) {
       setOwned({ tontines: [], associations: [], cooperatives: [], funds: [] });
+      setJoinReqs([]);
+      Alert.alert("Erreur", e?.detail ?? "Impossible de charger le tableau de gestion.");
     }
     setLoading(false);
   }, [isPlatformAdmin]);

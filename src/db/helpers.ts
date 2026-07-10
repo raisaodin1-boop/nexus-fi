@@ -23,6 +23,15 @@ export function invalidateCache(prefix?: string) {
   for (const k of _cache.keys()) if (k.startsWith(prefix)) _cache.delete(k);
 }
 
+/** Clear identity / trust / credit caches after membership or group changes. */
+export function invalidateUserStatsCaches(userId: string) {
+  invalidateCache(`identity-${userId}`);
+  invalidateCache(`trust-score-${userId}`);
+  invalidateCache(`credit-score-${userId}`);
+  invalidateCache(`diaspora-home-${userId}`);
+  invalidateCache(`diaspora-${userId}`);
+}
+
 // inviteCode exported from secure-random (expo-crypto)
 
 /** Lowercase + trim — use for auth emails and profile lookup. */

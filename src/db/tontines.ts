@@ -1,5 +1,5 @@
 import { getSupabase } from "@/src/supabase";
-import { uid, throwSb, inviteCode, invalidateCache, isUniqueViolation } from "./helpers";
+import { uid, throwSb, inviteCode, invalidateCache, isUniqueViolation, invalidateUserStatsCaches } from "./helpers";
 import { addIdentityEvent } from "./identity";
 import { notifyUser } from "./notifications";
 import { profileDisplayMap, profileFromMap } from "@/src/profile-display";
@@ -264,6 +264,11 @@ export async function listPublicTontines(filters?: {
 }
 
 export async function requestJoinTontine(tontine_id: string, message?: string) {
+  if (!tontine_id || Array.isArray(tontine_id as any)) {
+    const id = Array.isArray(tontine_id) ? tontine_id[0] : tontine_id;
+    if (!id) throw { status: 400, detail: "tontine_id requis." };
+    tontine_id = id;
+  }
   const { data, error } = await getSupabase().rpc("request_join_tontine", {
     p_tontine_id: tontine_id,
     p_message: message ?? null,
@@ -282,6 +287,9 @@ export async function requestJoinTontine(tontine_id: string, message?: string) {
 export async function listTontineJoinRequests(tontineId?: string) {
   const me = await uid();
   const sb = getSupabase();
+  const { data: profile } = await sb.from("profiles").select("role").eq("id", me).single();
+  const isPlatformAdmin = ["admin", "super_admin"].includes(profile?.role ?? "");
+
   let q = sb
     .from("tontine_join_requests")
     .select("*, tontines(id, name, owner_id)")
@@ -290,9 +298,21 @@ export async function listTontineJoinRequests(tontineId?: string) {
   if (tontineId) q = q.eq("tontine_id", tontineId);
   const { data, error } = await q;
   throwSb(error);
-  const rows = (data ?? []).filter((r: any) =>
-    tontineId ? true : r.tontines?.owner_id === me,
-  );
+
+  const { data: adminOf } = await sb
+    .from("tontine_members")
+    .select("tontine_id")
+    .eq("user_id", me)
+    .eq("role", "admin");
+  const adminOfSet = new Set((adminOf ?? []).map((r: any) => r.tontine_id));
+
+  const rows = (data ?? []).filter((r: any) => {
+    if (r.requester_id === me) return false; // never show own requests in manage inbox
+    if (tontineId) return true;
+    if (isPlatformAdmin) return true;
+    if (r.tontines?.owner_id === me) return true;
+    return adminOfSet.has(r.tontine_id);
+  });
   const ids = rows.map((r: any) => r.requester_id);
   const profiles = await profileDisplayMap(ids);
   return rows.map((r: any) => ({
@@ -313,6 +333,14 @@ export async function respondTontineJoin(request_id: string, approve: boolean) {
     p_approve: approve,
   });
   if (error) throwSb(error);
+  // Invalidate requester + actor stats so dashboards refresh immediately
+  try {
+    const me = await uid();
+    invalidateUserStatsCaches(me);
+    const requesterId = (data as any)?.requester_id;
+    if (requesterId) invalidateUserStatsCaches(String(requesterId));
+    invalidateCache("tontines");
+  } catch { /* best-effort */ }
   return data;
 }
 
@@ -439,7 +467,7 @@ export async function createTontineSecure(body: Record<string, any>) {
   if (memErr) throwSb(memErr);
 
   invalidateCache("tontines");
-  invalidateCache(`identity-${me}`);
+  invalidateUserStatsCaches(me);
   const { checkReferralMilestones } = await import("./misc");
   checkReferralMilestones(me).catch(() => {});
   return data;
@@ -488,7 +516,7 @@ export async function joinTontineSecure(invite_code: string) {
   }
 
   invalidateCache("tontines");
-  invalidateCache(`identity-${me}`);
+  invalidateUserStatsCaches(me);
   const { checkReferralMilestones } = await import("./misc");
   checkReferralMilestones(me).catch(() => {});
   return { tontine_id: tontineId };
@@ -508,7 +536,7 @@ export async function contributeTontineSecure(id: string, amount: number, paymen
   if (rpcErr) throwSb(rpcErr);
 
   invalidateCache("tontines");
-  invalidateCache(`identity-${me}`);
+  invalidateUserStatsCaches(me);
   await addIdentityEvent(me, "tontine_contribution", 1);
 
   const reserveAmount = Math.round(amount * RESERVE_FUND_PCT);

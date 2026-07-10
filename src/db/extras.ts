@@ -50,6 +50,27 @@ export async function getManagerProStatus() {
   };
 }
 
+function mapOverviewTontine(t: any) {
+  const membersCount = Number(t?.tontine_members?.[0]?.count ?? t?.members_count ?? 0);
+  const contribs: number[] = (t?.tontine_contributions ?? []).map((c: any) => Number(c.amount ?? 0));
+  const totalCollected = contribs.reduce((s: number, a: number) => s + a, 0);
+  const perCycle = Number(t?.amount_per_cycle ?? t?.contribution_amount ?? 0);
+  return {
+    id: t.id,
+    name: t.name,
+    current_cycle: t.current_cycle ?? 1,
+    max_members: t.max_members ?? 0,
+    amount_per_cycle: perCycle,
+    members_count: membersCount,
+    total_collected: totalCollected,
+    currency: t.currency ?? "XAF",
+  };
+}
+
+/**
+ * Live manager overview: owned groups + memberships (instant, DB-aligned).
+ * Previous RPC only counted owner_id, so managers who joined groups saw 0.
+ */
 export async function getManagerOverview() {
   try {
     const me = await uid();
@@ -61,15 +82,81 @@ export async function getManagerOverview() {
       return { ...EMPTY_MANAGER_OVERVIEW };
     }
 
-    const { data, error } = await sb.rpc("get_manager_overview", { p_user_id: me });
-    if (error || !data) {
-      return { ...EMPTY_MANAGER_OVERVIEW };
+    const tontineSelect =
+      "id, name, current_cycle, max_members, amount_per_cycle, contribution_amount, currency, created_at, owner_id, tontine_members(count), tontine_contributions(amount)";
+
+    const [ownedTRes, memTRes, ownedARes, memARes, ownedCRes, memCRes, ownedFRes] = await Promise.all([
+      sb.from("tontines").select(tontineSelect).eq("owner_id", me),
+      sb.from("tontine_members").select(`role, tontines(${tontineSelect})`).eq("user_id", me),
+      sb.from("associations").select("id").eq("owner_id", me),
+      sb.from("association_members").select("association_id").eq("user_id", me),
+      sb.from("cooperatives").select("id").eq("owner_id", me),
+      sb.from("cooperative_members").select("cooperative_id").eq("user_id", me),
+      sb.from("community_funds").select("id", { count: "exact", head: true }).eq("owner_id", me),
+    ]);
+
+    const byId = new Map<string, ReturnType<typeof mapOverviewTontine>>();
+    for (const t of ownedTRes.data ?? []) byId.set(t.id, mapOverviewTontine(t));
+    for (const row of memTRes.data ?? []) {
+      const t = (row as any).tontines;
+      if (t?.id && !byId.has(t.id)) byId.set(t.id, mapOverviewTontine(t));
     }
-    const overview = data as typeof EMPTY_MANAGER_OVERVIEW & { tontines: Record<string, unknown>[] };
+    const tontines = [...byId.values()];
+
+    const assocIds = new Set<string>([
+      ...(ownedARes.data ?? []).map((a: any) => a.id),
+      ...(memARes.data ?? []).map((a: any) => a.association_id),
+    ]);
+    const coopIds = new Set<string>([
+      ...(ownedCRes.data ?? []).map((c: any) => c.id),
+      ...(memCRes.data ?? []).map((c: any) => c.cooperative_id),
+    ]);
+
+    let totalMembers = 0;
+    let totalCollected = 0;
+    let complianceSum = 0;
+    let complianceCount = 0;
+    for (const t of tontines) {
+      totalMembers += t.members_count;
+      totalCollected += t.total_collected;
+      if (t.amount_per_cycle > 0 && t.members_count > 0) {
+        complianceSum += Math.min(100, (t.total_collected / (t.amount_per_cycle * t.members_count)) * 100);
+        complianceCount += 1;
+      }
+    }
+
+    const ownedTontineIds = (ownedTRes.data ?? []).map((t: any) => t.id);
+    let newMembers30d = 0;
+    if (ownedTontineIds.length) {
+      const since = new Date(Date.now() - 30 * 86400000).toISOString();
+      const { count } = await sb
+        .from("tontine_members")
+        .select("id", { count: "exact", head: true })
+        .in("tontine_id", ownedTontineIds)
+        .gte("joined_at", since);
+      newMembers30d = count ?? 0;
+    }
+
+    const avgCompliance = complianceCount > 0 ? Math.round(complianceSum / complianceCount) : 0;
+    const health = Math.min(100, Math.max(0, Math.round(
+      (complianceCount > 0 ? complianceSum / complianceCount : 50) * 0.6
+      + Math.min(100, totalMembers * 2) * 0.4,
+    )));
+
     return {
-      ...EMPTY_MANAGER_OVERVIEW,
-      ...overview,
-      tontines: overview.tontines ?? [],
+      groups: {
+        tontines: tontines.length,
+        associations: assocIds.size,
+        cooperatives: coopIds.size,
+        funds: ownedFRes.count ?? 0,
+      },
+      total_members: totalMembers,
+      total_collected: totalCollected,
+      avg_compliance: avgCompliance,
+      health_score: health,
+      new_members_30d: newMembers30d,
+      tontines,
+      currency: "XAF",
     };
   } catch {
     return { ...EMPTY_MANAGER_OVERVIEW };

@@ -11,10 +11,11 @@ import {
 import { useFocusEffect, useRouter } from "expo-router";
 import { ShieldCheck, Users } from "lucide-react-native";
 
-import { api, formatXAF } from "@/src/api";
+import { api, formatXAF, ApiError } from "@/src/api";
 import { VerifiedBadge } from "@/src/fraud-badge";
 import { Button, Card, EmptyState } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
+import { useToast } from "@/src/toast";
 
 type PublicTontine = {
   id: string;
@@ -97,6 +98,7 @@ function Chip({
 
 export function CommunityDiscoverTab() {
   const router = useRouter();
+  const { show } = useToast();
   const [items, setItems] = useState<PublicTontine[]>([]);
   const [loading, setLoading] = useState(true);
   const [city, setCity] = useState<string | null>(null);
@@ -140,15 +142,21 @@ export function CommunityDiscoverTab() {
     setMsg(null);
     try {
       await api.post("/tontines/request-join", { tontine_id: id });
-      setMsg("Demande envoyée au manager — il pourra l'accepter dans son tableau de gestion.");
+      const ok = "Demande envoyée au manager — visible dans Gestion / notifications admin.";
+      setMsg(ok);
+      show(ok, "success");
       Alert.alert(
         "Demande envoyée",
         "Le gestionnaire de la tontine a reçu votre demande d'adhésion.",
       );
     } catch (e: any) {
-      const detail = e?.detail ?? "Impossible d'envoyer la demande.";
+      const detail = e instanceof ApiError ? e.detail : (e?.detail ?? "Impossible d'envoyer la demande.");
       setMsg(detail);
+      show(detail, "error");
       Alert.alert("Erreur", detail);
+      if (/déjà membre/i.test(detail)) {
+        router.push(`/tontines/${id}` as any);
+      }
     }
     setJoiningId(null);
   };
