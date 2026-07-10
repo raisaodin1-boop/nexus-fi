@@ -184,6 +184,7 @@ export async function ensureDiasporaRequest(tontineId: string): Promise<Diaspora
   }).select("*").single();
   throwSb(error);
   invalidateCache(`diaspora-${me}`);
+  invalidateCache(`diaspora-home-${me}`);
   return mapRequest(data!, tontine.name);
 }
 
@@ -315,13 +316,15 @@ export async function markDiasporaPaymentStarted(id: string, payload: {
       payer_relation: payload.payer_relation ?? null,
       declared_amount: payload.declared_amount ?? null,
       declared_currency: payload.declared_currency ?? null,
-      status: "proof_submitted",
+      // Keep pending_payment until proof is uploaded so the user can resume pay/proof.
+      status: "pending_payment",
       updated_at: new Date().toISOString(),
     })
     .eq("id", id).eq("user_id", me).in("status", ["pending_payment", "rejected", "needs_info"])
     .select("*").single();
   throwSb(error);
   invalidateCache(`diaspora-${me}`);
+  invalidateCache(`diaspora-home-${me}`);
   const [req] = await enrichRequests([data!]);
   return req;
 }
@@ -376,6 +379,7 @@ export async function submitDiasporaProof(id: string, payload: {
   });
 
   invalidateCache(`diaspora-${me}`);
+  invalidateCache(`diaspora-home-${me}`);
   const [req] = await enrichRequests([data!]);
   return req;
 }
@@ -404,9 +408,26 @@ export async function getDiasporaReceipt(id: string) {
 export async function getDiasporaJoinPreview(inviteCode?: string, tontineId?: string) {
   if (tontineId) return getPublicTontineProfile(tontineId);
   if (!inviteCode?.trim()) throw { status: 400, detail: "Code ou tontine requis." };
-  const { data } = await getSupabase().from("tontines").select("id").eq("invite_code", inviteCode.trim().toUpperCase()).maybeSingle();
+  const { data } = await getSupabase()
+    .from("tontines")
+    .select("id, name, description, amount_per_cycle, contribution_amount, frequency, max_members, currency, country, language, is_public, invite_code, is_hodix_verified, display_member_count")
+    .eq("invite_code", inviteCode.trim().toUpperCase())
+    .maybeSingle();
   if (!data) throw { status: 404, detail: "Tontine introuvable." };
-  return getPublicTontineProfile(data.id);
+  // Invite-code preview must work for private groups (public directory still filters is_public).
+  const contributionAmount = Number(data.amount_per_cycle ?? data.contribution_amount ?? 0);
+  const { count } = await getSupabase()
+    .from("tontine_members")
+    .select("*", { count: "exact", head: true })
+    .eq("tontine_id", data.id);
+  return {
+    ...data,
+    contribution_amount: contributionAmount,
+    amount_per_cycle: contributionAmount,
+    members_count: count ?? 0,
+    members: [],
+    recent_activity: [],
+  };
 }
 
 export async function joinTontineDiaspora(inviteCode: string, diasporaConsent: boolean) {

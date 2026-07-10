@@ -159,7 +159,9 @@ export default function ProfileScreen() {
         city,
         neighborhood,
         occupation: form.occupation,
-        date_of_birth: dobDate ? dobDate.toISOString().split("T")[0] : (form.date_of_birth || null),
+        date_of_birth: form.date_of_birth
+          ? form.date_of_birth.slice(0, 10)
+          : (dobDate ? dobDate.toISOString().split("T")[0] : null),
         birth_place: form.birth_place,
         address: form.address,
       });
@@ -332,7 +334,10 @@ export default function ProfileScreen() {
               <DatePicker
                 label="Date de naissance"
                 value={form.date_of_birth}
-                onChange={(iso) => setForm({ ...form, date_of_birth: iso })}
+                onChange={(iso) => {
+                  setForm({ ...form, date_of_birth: iso });
+                  setDobDate(iso ? new Date(iso) : null);
+                }}
                 disabled={!editing}
                 testID="profile-dob"
               />

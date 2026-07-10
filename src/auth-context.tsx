@@ -83,8 +83,9 @@ function userFromSession(sbUser: {
   user_metadata?: Record<string, unknown>;
 }): User {
   const meta = sbUser.user_metadata ?? {};
+  // Never elevate from user_metadata (user-editable). Admin roles come from profiles only.
   const rawRole = (meta.role as string) || "member";
-  const role = rawRole === "admin" || rawRole === "super_admin" ? "super_admin" : rawRole;
+  const role = rawRole === "admin" || rawRole === "super_admin" ? "member" : rawRole;
   return {
     id: sbUser.id,
     email: sbUser.email ?? "",
@@ -268,7 +269,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!data.url) throw { detail: "Impossible d'ouvrir Google Sign-In." };
 
     const result = await WebBrowser.openAuthSessionAsync(data.url, nativeRedirect);
-    if (result.type !== "success") return;
+    if (result.type !== "success") {
+      throw { detail: "Connexion Google annulée." };
+    }
 
     const url = result.url;
     const params = new URLSearchParams(url.includes("#") ? url.split("#")[1] : url.split("?")[1] ?? "");

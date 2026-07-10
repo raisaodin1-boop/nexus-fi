@@ -98,3 +98,6 @@ credentials.json
 
 expo-env.d.ts
 # @end expo-cli
+nexus-fi/
+debug-*.log
+.cursor/debug-*.log

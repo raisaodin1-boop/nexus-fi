@@ -8,7 +8,8 @@ export type PaymentKind =
   | "fund_contribution"
   | "wallet_topup"
   | "certified_report"
-  | "manager_pro_subscription";
+  | "manager_pro_subscription"
+  | "subscription";
 
 export interface PaymentNavParams {
   amount: number;
@@ -20,6 +21,7 @@ export interface PaymentNavParams {
   association_id?: string;
   cooperative_id?: string;
   fund_id?: string;
+  plan_id?: string;
   provider?: "mtn" | "orange" | "moov";
   phone?: string;
 }
@@ -39,6 +41,7 @@ export function openPaymentScreen(router: Router, params: PaymentNavParams) {
       ...(params.association_id ? { association_id: params.association_id } : {}),
       ...(params.cooperative_id ? { cooperative_id: params.cooperative_id } : {}),
       ...(params.fund_id ? { fund_id: params.fund_id } : {}),
+      ...(params.plan_id ? { plan_id: params.plan_id } : {}),
       ...(params.provider ? { provider: params.provider } : {}),
       ...(params.phone ? { phone: params.phone } : {}),
     },
@@ -49,6 +52,7 @@ export function paymentReturnRoute(params: PaymentNavParams): string {
   if (params.kind === "wallet_topup") return "/wallet";
   if (params.kind === "certified_report") return "/(tabs)/identity";
   if (params.kind === "manager_pro_subscription") return "/(tabs)";
+  if (params.kind === "subscription") return "/subscription";
   if (params.goal_id) return `/savings/${params.goal_id}`;
   if (params.tontine_id) return `/tontines/${params.tontine_id}`;
   if (params.association_id) return `/associations/${params.association_id}`;

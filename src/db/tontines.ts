@@ -19,7 +19,13 @@ export async function listTontines() {
   throwSb(error);
   return (data ?? []).map((row: any) => {
     const t = row.tontines;
-    return { ...t, members_count: t?.tontine_members?.[0]?.count ?? 0 };
+    const amount = Number(t?.amount_per_cycle ?? t?.contribution_amount ?? 0);
+    return {
+      ...t,
+      contribution_amount: amount,
+      amount_per_cycle: amount || t?.amount_per_cycle,
+      members_count: t?.tontine_members?.[0]?.count ?? 0,
+    };
   });
 }
 
@@ -274,6 +280,7 @@ export async function requestJoinTontine(tontine_id: string, message?: string) {
 }
 
 export async function listTontineJoinRequests(tontineId?: string) {
+  const me = await uid();
   const sb = getSupabase();
   let q = sb
     .from("tontine_join_requests")
@@ -283,7 +290,9 @@ export async function listTontineJoinRequests(tontineId?: string) {
   if (tontineId) q = q.eq("tontine_id", tontineId);
   const { data, error } = await q;
   throwSb(error);
-  const rows = data ?? [];
+  const rows = (data ?? []).filter((r: any) =>
+    tontineId ? true : r.tontines?.owner_id === me,
+  );
   const ids = rows.map((r: any) => r.requester_id);
   const profiles = await profileDisplayMap(ids);
   return rows.map((r: any) => ({

@@ -1,15 +1,16 @@
-// Associations - Join
-import { useRouter } from "expo-router";
-import { GroupJoinForm } from "@/src/group-forms";
+import { Redirect, useLocalSearchParams } from "expo-router";
 
-export default function AssociationJoin() {
-  const router = useRouter();
-  return (
-    <GroupJoinForm
-      title="Rejoindre une association"
-      endpoint="/associations/join"
-      testIDPrefix="assoc-join"
-      onSuccess={(d) => router.replace(`/associations/${d.association_id}`)}
-    />
-  );
+/**
+ * Web deep link /join?code=…&type=…
+ * Native hodix://join is handled in deep-link.ts; this covers https://hodix.app/join.
+ */
+export default function JoinRedirect() {
+  const { code, type } = useLocalSearchParams<{ code?: string; type?: string }>();
+  const kind = String(type ?? "tontines").toLowerCase();
+  const base =
+    kind === "associations" || kind === "association" ? "/associations/join"
+    : kind === "cooperatives" || kind === "cooperative" ? "/cooperatives/join"
+    : "/tontines/join";
+  const qs = code ? `?code=${encodeURIComponent(String(code))}` : "";
+  return <Redirect href={`${base}${qs}` as any} />;
 }

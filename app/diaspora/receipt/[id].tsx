@@ -90,7 +90,7 @@ export default function DiasporaReceiptScreen() {
         </Card>
 
         <Button label="Télécharger / Partager" onPress={share} icon={<Share2 color="#fff" size={16} />} />
-        <Button label="Voir ma tontine" variant="outline" onPress={() => router.push("/diaspora/contributions" as any)} />
+        <Button label="Voir ma tontine" variant="ghost" onPress={() => router.push("/diaspora/contributions" as any)} />
       </ScrollView>
     </SafeAreaView>
   );

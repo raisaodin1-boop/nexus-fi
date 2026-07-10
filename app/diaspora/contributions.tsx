@@ -84,9 +84,11 @@ export default function DiasporaContributionsScreen() {
                   <Text style={styles.btnText}>Voir le reçu</Text>
                 </TouchableOpacity>
               ) : null}
-              {["rejected", "needs_info", "pending_payment"].includes(item.status) ? (
+              {["rejected", "needs_info", "pending_payment", "proof_submitted"].includes(item.status) ? (
                 <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={() => router.push(`/diaspora/proof/${item.id}` as any)}>
-                  <Text style={[styles.btnText, { color: "#fff" }]}>Nouvelle preuve</Text>
+                  <Text style={[styles.btnText, { color: "#fff" }]}>
+                    {item.status === "proof_submitted" ? "Continuer la preuve" : "Nouvelle preuve"}
+                  </Text>
                 </TouchableOpacity>
               ) : null}
               {item.status === "pending_payment" ? (

@@ -146,7 +146,6 @@ export async function listPublicAssociations() {
     .from("associations")
     .select("id, name, description, contribution_amount, currency, frequency, is_public, category, created_at, owner_id, association_members(count)")
     .eq("is_public", true)
-    .eq("is_active", true)
     .order("created_at", { ascending: false })
     .limit(100);
   throwSb(error);
@@ -172,6 +171,7 @@ export async function requestJoinAssociation(association_id: string, message?: s
 }
 
 export async function listAssociationJoinRequests(associationId?: string) {
+  const me = await uid();
   const sb = getSupabase();
   let q = sb
     .from("association_join_requests")
@@ -181,7 +181,9 @@ export async function listAssociationJoinRequests(associationId?: string) {
   if (associationId) q = q.eq("association_id", associationId);
   const { data, error } = await q;
   throwSb(error);
-  const rows = data ?? [];
+  const rows = (data ?? []).filter((r: any) =>
+    associationId ? true : r.associations?.owner_id === me,
+  );
   const ids = rows.map((r: any) => r.requester_id);
   const profiles = await profileDisplayMap(ids);
   return rows.map((r: any) => ({

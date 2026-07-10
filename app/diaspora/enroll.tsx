@@ -211,7 +211,7 @@ export default function DiasporaEnrollScreen() {
 
             {(Object.keys(DOC_LABELS) as DocSlot[]).map((slot) => (
               <TouchableOpacity key={slot} style={styles.docRow} onPress={() => pickDoc(slot)}>
-                <View style={[styles.docIcon, docs[slot] && styles.docDone]}>
+                <View style={[styles.docIcon, docs[slot] ? styles.docDone : null]}>
                   {docs[slot] ? <CheckCircle2 color={Colors.success} size={20} /> : <Camera color={Colors.primary} size={20} />}
                 </View>
                 <View style={{ flex: 1 }}>
@@ -232,7 +232,7 @@ export default function DiasporaEnrollScreen() {
             </TouchableOpacity>
 
             <View style={styles.btnRow}>
-              <Button label="Retour" variant="outline" onPress={() => setStep(1)} fullWidth={false} style={{ flex: 1 }} />
+              <Button label="Retour" variant="ghost" onPress={() => setStep(1)} fullWidth={false} style={{ flex: 1 }} />
               <Button label="Envoyer pour validation" onPress={submit} loading={busy} fullWidth={false} style={{ flex: 2 }} />
             </View>
           </Card>

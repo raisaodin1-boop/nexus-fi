@@ -56,11 +56,11 @@ export default function PayContribution() {
   const router = useRouter();
   const params = useLocalSearchParams<{
     tontine_id?: string; goal_id?: string; association_id?: string;
-    cooperative_id?: string; fund_id?: string; amount: string; label?: string; kind?: PaymentKind;
+    cooperative_id?: string; fund_id?: string; plan_id?: string; amount: string; label?: string; kind?: PaymentKind;
     cert_kind?: "identity" | "trust-score" | "savings";
     phone?: string;
   }>();
-  const { tontine_id, goal_id, association_id, cooperative_id, fund_id, amount, label, cert_kind, phone: paramPhone } = params;
+  const { tontine_id, goal_id, association_id, cooperative_id, fund_id, plan_id, amount, label, cert_kind, phone: paramPhone } = params;
   const paymentKind = inferKind(params);
   const amt = parseFloat(amount || "0");
 
@@ -96,6 +96,7 @@ export default function PayContribution() {
     ...(association_id ? { association_id } : {}),
     ...(cooperative_id ? { cooperative_id } : {}),
     ...(fund_id ? { fund_id } : {}),
+    ...(plan_id ? { plan_id } : {}),
     ...(cert_kind ? { cert_kind } : {}),
   });
 
@@ -113,9 +114,17 @@ export default function PayContribution() {
     }
   };
 
-  const markSuccess = (id: string) => {
+  const markSuccess = async (id: string) => {
     if (doneRef.current) return;
     doneRef.current = true;
+    if (paymentKind === "subscription" && plan_id) {
+      try {
+        const { subscribeToPlan } = await import("@/src/db/subscriptions");
+        await subscribeToPlan(plan_id as any, id);
+      } catch {
+        // Payment already succeeded — user can retry activation from /subscription if needed
+      }
+    }
     setStage("success");
     setHint("Paiement confirmé — crédit instantané");
     setTimeout(() => goReceipt(id), 900);
@@ -126,14 +135,14 @@ export default function PayContribution() {
       // Fast path: webhook may already have credited
       const st = await api.get<{ status: string }>(`/payments/${id}/status`);
       if (st?.status === "succeeded") {
-        markSuccess(id);
+        await markSuccess(id);
         return true;
       }
     } catch { /* continue */ }
 
     try {
       await api.post("/payments/paynote/confirm", { payment_id: id });
-      markSuccess(id);
+      await markSuccess(id);
       return true;
     } catch {
       return false;

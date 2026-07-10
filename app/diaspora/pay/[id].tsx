@@ -37,15 +37,19 @@ export default function DiasporaPayScreen() {
   const [transferCurrency, setTransferCurrency] = useState<Currency>("EUR");
   const [indicativeEur, setIndicativeEur] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
 
   const load = useCallback(async () => {
     if (!id) return;
+    setFetching(true);
     try {
       const data = await api.get<DiasporaRequest>(`/diaspora/requests/${id}`);
       setReq(data);
     } catch {
       show("Cotisation introuvable", "error");
       router.back();
+    } finally {
+      setFetching(false);
     }
   }, [id, router, show]);
 
@@ -83,9 +87,13 @@ export default function DiasporaPayScreen() {
     }
   };
 
-  if (!req) return checking ? (
-    <SafeAreaView style={styles.safe}><DiasporaGuardSpinner checking={checking} /></SafeAreaView>
-  ) : null;
+  if (checking || fetching || !req) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <DiasporaGuardSpinner checking={checking || fetching} />
+      </SafeAreaView>
+    );
+  }
 
   const momo = method === "orange_money" ? DIASPORA_MOMO.orange : DIASPORA_MOMO.mtn;
 

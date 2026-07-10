@@ -24,6 +24,7 @@ export interface PaymentMeta {
   association_id?: string | null;
   cooperative_id?: string | null;
   fund_id?: string | null;
+  plan_id?: string | null;
   provider?: string;
   phone?: string;
   cinetpay_transaction_id?: string | null;
@@ -43,6 +44,7 @@ type InitiatePayload = {
   association_id?: string;
   cooperative_id?: string;
   fund_id?: string;
+  plan_id?: string;
   cert_kind?: "identity" | "trust-score" | "savings";
 };
 
@@ -165,6 +167,13 @@ async function validatePaymentTarget(me: string, payload: InitiatePayload): Prom
       amount = 4990;
       break;
     }
+    case "subscription":
+      if (!payload.plan_id) throw { status: 400, detail: "plan_id requis." };
+      if (!payload.amount_xaf || payload.amount_xaf <= 0) {
+        throw { status: 400, detail: "Montant d'abonnement invalide." };
+      }
+      amount = payload.amount_xaf;
+      break;
     default:
       throw { status: 400, detail: "Type de paiement inconnu." };
   }
@@ -223,6 +232,12 @@ async function fulfillPayment(meta: PaymentMeta, paymentId: string) {
       await sb.from("profiles").update({ manager_pro_plan: "pro", manager_pro_until: until }).eq("id", me);
       break;
     }
+    case "subscription": {
+      if (!meta.plan_id) break;
+      const { subscribeToPlan } = await import("./subscriptions");
+      await subscribeToPlan(meta.plan_id as any, paymentId);
+      break;
+    }
   }
 }
 
@@ -237,6 +252,7 @@ async function initiatePaynoteMtnPayment(payload: InitiatePayload, amount: numbe
     association_id: payload.association_id ?? null,
     cooperative_id: payload.cooperative_id ?? null,
     fund_id: payload.fund_id ?? null,
+    plan_id: payload.plan_id ?? null,
     provider: "mtn",
     phone: payload.phone?.trim(),
     gateway: "paynote",

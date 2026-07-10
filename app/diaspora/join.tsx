@@ -64,7 +64,7 @@ export default function DiasporaJoinScreen() {
 
         <Card>
           <Field label="Code d'invitation" value={code} onChangeText={(v) => setCode(v.toUpperCase())} autoCapitalize="characters" />
-          <Button label="Voir la fiche" variant="outline" onPress={loadPreview} />
+          <Button label="Voir la fiche" variant="ghost" onPress={loadPreview} />
         </Card>
 
         {t ? (

@@ -94,6 +94,20 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ ok: false }, 405);
 
+  const webhookSecret = Deno.env.get("PAYNOTE_WEBHOOK_SECRET") ?? "";
+  const provided =
+    req.headers.get("x-paynote-secret")
+    ?? req.headers.get("x-webhook-secret")
+    ?? req.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
+    ?? "";
+  if (webhookSecret) {
+    if (provided !== webhookSecret) {
+      return json({ ok: false, error: "unauthorized" }, 401);
+    }
+  } else {
+    console.error("CRITICAL: PAYNOTE_WEBHOOK_SECRET unset — set it in Edge Function secrets ASAP");
+  }
+
   let payload: Record<string, unknown>;
   try {
     payload = await parseBody(req);

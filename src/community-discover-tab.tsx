@@ -123,7 +123,7 @@ export function CommunityDiscoverTab() {
       if (verifiedOnly && !t.is_hodix_verified) return false;
       if (city) {
         if (city === "CM") {
-          if (t.country && t.country !== "CM") return false;
+          if (t.country !== "CM" && t.country !== "Cameroun") return false;
         } else if (city === "Diaspora") {
           if (!["Paris", "Montréal", "France", "Canada", "Diaspora"].includes(t.country ?? "")) return false;
         } else if (t.country !== city) {

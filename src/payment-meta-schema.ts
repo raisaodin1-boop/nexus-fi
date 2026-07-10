@@ -10,6 +10,7 @@ const paymentKindSchema = z.enum([
   "wallet_topup",
   "certified_report",
   "manager_pro_subscription",
+  "subscription",
 ]);
 
 export const paymentMetaSchema = z.object({
@@ -21,6 +22,7 @@ export const paymentMetaSchema = z.object({
   association_id: z.string().nullable().optional(),
   cooperative_id: z.string().nullable().optional(),
   fund_id: z.string().nullable().optional(),
+  plan_id: z.string().nullable().optional(),
   provider: z.string().optional(),
   phone: z.string().optional(),
   cinetpay_transaction_id: z.string().nullable().optional(),

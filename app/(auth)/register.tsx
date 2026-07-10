@@ -18,6 +18,7 @@ import { ApiError } from "@/src/api";
 import { HodixLogo } from "@/src/logo";
 import { getSupabase } from "@/src/supabase";
 import { applyReferralBonus } from "@/src/db";
+import { normalizeEmail } from "@/src/db/helpers";
 import { useAuth } from "@/src/auth-context";
 
 type RoleChoice = "member" | "tontine_manager";
@@ -113,8 +114,9 @@ export default function RegisterScreen() {
     if (password.length < 6) { setError("Mot de passe : 6 caractères minimum."); return; }
     setLoading(true);
     try {
+      const normalizedEmail = normalizeEmail(email);
       const body: Record<string, any> = {
-        email: email.trim(),
+        email: normalizedEmail,
         password,
         full_name: fullName.trim(),
         role,
@@ -126,7 +128,7 @@ export default function RegisterScreen() {
       if (referralCode.trim()) body.referral_code = referralCode.trim().toUpperCase();
       // Register via Supabase Auth
       const { data, error: sbError } = await getSupabase().auth.signUp({
-        email: email.trim(),
+        email: normalizedEmail,
         password,
         options: {
           data: {
@@ -137,14 +139,26 @@ export default function RegisterScreen() {
       });
       if (sbError) throw new ApiError(400, sbError.message);
 
-      // Update profile with extra fields
+      // Update profile with extra fields (role only within signup window — see protect_profile_columns)
       if (data.user) {
-        await getSupabase().from("profiles").upsert({
+        const { error: profileErr } = await getSupabase().from("profiles").upsert({
           id: data.user.id,
           full_name: fullName.trim(),
           role,
           phone: phone.trim() || null,
+          email: normalizedEmail,
         }, { onConflict: "id" });
+        if (profileErr && /champ protégé|non autorisé/i.test(profileErr.message ?? "")) {
+          // Role blocked — keep member; manager can request promotion later
+          await getSupabase().from("profiles").upsert({
+            id: data.user.id,
+            full_name: fullName.trim(),
+            phone: phone.trim() || null,
+            email: normalizedEmail,
+          }, { onConflict: "id" });
+        } else if (profileErr) {
+          throw new ApiError(400, profileErr.message);
+        }
 
         setTimeout(async () => {
           if (referralCode.trim()) {
@@ -182,8 +196,7 @@ export default function RegisterScreen() {
       setCountdown(60);
     } catch (e: any) {
       setOtpError(e?.message ?? "Impossible d'envoyer le code SMS.");
-      setOtpBypassed(true);
-      setOtpSent(true);
+      // Do not silently bypass verification when SMS fails — user can retry or skip explicitly.
     } finally {
       setOtpLoading(false);
     }

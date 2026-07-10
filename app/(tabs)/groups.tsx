@@ -97,7 +97,7 @@ export default function Groups() {
     try {
       const data = await api.get<{ items?: { type?: string; is_read?: boolean }[] }>("/notifications");
       const n = (data?.items ?? []).filter((x) =>
-        ["join_request", "join_request_sent", "invite", "invitation"].includes(String(x.type ?? ""))
+        ["join_request", "join_request_sent", "invite", "invitation", "association_join_request", "tontine_join_request"].includes(String(x.type ?? ""))
         && !x.is_read,
       ).length;
       setInviteCount(n);

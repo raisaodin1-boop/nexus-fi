@@ -64,7 +64,7 @@ export function DiasporaMemberDashboard({ embeddedInTabs, skipGuard }: Props) {
     return <DiasporaGuardSpinner checking />;
   }
 
-  const level = home ? trustLevelFromScore(home.trust_score) : trustLevelFromScore(0);
+  const level = home ? trustLevelFromScore(home.trust_score, false) : trustLevelFromScore(0, false);
   const next = home?.next_contribution;
   const cur = (home?.display_currency ?? profileCur) as Currency;
   const curMeta = CURRENCY_META[cur];
@@ -184,7 +184,7 @@ export function DiasporaMemberDashboard({ embeddedInTabs, skipGuard }: Props) {
               <Text style={styles.fraudText}>Signaler une fraude ou un problème</Text>
             </TouchableOpacity>
             <ComingSoonRoadmap />
-            <Button label="Rejoindre une tontine" variant="outline" onPress={() => router.push("/diaspora/join" as any)} />
+            <Button label="Rejoindre une tontine" variant="ghost" onPress={() => router.push("/diaspora/join" as any)} />
           </>
         )}
       </ScrollView>

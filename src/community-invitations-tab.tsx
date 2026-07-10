@@ -7,6 +7,15 @@ import { api } from "@/src/api";
 import { Card, EmptyState } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 
+const INVITE_TYPES = [
+  "join_request",
+  "join_request_sent",
+  "invite",
+  "invitation",
+  "association_join_request",
+  "tontine_join_request",
+];
+
 type Notif = {
   id: string;
   title: string;
@@ -14,7 +23,11 @@ type Notif = {
   type?: string | null;
   is_read?: boolean;
   created_at?: string;
-  metadata?: { tontine_id?: string; requester_id?: string } | null;
+  metadata?: {
+    tontine_id?: string;
+    association_id?: string;
+    requester_id?: string;
+  } | null;
 };
 
 export function CommunityInvitationsTab() {
@@ -27,7 +40,7 @@ export function CommunityInvitationsTab() {
     try {
       const data = await api.get<{ items?: Notif[] }>("/notifications");
       const invites = (data?.items ?? []).filter((n) =>
-        ["join_request", "join_request_sent", "invite", "invitation"].includes(String(n.type ?? "")),
+        INVITE_TYPES.includes(String(n.type ?? "")),
       );
       setItems(invites);
     } catch {
@@ -72,8 +85,10 @@ export function CommunityInvitationsTab() {
           style={[styles.row, Shadow.card, !n.is_read && styles.rowUnread]}
           onPress={() => {
             const tid = n.metadata?.tontine_id;
+            const aid = n.metadata?.association_id;
             if (tid) router.push(`/tontines/${tid}` as any);
-            else router.push("/notifications" as any);
+            else if (aid) router.push(`/associations/${aid}` as any);
+            else router.push("/manage" as any);
           }}
         >
           <View style={styles.icon}>

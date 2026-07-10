@@ -108,9 +108,23 @@ export async function subscribeToPlan(planId: PlanId, paymentId: string): Promis
   const me = await uid();
   const sb = getSupabase();
 
-  // Enregistrer paiement
   const plan = (await getActivePlans()).find((p) => p.id === planId);
   if (!plan) throw { status: 404, detail: "Plan introuvable." };
+
+  // Require a real succeeded payment owned by the user (no free client activation).
+  const { data: pay, error: payErr } = await sb
+    .from("payments")
+    .select("id, status, amount, user_id, description")
+    .eq("id", paymentId)
+    .eq("user_id", me)
+    .maybeSingle();
+  if (payErr) throw { status: 500, detail: payErr.message };
+  if (!pay || pay.status !== "succeeded") {
+    throw { status: 402, detail: "Paiement non confirmé — abonnement impossible." };
+  }
+  if (Number(pay.amount) < plan.price_xaf) {
+    throw { status: 400, detail: "Montant de paiement insuffisant pour ce plan." };
+  }
 
   await sb.from("subscription_payments").insert({
     user_id: me, plan_id: planId,
@@ -119,11 +133,9 @@ export async function subscribeToPlan(planId: PlanId, paymentId: string): Promis
     status: "succeeded",
   });
 
-  // Calculer expires_at (+30 jours)
   const expires = new Date();
   expires.setDate(expires.getDate() + 30);
 
-  // Upsert abonnement
   const { error } = await sb.from("user_subscriptions").upsert({
     user_id: me,
     plan_id: planId,

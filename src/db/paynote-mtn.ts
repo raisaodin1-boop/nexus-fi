@@ -12,7 +12,7 @@ export function normalizeMtnMsisdn(phone: string): string {
 }
 
 export async function invokePaynoteMtn<T = unknown>(
-  action: "initiate" | "status",
+  action: "initiate" | "status" | "confirm",
   body: Record<string, unknown>,
 ): Promise<T> {
   const { data, error } = await getSupabase().functions.invoke("paynote-mtn", {

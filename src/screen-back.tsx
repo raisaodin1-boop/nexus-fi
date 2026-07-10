@@ -58,7 +58,8 @@ export function FloatingBackButton() {
 
   if (!root || HIDDEN_ROOTS.has(root)) return null;
   if (ROOTS_WITH_LOCAL_BACK.has(root)) return null;
-  if (segments.includes("login") || segments.includes("register")) return null;
+  const segs = segments as string[];
+  if (segs.includes("login") || segs.includes("register")) return null;
 
   return (
     <View

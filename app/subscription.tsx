@@ -18,7 +18,7 @@ import {
   PLAN_PERKS, planLabel,
   type PlanId, type SubscriptionPlan, type UserSubscription,
 } from "@/src/db/subscriptions";
-import { initiateCinetpayPayment } from "@/src/db/payments";
+import { openPaymentScreen } from "@/src/payment-nav";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { SkeletonBox } from "@/src/ui";
 
@@ -133,23 +133,14 @@ export default function SubscriptionScreen() {
           onPress: async () => {
             setPaying(true);
             try {
-              const result = await initiateCinetpayPayment({
+              // Unified Paynote flow — plan activation happens after confirmed payment.
+              openPaymentScreen(router, {
                 amount: plan.price_xaf,
-                description: `Abonnement HODIX ${plan.name} — 1 mois`,
-                metadata: { type: "subscription", plan_id: plan.id },
+                label: `Abonnement HODIX ${plan.name} — 1 mois`,
+                kind: "subscription",
+                plan_id: plan.id,
+                provider: "mtn",
               });
-              if (result.payment_url) {
-                router.push({
-                  pathname: "/cinetpay-webview" as any,
-                  params: {
-                    url: result.payment_url,
-                    payment_id: result.payment_id,
-                    return_path: "/subscription",
-                    success_action: "subscription",
-                    plan_id: plan.id,
-                  },
-                });
-              }
             } catch (e: any) {
               Alert.alert("Erreur", e?.detail ?? "Impossible d'initier le paiement.");
             } finally {
