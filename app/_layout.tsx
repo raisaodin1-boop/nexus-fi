@@ -5,7 +5,7 @@ if (Platform.OS !== "web") {
   initObservability();
 }
 
-import { Stack, useRouter } from "expo-router";
+import { Stack, usePathname, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
@@ -85,12 +85,25 @@ function PushSetup() {
 function FirstLaunchGuard() {
   const { isFirstLaunch } = useFirstLaunch();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    if (isFirstLaunch === true) {
-      router.replace("/welcome");
-    }
-  }, [isFirstLaunch]);
+    if (isFirstLaunch !== true) return;
+    // Public pages must stay reachable (QR / shared identity links, legal, landing).
+    const publicPath =
+      pathname.startsWith("/verify") ||
+      pathname.startsWith("/landing") ||
+      pathname.startsWith("/welcome") ||
+      pathname.startsWith("/cgu") ||
+      pathname.startsWith("/privacy") ||
+      pathname.startsWith("/data-rights") ||
+      pathname.startsWith("/(auth)") ||
+      pathname.startsWith("/login") ||
+      pathname.startsWith("/register") ||
+      pathname.startsWith("/auth");
+    if (publicPath) return;
+    router.replace("/welcome");
+  }, [isFirstLaunch, pathname, router]);
 
   return null;
 }

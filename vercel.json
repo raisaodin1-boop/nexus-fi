@@ -25,7 +25,8 @@
     { "source": "/sw.js", "destination": "/sw.js" },
     { "source": "/offline.html", "destination": "/offline.html" },
     { "source": "/.well-known/(.*)", "destination": "/.well-known/$1" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/verify/:hash", "destination": "/verify" },
+    { "source": "/((?!assets/).*)", "destination": "/" }
   ],
   "headers": [
     {

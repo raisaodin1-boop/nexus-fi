@@ -392,7 +392,7 @@ export async function mintCertificateHash(docId: string, docType: string): Promi
   const payload = `${me}:${docId}:${docType}:${profile?.full_name ?? ""}:${new Date().toISOString()}`;
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload));
   const hexHash = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
-  const verifyUrl = `https://www.hodix.app/verify/${hexHash}`;
+  const verifyUrl = `https://www.hodix.app/verify?h=${hexHash}`;
   const chainRef = `0x${hexHash.slice(0, 40)}`;
 
   await sb.from("identity_certificates").upsert({
