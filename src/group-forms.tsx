@@ -57,7 +57,8 @@ export function GroupCreateForm({ title, subtitle, endpoint, showContribution, s
       body.amount_per_cycle = amt;
       body.frequency = frequency;
       body.max_members = parseInt(maxMembers) || 10;
-      if (showRotationMode) body.is_public = isPublic;
+      body.is_public = isPublic;
+      if (showRotationMode) body.rotation_mode = rotationMode;
     } else if (endpoint === "/associations") {
       body.contribution_amount = parseFloat(fee) || 0;
       body.frequency = "monthly";
@@ -148,34 +149,41 @@ export function GroupCreateForm({ title, subtitle, endpoint, showContribution, s
                       </TouchableOpacity>
                     ))}
                   </View>
-                  <Text style={styles.label}>Visibilité de la tontine</Text>
-                  <View style={styles.visibilityRow}>
-                    <TouchableOpacity
-                      testID={`${testIDPrefix}-visibility-public`}
-                      onPress={() => setIsPublic(true)}
-                      style={[styles.visBtn, isPublic ? styles.visBtnActive : null]}
-                    >
-                      <Text style={[styles.visBtnLabel, isPublic ? styles.visBtnLabelActive : null]}>Publique</Text>
-                      <Text style={[styles.visBtnDesc, isPublic ? { color: Colors.secondary } : null]}>Visible · rejoindre nécessite validation</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      testID={`${testIDPrefix}-visibility-private`}
-                      onPress={() => setIsPublic(false)}
-                      style={[styles.visBtn, !isPublic ? styles.visBtnActive : null]}
-                    >
-                      <Text style={[styles.visBtnLabel, !isPublic ? styles.visBtnLabelActive : null]}>Privée</Text>
-                      <Text style={[styles.visBtnDesc, !isPublic ? { color: Colors.secondary } : null]}>Code d'invitation uniquement</Text>
-                    </TouchableOpacity>
-                  </View>
                 </>
               ) : null}
+              <Text style={styles.label}>Visibilité — publique ou privée ?</Text>
+              <Text style={{ color: Colors.textMuted, fontSize: 12, marginBottom: 8 }}>
+                Par défaut publique. Choisissez privée seulement si vous voulez un accès par code uniquement.
+              </Text>
+              <View style={styles.visibilityRow}>
+                <TouchableOpacity
+                  testID={`${testIDPrefix}-visibility-public`}
+                  onPress={() => setIsPublic(true)}
+                  style={[styles.visBtn, isPublic ? styles.visBtnActive : null]}
+                >
+                  <Text style={[styles.visBtnLabel, isPublic ? styles.visBtnLabelActive : null]}>Publique</Text>
+                  <Text style={[styles.visBtnDesc, isPublic ? { color: Colors.secondary } : null]}>Visible dans l'annuaire · demandes d'adhésion</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  testID={`${testIDPrefix}-visibility-private`}
+                  onPress={() => setIsPublic(false)}
+                  style={[styles.visBtn, !isPublic ? styles.visBtnActive : null]}
+                >
+                  <Text style={[styles.visBtnLabel, !isPublic ? styles.visBtnLabelActive : null]}>Privée</Text>
+                  <Text style={[styles.visBtnDesc, !isPublic ? { color: Colors.secondary } : null]}>Code d'invitation uniquement</Text>
+                </TouchableOpacity>
+              </View>
             </>
           ) : endpoint === "/associations" ? (
             <>
               <Field testID={`${testIDPrefix}-fee`} label="Cotisation membre (XAF) — 0 si gratuit" placeholder="5000" value={fee} onChangeText={setFee} keyboardType="number-pad" />
-              <Text style={styles.label}>Visibilité</Text>
+              <Text style={styles.label}>Visibilité — publique ou privée ?</Text>
+              <Text style={{ color: Colors.textMuted, fontSize: 12, marginBottom: 8 }}>
+                Toute association est publique par défaut. Passez en privée seulement si vous le souhaitez expressément.
+              </Text>
               <View style={styles.visibilityRow}>
                 <TouchableOpacity
+                  testID={`${testIDPrefix}-visibility-public`}
                   onPress={() => setIsPublic(true)}
                   style={[styles.visBtn, isPublic ? styles.visBtnActive : null]}
                 >
@@ -183,6 +191,7 @@ export function GroupCreateForm({ title, subtitle, endpoint, showContribution, s
                   <Text style={[styles.visBtnDesc, isPublic ? { color: Colors.secondary } : null]}>Visible — les membres demandent à rejoindre</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
+                  testID={`${testIDPrefix}-visibility-private`}
                   onPress={() => setIsPublic(false)}
                   style={[styles.visBtn, !isPublic ? styles.visBtnActive : null]}
                 >

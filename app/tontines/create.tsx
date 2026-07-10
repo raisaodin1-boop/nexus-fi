@@ -6,12 +6,12 @@ export default function TontineCreate() {
   return (
     <GroupCreateForm
       title="Nouvelle tontine"
-      subtitle="Créez une tontine digitale sécurisée."
+      subtitle="Publique par défaut. Choisissez privée seulement si vous le souhaitez expressément."
       endpoint="/tontines"
       showContribution
       showRotationMode
       testIDPrefix="tontine-create"
-      onSuccess={(d) => router.replace(`/tontines/${d.id}` as any)}
+      onSuccess={() => router.replace("/manage" as any)}
     />
   );
 }

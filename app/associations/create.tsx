@@ -6,10 +6,10 @@ export default function AssociationCreate() {
   return (
     <GroupCreateForm
       title="Nouvelle association"
-      subtitle="Animez votre communauté autour d'une cause commune."
+      subtitle="Publique par défaut. Choisissez privée seulement si vous le souhaitez expressément."
       endpoint="/associations"
       testIDPrefix="assoc-create"
-      onSuccess={(d) => router.replace(`/associations/${d.id}` as any)}
+      onSuccess={() => router.replace("/manage" as any)}
     />
   );
 }

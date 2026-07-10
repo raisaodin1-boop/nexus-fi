@@ -161,7 +161,14 @@ const message = `Rejoignez « ${item.name} » sur Hodix !\n\nCode d'invitation :
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 60, paddingTop: 4 }} keyboardShouldPersistTaps="handled">
           <LinearGradient colors={[Colors.primary, Colors.gradMid]} style={[styles.hero, Shadow.cardDark]}>
-            <Text style={styles.heroName}>{item.name}</Text>
+            <View style={styles.heroTopRow}>
+              <Text style={[styles.heroName, { flex: 1 }]}>{item.name}</Text>
+              {item.is_public !== undefined ? (
+                <View style={[styles.visPill, item.is_public === false ? styles.visPillPrivate : styles.visPillPublic]}>
+                  <Text style={styles.visPillText}>{item.is_public === false ? "Privée" : "Publique"}</Text>
+                </View>
+              ) : null}
+            </View>
             {item.description ? <Text style={styles.heroDesc}>{item.description}</Text> : null}
             <View style={styles.heroStats}>
               <View style={styles.heroStat}>
@@ -203,6 +210,24 @@ const message = `Rejoignez « ${item.name} » sur Hodix !\n\nCode d'invitation :
             <MessageSquare color="#fff" size={18} />
             <Text style={styles.whatsappBtnText}>Partager le lien sur WhatsApp</Text>
           </TouchableOpacity>
+
+          {isAdmin ? (
+          <TouchableOpacity
+            testID={`${testIDPrefix}-open-manage`}
+            onPress={() => router.push("/manage" as any)}
+            style={styles.manageCta}
+          >
+            <Settings2 size={18} color="#fff" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.manageCtaTitle}>Tableau de gestion</Text>
+              <Text style={styles.manageCtaSub}>
+                {item.is_public === false ? "Privée" : "Publique"}
+                {" · "}demandes, modules, membres
+              </Text>
+            </View>
+            <Text style={styles.manageCtaArrow}>→</Text>
+          </TouchableOpacity>
+          ) : null}
 
           {isAdmin && joinReqs.length > 0 ? (
             <View style={{ marginTop: 16, gap: 8 }}>
@@ -445,6 +470,18 @@ const styles = StyleSheet.create({
   whatsappCodeBtnText: { color: "#fff", fontWeight: "800", fontSize: 12 },
   whatsappBtn: { backgroundColor: "#25D366", borderRadius: 14, padding: 14, flexDirection: "row", gap: 10, alignItems: "center", marginTop: 12 },
   whatsappBtnText: { color: "#fff", fontWeight: "800", fontSize: 15 },
+  heroTopRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  visPill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+  visPillPublic: { backgroundColor: "rgba(34,197,94,0.35)" },
+  visPillPrivate: { backgroundColor: "rgba(245,158,11,0.4)" },
+  visPillText: { color: "#fff", fontWeight: "800", fontSize: 11 },
+  manageCta: {
+    marginTop: 12, flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: Colors.brandNavy, borderRadius: Radius.xl, padding: 14,
+  },
+  manageCtaTitle: { color: "#fff", fontWeight: "800", fontSize: 15 },
+  manageCtaSub: { color: "rgba(255,255,255,0.75)", fontSize: 12, marginTop: 2 },
+  manageCtaArrow: { color: "#fff", fontWeight: "900", fontSize: 18 },
   serviceRow: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     marginTop: 12, gap: 10,

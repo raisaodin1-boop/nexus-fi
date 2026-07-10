@@ -23,6 +23,7 @@ import {
 } from "lucide-react-native";
 
 import { api, formatXAF } from "@/src/api";
+import { useAuth } from "@/src/auth-context";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { supabase } from "@/src/supabase";
 import { SkeletonList } from "@/src/ui";
@@ -46,7 +47,9 @@ interface Item {
   current_balance?: number;
   target_amount?: number | null;
   currency?: string;
+  is_public?: boolean;
   kind: GroupKind;
+  owner_id?: string;
 }
 
 const KIND_META: Record<GroupKind, { label: string; color: string; icon: typeof Users }> = {
@@ -58,6 +61,7 @@ const KIND_META: Record<GroupKind, { label: string; color: string; icon: typeof 
 
 export default function Groups() {
   const router = useRouter();
+  const { user } = useAuth();
   const [hubTab, setHubTab] = useState<HubTab>("mine");
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
@@ -182,6 +186,24 @@ export default function Groups() {
           <CommunityIntentionHub onDiscover={() => setHubTab("discover")} />
         ) : (
           <View style={{ paddingHorizontal: Spacing.xl, gap: 12 }}>
+            <TouchableOpacity
+              testID="groups-manage-banner"
+              activeOpacity={0.9}
+              onPress={() => router.push("/manage" as any)}
+              style={[styles.manageBanner, Shadow.card]}
+            >
+              <View style={styles.manageBannerIcon}>
+                <Settings2 color="#fff" size={18} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.manageBannerTitle}>Tableau de gestion</Text>
+                <Text style={styles.manageBannerSub}>
+                  Demandes d'adhésion, modules et pilotage de vos communautés
+                </Text>
+              </View>
+              <ChevronRight color={Colors.primary} size={18} />
+            </TouchableOpacity>
+
             <View style={styles.mineHead}>
               <Text style={styles.mineTitle}>{items.length} communauté(s)</Text>
               <TouchableOpacity onPress={() => setHubTab("discover")}>
@@ -192,6 +214,9 @@ export default function Groups() {
             {items.map((it) => {
               const meta = KIND_META[it.kind];
               const Icon = meta.icon;
+              const visibility = it.is_public === false ? "Privée" : "Publique";
+              const visColor = it.is_public === false ? Colors.warning : Colors.success;
+              const isOwner = !!(it.owner_id && user?.id && it.owner_id === user.id);
               return (
                 <View key={`${it.kind}-${it.id}`} style={[styles.groupCard, Shadow.card]}>
                   <TouchableOpacity
@@ -214,6 +239,9 @@ export default function Groups() {
                           <Text style={styles.itemDesc} numberOfLines={2}>{it.description}</Text>
                         ) : null}
                         <View style={styles.itemMeta}>
+                          <Text style={[styles.metaPill, { backgroundColor: visColor + "22", color: visColor }]}>
+                            {visibility}
+                          </Text>
                           {it.members_count !== undefined ? (
                             <Text style={styles.metaPill}>{it.members_count} membre(s)</Text>
                           ) : null}
@@ -242,16 +270,15 @@ export default function Groups() {
                     </View>
                   </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={styles.modulesBtn}
-                    onPress={() => {
-                      setModulesGroup(it);
-                      setModulesOpen(true);
-                    }}
-                  >
-                    <Settings2 size={13} color={Colors.primary} />
-                    <Text style={styles.modulesBtnText}>Paramètres / modules</Text>
-                  </TouchableOpacity>
+                  {isOwner ? (
+                    <TouchableOpacity
+                      style={styles.modulesBtn}
+                      onPress={() => router.push("/manage" as any)}
+                    >
+                      <Settings2 size={13} color={Colors.primary} />
+                      <Text style={styles.modulesBtnText}>Ouvrir le tableau de gestion</Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               );
             })}
@@ -287,6 +314,17 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryLight, alignItems: "center", justifyContent: "center",
     borderWidth: 1, borderColor: Colors.primary + "33",
   },
+  manageBanner: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: Colors.primaryLight, borderRadius: Radius.xl,
+    padding: 14, borderWidth: 1, borderColor: Colors.primary + "33",
+  },
+  manageBannerIcon: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: Colors.primary, alignItems: "center", justifyContent: "center",
+  },
+  manageBannerTitle: { fontSize: 15, fontWeight: "800", color: Colors.primary },
+  manageBannerSub: { fontSize: 12, color: Colors.textMuted, marginTop: 2, lineHeight: 16 },
   tabsRow: {
     flexDirection: "row",
     paddingHorizontal: Spacing.xl,
