@@ -189,21 +189,28 @@ export async function transferToMember(payload: TransferPayload): Promise<Wallet
   let recipient: { id: string; full_name: string | null } | null = null;
 
   if (payload.to_user_id) {
-    const { data } = await sb.from("profiles").select("id, full_name").eq("id", payload.to_user_id).maybeSingle();
-    recipient = data;
+    // UUID path (QR / deep link): wallet_transfer validates the recipient server-side.
+    // Client RLS may hide other profiles, so do not require a visible profiles row here.
+    recipient = { id: payload.to_user_id, full_name: null };
   } else if (payload.to_phone_or_email) {
     const search = payload.to_phone_or_email.trim();
     const isEmail = search.includes("@");
-    const profileQuery = isEmail
-      ? sb.from("profiles").select("id, full_name").eq("email", search.toLowerCase()).maybeSingle()
-      : sb.from("profiles").select("id, full_name").eq("phone", search).maybeSingle();
-    const { data } = await profileQuery;
-    recipient = data;
+    // SECURITY DEFINER RPCs — required after profiles RLS was tightened to own/shared-group only.
+    // Recipient does not need to be online; only to have a HODIX account.
+    const { data: rows, error: lookupErr } = isEmail
+      ? await sb.rpc("lookup_profile_by_email", { p_email: search.toLowerCase() })
+      : await sb.rpc("lookup_profile_by_phone", { p_phone: search.replace(/\s+/g, "") });
+    if (lookupErr) throw new Error(lookupErr.message);
+    const list = Array.isArray(rows) ? rows : rows ? [rows] : [];
+    const row = (list[0] as { id: string; full_name: string } | undefined) ?? null;
+    recipient = row;
   } else {
     throw new Error("Destinataire requis.");
   }
 
-  if (!recipient) throw new Error("Membre introuvable. Vérifiez l'email ou le téléphone.");
+  if (!recipient) {
+    throw new Error("Membre introuvable. Vérifiez l'email ou le téléphone — le destinataire n'a pas besoin d'être connecté.");
+  }
   if (recipient.id === me) throw new Error("Impossible de vous transférer à vous-même.");
 
   // Debit + credit + both transaction records happen in ONE server-side
