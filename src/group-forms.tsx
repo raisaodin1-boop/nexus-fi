@@ -58,9 +58,11 @@ export function GroupCreateForm({ title, subtitle, endpoint, showContribution, s
       body.frequency = frequency;
       body.max_members = parseInt(maxMembers) || 10;
       if (showRotationMode) body.is_public = isPublic;
-    } else {
-      body.membership_fee = parseFloat(fee) || 0;
+    } else if (endpoint === "/associations") {
+      body.contribution_amount = parseFloat(fee) || 0;
+      body.frequency = "monthly";
     }
+    // cooperatives: fee field is informational only (no fee column in schema)
     return body;
   };
 
@@ -167,9 +169,9 @@ export function GroupCreateForm({ title, subtitle, endpoint, showContribution, s
                 </>
               ) : null}
             </>
-          ) : (
+          ) : endpoint === "/associations" ? (
             <Field testID={`${testIDPrefix}-fee`} label="Cotisation membre (XAF) — 0 si gratuit" placeholder="5000" value={fee} onChangeText={setFee} keyboardType="number-pad" />
-          )}
+          ) : null}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Button testID={`${testIDPrefix}-submit`} label="Créer" onPress={submit} loading={loading} />

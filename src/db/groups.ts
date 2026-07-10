@@ -101,11 +101,23 @@ export async function getAssociation(id: string) {
 export async function createAssociation(body: Record<string, any>) {
   const me = await uid();
   const sb = getSupabase();
+  const fee = Number(body.contribution_amount ?? body.membership_fee ?? 0);
+  const insertRow = {
+    name: String(body.name ?? "").trim(),
+    description: body.description ?? null,
+    currency: body.currency ?? "XAF",
+    contribution_amount: Number.isFinite(fee) ? fee : 0,
+    frequency: body.frequency ?? "monthly",
+    owner_id: me,
+    invite_code: inviteCode(),
+  };
+  if (!insertRow.name) throw { status: 400, detail: "Nom requis" };
+
   let data: any;
   for (let attempt = 0; attempt < 5; attempt++) {
     const { data: row, error } = await sb
       .from("associations")
-      .insert({ ...body, owner_id: me, invite_code: inviteCode() })
+      .insert({ ...insertRow, invite_code: inviteCode() })
       .select().single();
     if (!error) { data = row; break; }
     if (!isUniqueViolation(error) || attempt === 4) throwSb(error);
@@ -187,11 +199,20 @@ export async function getCooperative(id: string) {
 export async function createCooperative(body: Record<string, any>) {
   const me = await uid();
   const sb = getSupabase();
+  const insertRow = {
+    name: String(body.name ?? "").trim(),
+    description: body.description ?? null,
+    currency: body.currency ?? "XAF",
+    owner_id: me,
+    invite_code: inviteCode(),
+  };
+  if (!insertRow.name) throw { status: 400, detail: "Nom requis" };
+
   let data: any;
   for (let attempt = 0; attempt < 5; attempt++) {
     const { data: row, error } = await sb
       .from("cooperatives")
-      .insert({ ...body, owner_id: me, invite_code: inviteCode() })
+      .insert({ ...insertRow, invite_code: inviteCode() })
       .select().single();
     if (!error) { data = row; break; }
     if (!isUniqueViolation(error) || attempt === 4) throwSb(error);
