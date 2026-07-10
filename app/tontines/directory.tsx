@@ -26,32 +26,102 @@ interface TontineItem {
   country: string | null;
   description: string | null;
   members_count: number;
+  is_public?: boolean;
   is_hodix_verified?: boolean;
   compliance_rate: number | null;
   reliability_score: number;
   created_at: string;
 }
 
+type MemberBucket = "lt50" | "50to100" | "gt100";
+type Visibility = "public" | "private";
+
 const FREQ_LABELS: Record<string, string> = {
-  weekly: "Hebdo",
-  biweekly: "Bimensuel",
-  monthly: "Mensuel",
+  daily: "Quotidienne",
+  weekly: "Hebdomadaire",
+  biweekly: "Bimensuelle",
+  monthly: "Mensuelle",
 };
 
-const COUNTRIES = ["CM", "SN", "CI", "BF", "ML", "TG", "BJ", "GA", "FR", "BE"];
-const COUNTRY_FLAGS: Record<string, string> = {
-  CM: "🇨🇲", SN: "🇸🇳", CI: "🇨🇮", BF: "🇧🇫", ML: "🇲🇱",
-  TG: "🇹🇬", BJ: "🇧🇯", GA: "🇬🇦", FR: "🇫🇷", BE: "🇧🇪",
-};
+const AMOUNT_OPTIONS = [500, 1000, 2000, 2500, 5000, 10000];
+
+const CITY_OPTIONS: { key: string; label: string }[] = [
+  { key: "Douala", label: "Douala" },
+  { key: "Yaoundé", label: "Yaoundé" },
+  { key: "Bafoussam", label: "Bafoussam" },
+  { key: "CM", label: "National" },
+];
+
+const MEMBER_OPTIONS: { key: MemberBucket; label: string }[] = [
+  { key: "lt50", label: "< 50" },
+  { key: "50to100", label: "50 – 100" },
+  { key: "gt100", label: "100+" },
+];
 
 const reliabilityColor = (s: number) =>
   s >= 80 ? "#10B981" : s >= 60 ? "#F59E0B" : "#EF4444";
 
 const placeLabel = (country: string | null) => {
   if (!country) return null;
-  if (country === "CM") return `${COUNTRY_FLAGS.CM} Cameroun`;
-  return `${COUNTRY_FLAGS[country] ?? "🌍"} ${country}`;
+  if (country === "CM") return "National";
+  return country;
 };
+
+function matchesCity(tCountry: string | null, city: string) {
+  if (!tCountry) return false;
+  if (city === "CM") return tCountry === "CM" || tCountry === "Cameroun";
+  return tCountry === city;
+}
+
+function matchesMembers(count: number, bucket: MemberBucket) {
+  if (bucket === "lt50") return count < 50;
+  if (bucket === "50to100") return count >= 50 && count <= 100;
+  return count > 100;
+}
+
+function FilterRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.filterBlock}>
+      <Text style={styles.filterLabel}>{label}</Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterChips}
+      >
+        {children}
+      </ScrollView>
+    </View>
+  );
+}
+
+function Chip({
+  label,
+  active,
+  onPress,
+  tone = "default",
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+  tone?: "default" | "verified";
+}) {
+  const activeStyle =
+    tone === "verified" ? styles.chipVerified : styles.chipActive;
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={[styles.chip, active && activeStyle]}
+    >
+      <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
 
 function TontineCard({
   t,
@@ -135,8 +205,12 @@ export default function TontineDirectory() {
   const router = useRouter();
   const [all, setAll] = useState<TontineItem[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [amount, setAmount] = useState<number | null>(null);
   const [freq, setFreq] = useState<string | null>(null);
-  const [country, setCountry] = useState<string | null>(null);
+  const [city, setCity] = useState<string | null>(null);
+  const [members, setMembers] = useState<MemberBucket | null>(null);
+  const [visibility, setVisibility] = useState<Visibility | null>("public");
   const [verifiedOnly, setVerifiedOnly] = useState(false);
 
   const load = useCallback(async () => {
@@ -144,22 +218,43 @@ export default function TontineDirectory() {
     try {
       const data = await api.get<TontineItem[]>("/tontines/directory");
       setAll(data);
-    } catch {}
+    } catch {
+      setAll([]);
+    }
     setLoading(false);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  const activeFilterCount = [
+    amount != null,
+    freq != null,
+    city != null,
+    members != null,
+    visibility === "private",
+    verifiedOnly,
+  ].filter(Boolean).length;
+
+  const resetFilters = () => {
+    setAmount(null);
+    setFreq(null);
+    setCity(null);
+    setMembers(null);
+    setVisibility("public");
+    setVerifiedOnly(false);
+  };
+
   const items = useMemo(() => {
+    if (visibility === "private") return [];
     return all.filter((t) => {
       if (verifiedOnly && !t.is_hodix_verified) return false;
+      if (amount != null && Number(t.amount_per_cycle) !== amount) return false;
       if (freq && t.frequency !== freq) return false;
-      if (country && t.country !== country && !(country === "CM" && ["Douala", "Yaoundé", "Bafoussam"].includes(t.country ?? ""))) {
-        return false;
-      }
+      if (city && !matchesCity(t.country, city)) return false;
+      if (members && !matchesMembers(t.members_count, members)) return false;
       return true;
     });
-  }, [all, freq, country, verifiedOnly]);
+  }, [all, amount, freq, city, members, visibility, verifiedOnly]);
 
   const verified = items.filter((t) => t.is_hodix_verified);
   const others = items.filter((t) => !t.is_hodix_verified);
@@ -172,63 +267,119 @@ export default function TontineDirectory() {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={styles.h1}>Annuaire des Tontines</Text>
-          <Text style={styles.subtitle}>Communautés publiques actives</Text>
+          <Text style={styles.subtitle}>
+            {loading
+              ? "Chargement…"
+              : `${items.length} tontine${items.length > 1 ? "s" : ""} · filtrez selon votre budget`}
+          </Text>
         </View>
+        {activeFilterCount > 0 ? (
+          <TouchableOpacity onPress={resetFilters} style={styles.resetBtn}>
+            <Text style={styles.resetText}>Reset</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterRow}
-      >
-        <TouchableOpacity
-          onPress={() => setVerifiedOnly((v) => !v)}
-          style={[styles.chip, verifiedOnly && styles.chipVerified]}
-        >
-          <Text style={[styles.chipText, verifiedOnly && styles.chipTextActive]}>
-            ✓ Vérifiées HODIX
-          </Text>
-        </TouchableOpacity>
-        {[null, "weekly", "biweekly", "monthly"].map((f) => {
-          const active = freq === f;
-          const label = f === null ? "Toutes" : FREQ_LABELS[f] ?? f;
-          return (
-            <TouchableOpacity
-              key={f ?? "all"}
-              onPress={() => setFreq(f)}
-              style={[styles.chip, active && styles.chipActive]}
-            >
-              <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-        <View style={styles.divider} />
-        {COUNTRIES.map((c) => {
-          const active = country === c;
-          return (
-            <TouchableOpacity
-              key={c}
-              onPress={() => setCountry(active ? null : c)}
-              style={[styles.chip, active && styles.chipActive]}
-            >
-              <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                {COUNTRY_FLAGS[c]} {c}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+      <View style={styles.filtersPanel}>
+        <FilterRow label="Cotisation">
+          <Chip label="Toutes" active={amount == null} onPress={() => setAmount(null)} />
+          {AMOUNT_OPTIONS.map((a) => (
+            <Chip
+              key={a}
+              label={formatXAF(a)}
+              active={amount === a}
+              onPress={() => setAmount(amount === a ? null : a)}
+            />
+          ))}
+        </FilterRow>
+
+        <FilterRow label="Fréquence">
+          <Chip label="Toutes" active={freq == null} onPress={() => setFreq(null)} />
+          {(["daily", "weekly", "biweekly", "monthly"] as const).map((f) => (
+            <Chip
+              key={f}
+              label={FREQ_LABELS[f]}
+              active={freq === f}
+              onPress={() => setFreq(freq === f ? null : f)}
+            />
+          ))}
+        </FilterRow>
+
+        <FilterRow label="Ville">
+          <Chip label="Toutes" active={city == null} onPress={() => setCity(null)} />
+          {CITY_OPTIONS.map((c) => (
+            <Chip
+              key={c.key}
+              label={c.label}
+              active={city === c.key}
+              onPress={() => setCity(city === c.key ? null : c.key)}
+            />
+          ))}
+        </FilterRow>
+
+        <FilterRow label="Membres">
+          <Chip label="Tous" active={members == null} onPress={() => setMembers(null)} />
+          {MEMBER_OPTIONS.map((m) => (
+            <Chip
+              key={m.key}
+              label={m.label}
+              active={members === m.key}
+              onPress={() => setMembers(members === m.key ? null : m.key)}
+            />
+          ))}
+        </FilterRow>
+
+        <FilterRow label="Visibilité">
+          <Chip
+            label="Publiques"
+            active={visibility === "public"}
+            onPress={() => setVisibility("public")}
+          />
+          <Chip
+            label="Privées"
+            active={visibility === "private"}
+            onPress={() => setVisibility("private")}
+          />
+        </FilterRow>
+
+        <FilterRow label="Vérification">
+          <Chip label="Toutes" active={!verifiedOnly} onPress={() => setVerifiedOnly(false)} />
+          <Chip
+            label="Vérifiées HODIX"
+            active={verifiedOnly}
+            tone="verified"
+            onPress={() => setVerifiedOnly(true)}
+          />
+        </FilterRow>
+      </View>
 
       <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
         {loading ? (
-          <ActivityIndicator color={Colors.secondary} style={{ marginTop: 60 }} />
+          <ActivityIndicator color={Colors.secondary} style={{ marginTop: 40 }} />
+        ) : visibility === "private" ? (
+          <Card>
+            <EmptyState
+              title="Tontines privées"
+              description="Les tontines privées ne sont pas listées ici. Demandez le code d'invitation à l'admin, puis rejoignez-la depuis l'onglet Groupes."
+              icon={<Globe color={Colors.textMuted} size={32} />}
+            />
+            <Button
+              label="Aller aux Groupes"
+              variant="secondary"
+              onPress={() => router.push("/(tabs)/groups" as any)}
+              style={{ marginTop: 12 }}
+            />
+          </Card>
         ) : items.length === 0 ? (
           <Card>
             <EmptyState
-              title="Aucune tontine publique"
-              description="Il n'y a pas encore de tontines publiques correspondant à vos critères."
+              title="Aucune tontine trouvée"
+              description="Élargissez vos filtres (cotisation, ville ou fréquence) pour voir plus de groupes adaptés à votre budget."
               icon={<Globe color={Colors.textMuted} size={32} />}
             />
+            {activeFilterCount > 0 ? (
+              <Button label="Réinitialiser les filtres" variant="secondary" onPress={resetFilters} style={{ marginTop: 12 }} />
+            ) : null}
           </Card>
         ) : (
           <>
@@ -236,7 +387,7 @@ export default function TontineDirectory() {
               <View style={styles.sectionHead}>
                 <Text style={styles.sectionTitle}>Tontines publiques vérifiées</Text>
                 <Text style={styles.sectionSub}>
-                  Créées ou validées par HODIX — badge officiel et compteurs en direct
+                  Validées par HODIX — trouvez vite un groupe à votre budget
                 </Text>
               </View>
             ) : null}
@@ -274,21 +425,41 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.md,
-    paddingBottom: Spacing.md,
+    paddingBottom: Spacing.sm,
     gap: Spacing.md,
   },
   backBtn: { padding: 6 },
   backText: { fontSize: 22, color: Colors.secondary, fontWeight: "700" },
   h1: { fontSize: 22, fontWeight: "800", color: Colors.text, letterSpacing: -0.5 },
-  subtitle: { fontSize: 13, color: Colors.textMuted, marginTop: 2 },
-  filterRow: {
+  subtitle: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
+  resetBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  resetText: { fontSize: 12, fontWeight: "700", color: Colors.secondary },
+  filtersPanel: {
+    paddingBottom: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    gap: 8,
+  },
+  filterBlock: { gap: 6 },
+  filterLabel: {
     paddingHorizontal: Spacing.xl,
-    paddingBottom: Spacing.md,
+    fontSize: 11,
+    fontWeight: "800",
+    color: Colors.textMuted,
+    letterSpacing: 0.3,
+  },
+  filterChips: {
+    paddingHorizontal: Spacing.xl,
     gap: 8,
     alignItems: "center",
   },
   chip: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: Radius.full,
     backgroundColor: Colors.surface,
@@ -299,17 +470,14 @@ const styles = StyleSheet.create({
   chipVerified: { backgroundColor: "#10B981", borderColor: "#10B981" },
   chipText: { fontSize: 12, fontWeight: "600", color: Colors.text },
   chipTextActive: { color: "#fff" },
-  divider: { width: 1, height: 24, backgroundColor: Colors.border, marginHorizontal: 4 },
-  list: { paddingHorizontal: Spacing.xl, gap: 12, paddingBottom: 100 },
+  list: { paddingHorizontal: Spacing.xl, gap: 12, paddingTop: 14, paddingBottom: 100 },
   sectionHead: { gap: 4, marginBottom: 4, marginTop: 4 },
   sectionTitle: { fontSize: 15, fontWeight: "800", color: Colors.text },
   sectionSub: { fontSize: 12, color: Colors.textMuted, lineHeight: 17 },
   card: { padding: 16, gap: 10 },
   cardHeader: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
-  liveDot: {
-    width: 8, height: 8, borderRadius: 4, backgroundColor: "#10B981",
-  },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#10B981" },
   cardName: { flex: 1, fontSize: 16, fontWeight: "700", color: Colors.text },
   cardDesc: { fontSize: 12, color: Colors.textMuted, lineHeight: 18 },
   badgeRow: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },

@@ -5,7 +5,7 @@ import { notifyUser } from "./notifications";
 import { profileDisplayMap, profileFromMap } from "@/src/profile-display";
 
 const FREQ_DAYS: Record<string, number> = {
-  weekly: 7, biweekly: 14, monthly: 30, quarterly: 90,
+  daily: 1, weekly: 7, biweekly: 14, monthly: 30, quarterly: 90,
 };
 
 /* ── Basic CRUD ─────────────────────────────────────────────── */
@@ -245,6 +245,7 @@ export async function listPublicTontines(filters?: {
       frequency: t.frequency, max_members: t.max_members,
       language: t.language ?? null, country: t.country ?? null,
       description: t.description ?? null, members_count: memberCount,
+      is_public: true,
       is_hodix_verified: Boolean(t.is_hodix_verified),
       compliance_rate: complianceRate, reliability_score: reliability, created_at: t.created_at,
     };
