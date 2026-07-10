@@ -7,10 +7,28 @@ import { notifyUser } from "./notifications";
 
 export async function listPayments() {
   const me = await uid();
-  const { data, error } = await getSupabase()
+  const sb = getSupabase();
+  const { data, error } = await sb
     .from("payments").select("*").eq("user_id", me).order("created_at", { ascending: false }).limit(50);
   throwSb(error);
-  return data ?? [];
+  const rows = data ?? [];
+
+  const pending = rows
+    .filter((p: { status?: string }) => p.status === "pending_paynote")
+    .slice(0, 5) as { id: string }[];
+
+  if (pending.length) {
+    try {
+      const { confirmPaynoteMtnPayment } = await import("@/src/db/payments");
+      await Promise.allSettled(
+        pending.map((p) => confirmPaynoteMtnPayment({ payment_id: p.id })),
+      );
+    } catch { /* best-effort reconcile */ }
+    const { data: refreshed } = await sb
+      .from("payments").select("*").eq("user_id", me).order("created_at", { ascending: false }).limit(50);
+    return refreshed ?? rows;
+  }
+  return rows;
 }
 
 /* ── REFERRAL ────────────────────────────────────────────── */

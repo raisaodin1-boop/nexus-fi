@@ -1,4 +1,4 @@
-// HODIX Payment — MTN Mobile Money via Paynote (Y-Note)
+// HODIX Payment — MTN Mobile Money via Paynote (instant confirm)
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator, Animated, Easing, ScrollView,
@@ -14,7 +14,7 @@ import type { PaymentKind } from "@/src/payment-nav";
 import { Button, Card, Field } from "@/src/ui";
 import { Colors, Radius, Spacing, Shadow } from "@/src/theme";
 
-type Stage = "form" | "processing";
+type Stage = "form" | "processing" | "success";
 
 interface PaynoteInit {
   payment_id: string;
@@ -24,7 +24,7 @@ interface PaynoteInit {
 
 const MTN = {
   label: "MTN Mobile Money",
-  sub: "Paiement direct via Paynote",
+  sub: "Confirmation instantanée via Paynote",
   color: "#FFCC00",
   dark: "#CC9900",
   icon: "🟡",
@@ -64,19 +64,21 @@ export default function PayContribution() {
   const paymentKind = inferKind(params);
   const amt = parseFloat(amount || "0");
 
-  const [stage, setStage] = useState<Stage>(paramPhone ? "form" : "form");
+  const [stage, setStage] = useState<Stage>("form");
   const [phone, setPhone] = useState(paramPhone ?? "");
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [hint, setHint] = useState("En attente de votre validation PIN…");
+  const doneRef = useRef(false);
 
   const pulse = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     if (stage !== "processing") return;
     const anim = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1.08, duration: 900, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
-        Animated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
+        Animated.timing(pulse, { toValue: 1.08, duration: 700, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
+        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
       ]),
     );
     anim.start();
@@ -111,14 +113,42 @@ export default function PayContribution() {
     }
   };
 
+  const markSuccess = (id: string) => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    setStage("success");
+    setHint("Paiement confirmé — crédit instantané");
+    setTimeout(() => goReceipt(id), 900);
+  };
+
+  const tryConfirm = async (id: string): Promise<boolean> => {
+    try {
+      // Fast path: webhook may already have credited
+      const st = await api.get<{ status: string }>(`/payments/${id}/status`);
+      if (st?.status === "succeeded") {
+        markSuccess(id);
+        return true;
+      }
+    } catch { /* continue */ }
+
+    try {
+      await api.post("/payments/paynote/confirm", { payment_id: id });
+      markSuccess(id);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const initiatePayment = async () => {
     if (!phone || phone.replace(/\D/g, "").length < 9) {
       setError("Numéro MTN invalide"); return;
     }
-    setError(null); setBusy(true);
+    setError(null); setBusy(true); doneRef.current = false;
     try {
       const r = await api.post<PaynoteInit>("/payments/mtn/initiate", buildInitPayload());
       setPaymentId(r.payment_id);
+      setHint("Demande USSD envoyée — validez avec votre PIN");
       setStage("processing");
     } catch (e) {
       setError(e instanceof ApiError ? e.detail : "Erreur de paiement MTN");
@@ -128,27 +158,51 @@ export default function PayContribution() {
   const confirmPayment = async () => {
     if (!paymentId) { setError("Paiement introuvable"); return; }
     setError(null); setBusy(true);
-    try {
-      await api.post("/payments/paynote/confirm", { payment_id: paymentId });
-      goReceipt(paymentId);
-    } catch (e) {
-      setError(e instanceof ApiError ? e.detail : "Paiement MTN MoMo non confirmé — validez sur votre téléphone.");
-    } finally { setBusy(false); }
+    setHint("Vérification Paynote…");
+    const ok = await tryConfirm(paymentId);
+    if (!ok) {
+      setError("Pas encore confirmé. Validez le PIN sur votre téléphone — on réessaie automatiquement.");
+    }
+    setBusy(false);
   };
 
   useEffect(() => {
     if (stage !== "processing" || !paymentId) return;
     let cancelled = false;
+    let ticks = 0;
+
     const poll = async () => {
-      try {
-        await api.post("/payments/paynote/confirm", { payment_id: paymentId });
-        if (!cancelled) goReceipt(paymentId);
-      } catch { /* pending */ }
+      if (cancelled || doneRef.current) return;
+      ticks += 1;
+      if (ticks === 3) setHint("Toujours en attente du PIN MTN…");
+      if (ticks === 8) setHint("Dès validation, le crédit est instantané");
+      const ok = await tryConfirm(paymentId);
+      if (ok) cancelled = true;
     };
-    const interval = setInterval(poll, 4000);
-    poll();
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [stage, paymentId, paymentKind, cert_kind, router]);
+
+    const interval = setInterval(poll, 2000);
+    // First check quickly after USSD prompt
+    const t1 = setTimeout(poll, 1500);
+    const t2 = setTimeout(poll, 3500);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [stage, paymentId]);
+
+  if (stage === "success") {
+    return (
+      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: Spacing.xl }}>
+          <CheckCircle2 color={Colors.success} size={64} />
+          <Text style={[styles.processingTitle, { marginTop: 16 }]}>Paiement confirmé</Text>
+          <Text style={styles.processingDesc}>Crédit enregistré instantanément.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (stage === "processing") {
     return (
@@ -160,29 +214,28 @@ export default function PayContribution() {
             </LinearGradient>
           </Animated.View>
 
-          <Text style={styles.processingTitle}>Paiement MTN en attente</Text>
+          <Text style={styles.processingTitle}>Validez sur MTN MoMo</Text>
           <Text style={styles.processingDesc}>
-            {`Une demande a été envoyée sur ${phone}. Validez avec votre code PIN MTN MoMo — HODIX confirme automatiquement.`}
-            {"\n"}Aucun crédit sans confirmation Paynote.
+            {`Demande envoyée sur ${phone}. Entrez votre code PIN — HODIX crédite dès confirmation Paynote.`}
           </Text>
 
           <Card style={{ gap: 12, marginTop: 8, alignItems: "center" }}>
             <ActivityIndicator color={MTN.color} size="large" />
-            <Text style={{ color: Colors.textMuted, textAlign: "center", fontWeight: "600" }}>
-              En attente de validation sur votre téléphone
+            <Text style={{ color: Colors.textMuted, textAlign: "center", fontWeight: "700" }}>
+              {hint}
             </Text>
             {error ? <Text style={styles.error}>{error}</Text> : null}
             <Button
               testID="pay-mm-confirm"
-              label="J'ai validé sur mon téléphone"
+              label="J'ai validé mon PIN"
               loading={busy}
               onPress={confirmPayment}
               icon={<CheckCircle2 color="#fff" size={16} />}
             />
             <Button
-              label="Annuler"
+              label="Retour"
               variant="ghost"
-              onPress={() => { setStage("form"); setPaymentId(null); setError(null); }}
+              onPress={() => { setStage("form"); setPaymentId(null); setError(null); doneRef.current = false; }}
               testID="pay-mm-cancel"
             />
           </Card>
@@ -208,7 +261,7 @@ export default function PayContribution() {
           <Text style={styles.heroAmt}>{formatXAF(amt)}</Text>
           <View style={styles.heroRow}>
             <Lock size={12} color="rgba(255,255,255,0.6)" />
-            <Text style={styles.heroSub}>MTN MoMo · Paynote</Text>
+            <Text style={styles.heroSub}>MTN MoMo · crédit instantané</Text>
           </View>
         </LinearGradient>
 
@@ -221,11 +274,10 @@ export default function PayContribution() {
         <Card style={{ marginTop: 20, gap: 12 }}>
           <Text style={styles.formTitle}>Payer avec MTN Mobile Money</Text>
           <View style={[styles.infoBox, { borderColor: MTN.color + "55", backgroundColor: MTN.color + "11" }]}>
-            <Text style={[styles.infoBoxTitle, { color: MTN.dark }]}>Comment ça marche ?</Text>
-            <Text style={styles.infoBoxStep}>1. Entrez votre numéro MTN ci-dessous</Text>
-            <Text style={styles.infoBoxStep}>2. Vous recevez une demande USSD sur votre téléphone</Text>
-            <Text style={styles.infoBoxStep}>3. Validez avec votre code PIN</Text>
-            <Text style={styles.infoBoxStep}>4. HODIX confirme automatiquement via Paynote</Text>
+            <Text style={[styles.infoBoxTitle, { color: MTN.dark }]}>En 3 étapes</Text>
+            <Text style={styles.infoBoxStep}>1. Entrez votre numéro MTN</Text>
+            <Text style={styles.infoBoxStep}>2. Validez le PIN sur votre téléphone</Text>
+            <Text style={styles.infoBoxStep}>3. Le crédit apparaît immédiatement dans HODIX</Text>
           </View>
 
           <Field
@@ -248,7 +300,7 @@ export default function PayContribution() {
 
         <View style={styles.secureBar}>
           <Lock size={12} color={Colors.accent} />
-          <Text style={styles.secureText}>Orange Money bientôt disponible · Paiement sécurisé Paynote</Text>
+          <Text style={styles.secureText}>Paiement sécurisé Paynote · confirmation automatique</Text>
         </View>
       </ScrollView>
     </SafeAreaView>

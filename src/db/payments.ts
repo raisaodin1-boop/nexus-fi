@@ -256,8 +256,9 @@ async function initiatePaynoteMtnPayment(payload: InitiatePayload, amount: numbe
   throwSb(error);
 
   const paynote = await invokePaynoteMtn<{
-    message_id?: string;
+    message_id?: string | null;
     message?: string;
+    warning?: string;
   }>("initiate", {
     payment_id: paymentId,
     phone: payload.phone?.trim() ?? "",
@@ -267,7 +268,10 @@ async function initiatePaynoteMtnPayment(payload: InitiatePayload, amount: numbe
     meta.paynote_message_id = paynote.message_id;
     const { error: updErr } = await getSupabase()
       .from("payments")
-      .update({ description: encodeMeta(meta) })
+      .update({
+        description: encodeMeta(meta),
+        provider_ref: paynote.message_id,
+      })
       .eq("id", paymentId)
       .eq("user_id", me);
     throwSb(updErr);
@@ -359,11 +363,9 @@ export async function confirmPaynoteMtnPayment(payload: { payment_id: string }) 
     .maybeSingle();
   throwSb(error);
   if (!payment) throw { status: 404, detail: "Paiement introuvable." };
+
   if (payment.status === "succeeded") {
     const meta = parsePaymentMeta(payment.description);
-    if (meta) {
-      try { await fulfillPayment(meta, payment.id); } catch { /* idempotent wallet_topup */ }
-    }
     if (!payment.receipt_email_sent_at) {
       try { await sendPaymentReceiptEmail(payment.id); } catch { /* best-effort */ }
     }
@@ -373,21 +375,22 @@ export async function confirmPaynoteMtnPayment(payload: { payment_id: string }) 
     throw { status: 400, detail: "Ce paiement n'est plus en attente." };
   }
 
-  const statusRes = await invokePaynoteMtn<{
+  // Atomic edge confirm: Paynote status check + DB credit (service role)
+  const confirmRes = await invokePaynoteMtn<{
     verified?: boolean;
+    status?: string;
     payment_ref?: string;
-  }>("status", { payment_id: payment.id });
+    result?: unknown;
+    already_fulfilled?: boolean;
+    error?: string;
+  }>("confirm", { payment_id: payment.id });
 
-  if (!statusRes.verified) {
-    throw { status: 402, detail: "Paiement MTN MoMo non confirmé. Validez sur votre téléphone puis réessayez." };
+  if (!confirmRes.verified) {
+    throw {
+      status: 402,
+      detail: "Paiement MTN MoMo non confirmé. Validez sur votre téléphone — confirmation automatique en cours.",
+    };
   }
-
-  const ref = String(statusRes.payment_ref ?? payment.id);
-  const { data: result, error: rpcErr } = await getSupabase().rpc("confirm_cinetpay_payment", {
-    p_payment_id: payment.id,
-    p_reference: ref,
-  });
-  throwSb(rpcErr);
 
   let receiptEmail: { delivery?: string } | null = null;
   try {
@@ -399,9 +402,9 @@ export async function confirmPaynoteMtnPayment(payload: { payment_id: string }) 
     payment_id: payment.id,
     status: "succeeded" as const,
     meta,
-    result,
+    result: confirmRes.result,
     receipt_email: receiptEmail,
-    already_fulfilled: !!(result as { already_fulfilled?: boolean })?.already_fulfilled,
+    already_fulfilled: !!confirmRes.already_fulfilled,
   };
 }
 

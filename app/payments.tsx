@@ -18,17 +18,43 @@ function formatDate(d: string) {
   return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+function statusLabel(status: string) {
+  switch (status) {
+    case "succeeded": return "Confirmé";
+    case "pending_paynote":
+    case "pending_cinetpay": return "En attente";
+    case "failed": return "Échoué";
+    default: return status;
+  }
+}
+
 export default function PaymentsScreen() {
   const router = useRouter();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
 
-  useFocusEffect(useCallback(() => {
+  const load = useCallback(() => {
+    setLoading(true);
     api.get<Payment[]>("/payments/history")
       .then(setPayments)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []));
+  }, []);
+
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const retryConfirm = async (paymentId: string) => {
+    setRetryingId(paymentId);
+    try {
+      await api.post("/payments/paynote/confirm", { payment_id: paymentId });
+      load();
+    } catch {
+      /* still pending */
+    } finally {
+      setRetryingId(null);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -51,30 +77,53 @@ export default function PaymentsScreen() {
           contentContainerStyle={{ padding: Spacing.xl, gap: 10, paddingBottom: 100 }}
           renderItem={({ item: p }) => {
             const isIn = p.type === "credit" || p.type === "deposit";
+            const pending = p.status === "pending_paynote" || p.status === "pending_cinetpay";
+            const metaLabel = (() => {
+              try {
+                const raw = (p.description ?? "").split(" · ref:")[0];
+                const m = JSON.parse(raw);
+                return m.label || m.kind || "Paiement";
+              } catch {
+                return p.description || "Paiement";
+              }
+            })();
             return (
-              <TouchableOpacity
-                activeOpacity={0.85}
-                disabled={p.status !== "succeeded"}
-                onPress={() => router.push({ pathname: "/receipt", params: { paymentId: p.id } } as any)}
-              >
-              <Card style={{ padding: 14, flexDirection: "row", alignItems: "center", gap: 12 }}>
-                <View style={[styles.iconBox, { backgroundColor: isIn ? `${Colors.accent}20` : `${Colors.danger}20` }]}>
-                  {isIn
-                    ? <ArrowDownLeft color={Colors.accent} size={20} />
-                    : <ArrowUpRight color={Colors.danger} size={20} />}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.desc}>{p.description}</Text>
-                  <Text style={styles.date}>{formatDate(p.created_at)}</Text>
-                </View>
-                <View style={{ alignItems: "flex-end" }}>
-                  <Text style={[styles.amount, { color: isIn ? Colors.accent : Colors.danger }]}>
-                    {isIn ? "+" : "-"}{formatXAF(p.amount, p.currency)}
-                  </Text>
-                  <Text style={styles.status}>{p.status}</Text>
-                </View>
+              <Card style={{ padding: 14, gap: 8 }}>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  disabled={p.status !== "succeeded"}
+                  onPress={() => router.push({ pathname: "/receipt", params: { paymentId: p.id } } as any)}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
+                >
+                  <View style={[styles.iconBox, { backgroundColor: isIn ? `${Colors.accent}20` : `${Colors.danger}20` }]}>
+                    {isIn
+                      ? <ArrowDownLeft color={Colors.accent} size={20} />
+                      : <ArrowUpRight color={Colors.danger} size={20} />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.desc}>{metaLabel}</Text>
+                    <Text style={styles.date}>{formatDate(p.created_at)}</Text>
+                  </View>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text style={[styles.amount, { color: isIn ? Colors.accent : Colors.danger }]}>
+                      {isIn ? "+" : "-"}{formatXAF(p.amount, p.currency)}
+                    </Text>
+                    <Text style={[styles.status, pending ? { color: Colors.warning } : null]}>
+                      {statusLabel(p.status)}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+                {pending ? (
+                  <TouchableOpacity
+                    onPress={() => retryConfirm(p.id)}
+                    disabled={retryingId === p.id}
+                  >
+                    <Text style={{ color: Colors.primary, fontWeight: "700", fontSize: 12 }}>
+                      {retryingId === p.id ? "Vérification…" : "Vérifier le paiement MoMo"}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
               </Card>
-              </TouchableOpacity>
             );
           }}
           ListEmptyComponent={
