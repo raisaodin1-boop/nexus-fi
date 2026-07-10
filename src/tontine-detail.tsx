@@ -573,6 +573,18 @@ export function TontineDetailView({ id }: { id: string }) {
     return () => { supabase.removeChannel(ch); };
   }, [id, load]));
 
+  // Keep tab in sync with enabled modules — must run before any early return (Rules of Hooks).
+  useEffect(() => {
+    const keys = [
+      modules.tontine ? "cycle" : null,
+      modules.tontine ? "rotation" : null,
+      modules.tontine ? "history" : null,
+      modules.members ? "members" : null,
+      modules.treasury ? "contributions" : null,
+    ].filter(Boolean) as typeof activeTab[];
+    if (keys.length && !keys.includes(activeTab)) setActiveTab(keys[0]);
+  }, [modules.tontine, modules.members, modules.treasury, activeTab]);
+
   const advanceCycle = async () => {
     setAdvanceBusy(true);
     try {
@@ -787,17 +799,6 @@ export function TontineDetailView({ id }: { id: string }) {
     modules.members ? { key: "members" as const, label: "Membres" } : null,
     modules.treasury ? { key: "contributions" as const, label: "Cotisations" } : null,
   ].filter(Boolean) as { key: "cycle" | "rotation" | "history" | "members" | "contributions"; label: string }[];
-
-  useEffect(() => {
-    const keys = [
-      modules.tontine ? "cycle" : null,
-      modules.tontine ? "rotation" : null,
-      modules.tontine ? "history" : null,
-      modules.members ? "members" : null,
-      modules.treasury ? "contributions" : null,
-    ].filter(Boolean) as typeof activeTab[];
-    if (keys.length && !keys.includes(activeTab)) setActiveTab(keys[0]);
-  }, [modules.tontine, modules.members, modules.treasury, activeTab]);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
