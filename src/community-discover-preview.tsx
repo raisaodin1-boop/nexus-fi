@@ -15,6 +15,8 @@ type PublicTontine = {
   max_members?: number;
   reliability_score?: number;
   country?: string | null;
+  is_hodix_verified?: boolean;
+  description?: string | null;
 };
 
 export function CommunityDiscoverPreview() {
@@ -26,10 +28,12 @@ export function CommunityDiscoverPreview() {
     setLoading(true);
     try {
       const data = await api.get<PublicTontine[]>("/tontines/directory");
-      const sorted = [...data].sort(
-        (a, b) => (b.reliability_score ?? 0) - (a.reliability_score ?? 0),
-      );
-      setItems(sorted.slice(0, 3));
+      const sorted = [...data].sort((a, b) => {
+        const av = Number(a.is_hodix_verified) - Number(b.is_hodix_verified);
+        if (av !== 0) return -av;
+        return (b.members_count ?? 0) - (a.members_count ?? 0);
+      });
+      setItems(sorted.slice(0, 4));
     } catch {
       setItems([]);
     }
@@ -42,9 +46,9 @@ export function CommunityDiscoverPreview() {
     <View style={{ paddingHorizontal: Spacing.xl, marginBottom: 12, gap: 10 }}>
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.eyebrow}>EFFET RÉSEAU</Text>
-          <Text style={styles.title}>Communautés recommandées</Text>
-          <Text style={styles.sub}>Groupes publics triés par fiabilité et participation</Text>
+          <Text style={styles.eyebrow}>TONTINES PUBLIQUES VÉRIFIÉES</Text>
+          <Text style={styles.title}>Communautés actives</Text>
+          <Text style={styles.sub}>Rejoignez un groupe HODIX déjà en marche</Text>
         </View>
         <TouchableOpacity
           testID="discover-all-tontines"
@@ -79,13 +83,21 @@ export function CommunityDiscoverPreview() {
               <Users color="#fff" size={18} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.rowTitle} numberOfLines={1}>{t.name}</Text>
+              <View style={styles.titleRow}>
+                <View style={styles.liveDot} />
+                <Text style={styles.rowTitle} numberOfLines={1}>{t.name}</Text>
+              </View>
               <Text style={styles.rowMeta}>
                 {formatXAF(t.amount_per_cycle)} / cycle · {t.members_count ?? 0} membres
-                {t.country ? ` · ${t.country}` : ""}
+                {t.country ? ` · ${t.country === "CM" ? "Cameroun" : t.country}` : ""}
               </Text>
             </View>
-            {t.reliability_score != null ? (
+            {t.is_hodix_verified ? (
+              <View style={styles.verifiedPill}>
+                <Sparkles color="#10B981" size={12} />
+                <Text style={styles.verifiedText}>OK</Text>
+              </View>
+            ) : t.reliability_score != null ? (
               <View style={styles.scorePill}>
                 <Sparkles color={Colors.warning} size={12} />
                 <Text style={styles.scoreText}>{t.reliability_score}</Text>
@@ -115,13 +127,20 @@ const styles = StyleSheet.create({
     width: 40, height: 40, borderRadius: 12,
     backgroundColor: Colors.secondary, alignItems: "center", justifyContent: "center",
   },
-  rowTitle: { fontSize: 14, fontWeight: "700", color: Colors.text },
+  rowTitle: { flex: 1, fontSize: 14, fontWeight: "700", color: Colors.text },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#10B981" },
   rowMeta: { fontSize: 11, color: Colors.textMuted, marginTop: 2 },
   scorePill: {
     flexDirection: "row", alignItems: "center", gap: 4,
     backgroundColor: Colors.warningLight, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999,
   },
   scoreText: { fontSize: 11, fontWeight: "800", color: Colors.warning },
+  verifiedPill: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: "#10B98118", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999,
+  },
+  verifiedText: { fontSize: 11, fontWeight: "800", color: "#10B981" },
   emptyTitle: { fontSize: 15, fontWeight: "800", color: Colors.text },
   emptySub: { fontSize: 12, color: Colors.textMuted, marginTop: 4, lineHeight: 18 },
   cta: {

@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -12,8 +12,9 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { Globe, Shield, Star, Users } from "lucide-react-native";
 
 import { api, formatXAF } from "@/src/api";
+import { VerifiedBadge } from "@/src/fraud-badge";
 import { Button, Card, EmptyState } from "@/src/ui";
-import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
+import { Colors, Radius, Spacing } from "@/src/theme";
 
 interface TontineItem {
   id: string;
@@ -25,6 +26,7 @@ interface TontineItem {
   country: string | null;
   description: string | null;
   members_count: number;
+  is_hodix_verified?: boolean;
   compliance_rate: number | null;
   reliability_score: number;
   created_at: string;
@@ -45,12 +47,97 @@ const COUNTRY_FLAGS: Record<string, string> = {
 const reliabilityColor = (s: number) =>
   s >= 80 ? "#10B981" : s >= 60 ? "#F59E0B" : "#EF4444";
 
+const placeLabel = (country: string | null) => {
+  if (!country) return null;
+  if (country === "CM") return `${COUNTRY_FLAGS.CM} Cameroun`;
+  return `${COUNTRY_FLAGS[country] ?? "🌍"} ${country}`;
+};
+
+function TontineCard({
+  t,
+  onPress,
+}: {
+  t: TontineItem;
+  onPress: () => void;
+}) {
+  return (
+    <Card style={styles.card}>
+      <View style={styles.cardHeader}>
+        <View style={{ flex: 1 }}>
+          <View style={styles.nameRow}>
+            {t.is_hodix_verified ? <View style={styles.liveDot} /> : null}
+            <Text style={styles.cardName} numberOfLines={1}>{t.name}</Text>
+          </View>
+          <View style={styles.badgeRow}>
+            {t.is_hodix_verified ? (
+              <VerifiedBadge size="sm" label="HODIX vérifiée" />
+            ) : null}
+            <View style={styles.freqBadge}>
+              <Text style={styles.freqText}>{FREQ_LABELS[t.frequency] ?? t.frequency}</Text>
+            </View>
+            {t.country ? (
+              <Text style={styles.flagText}>{placeLabel(t.country)}</Text>
+            ) : null}
+          </View>
+        </View>
+        <View style={[styles.reliabilityBadge, { borderColor: reliabilityColor(t.reliability_score) }]}>
+          <Star size={10} color={reliabilityColor(t.reliability_score)} />
+          <Text style={[styles.reliabilityText, { color: reliabilityColor(t.reliability_score) }]}>
+            {t.reliability_score}
+          </Text>
+        </View>
+      </View>
+
+      {t.description ? (
+        <Text style={styles.cardDesc} numberOfLines={2}>{t.description}</Text>
+      ) : null}
+
+      <View style={styles.statsRow}>
+        <View style={styles.stat}>
+          <Users size={12} color={Colors.textMuted} />
+          <Text style={styles.statText}>{t.members_count} membres</Text>
+        </View>
+        <Text style={styles.amount}>{formatXAF(t.amount_per_cycle)}/cycle</Text>
+      </View>
+
+      {t.compliance_rate !== null ? (
+        <View style={styles.complianceWrap}>
+          <View style={styles.complianceBar}>
+            <View
+              style={[
+                styles.complianceFill,
+                {
+                  width: `${t.compliance_rate}%` as any,
+                  backgroundColor: reliabilityColor(t.compliance_rate),
+                },
+              ]}
+            />
+          </View>
+          <View style={styles.complianceLabel}>
+            <Shield size={10} color={Colors.textMuted} />
+            <Text style={styles.complianceText}>{t.compliance_rate}% conformité</Text>
+          </View>
+        </View>
+      ) : null}
+
+      <Button
+        label="Voir"
+        variant="secondary"
+        fullWidth={false}
+        style={styles.viewBtn}
+        onPress={onPress}
+      />
+    </Card>
+  );
+}
+
 export default function TontineDirectory() {
   const router = useRouter();
   const [all, setAll] = useState<TontineItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [freq, setFreq] = useState<string | null>(null);
   const [country, setCountry] = useState<string | null>(null);
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -63,11 +150,19 @@ export default function TontineDirectory() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const items = all.filter((t) => {
-    if (freq && t.frequency !== freq) return false;
-    if (country && t.country !== country) return false;
-    return true;
-  });
+  const items = useMemo(() => {
+    return all.filter((t) => {
+      if (verifiedOnly && !t.is_hodix_verified) return false;
+      if (freq && t.frequency !== freq) return false;
+      if (country && t.country !== country && !(country === "CM" && ["Douala", "Yaoundé", "Bafoussam"].includes(t.country ?? ""))) {
+        return false;
+      }
+      return true;
+    });
+  }, [all, freq, country, verifiedOnly]);
+
+  const verified = items.filter((t) => t.is_hodix_verified);
+  const others = items.filter((t) => !t.is_hodix_verified);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -77,16 +172,23 @@ export default function TontineDirectory() {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={styles.h1}>Annuaire des Tontines</Text>
-          <Text style={styles.subtitle}>Rejoignez une communauté</Text>
+          <Text style={styles.subtitle}>Communautés publiques actives</Text>
         </View>
       </View>
 
-      {/* Frequency filter chips */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filterRow}
       >
+        <TouchableOpacity
+          onPress={() => setVerifiedOnly((v) => !v)}
+          style={[styles.chip, verifiedOnly && styles.chipVerified]}
+        >
+          <Text style={[styles.chipText, verifiedOnly && styles.chipTextActive]}>
+            ✓ Vérifiées HODIX
+          </Text>
+        </TouchableOpacity>
         {[null, "weekly", "biweekly", "monthly"].map((f) => {
           const active = freq === f;
           const label = f === null ? "Toutes" : FREQ_LABELS[f] ?? f;
@@ -129,65 +231,35 @@ export default function TontineDirectory() {
             />
           </Card>
         ) : (
-          items.map((t) => (
-            <Card key={t.id} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardName} numberOfLines={1}>{t.name}</Text>
-                  <View style={styles.badgeRow}>
-                    <View style={styles.freqBadge}>
-                      <Text style={styles.freqText}>{FREQ_LABELS[t.frequency] ?? t.frequency}</Text>
-                    </View>
-                    {t.country ? (
-                      <Text style={styles.flagText}>{COUNTRY_FLAGS[t.country] ?? "🌍"} {t.country}</Text>
-                    ) : null}
-                  </View>
-                </View>
-                <View style={[styles.reliabilityBadge, { borderColor: reliabilityColor(t.reliability_score) }]}>
-                  <Star size={10} color={reliabilityColor(t.reliability_score)} />
-                  <Text style={[styles.reliabilityText, { color: reliabilityColor(t.reliability_score) }]}>
-                    {t.reliability_score}
-                  </Text>
-                </View>
+          <>
+            {verified.length > 0 ? (
+              <View style={styles.sectionHead}>
+                <Text style={styles.sectionTitle}>Tontines publiques vérifiées</Text>
+                <Text style={styles.sectionSub}>
+                  Créées ou validées par HODIX — badge officiel et compteurs en direct
+                </Text>
               </View>
-
-              <View style={styles.statsRow}>
-                <View style={styles.stat}>
-                  <Users size={12} color={Colors.textMuted} />
-                  <Text style={styles.statText}>{t.members_count}/{t.max_members}</Text>
-                </View>
-                <Text style={styles.amount}>{formatXAF(t.amount_per_cycle)}/cycle</Text>
-              </View>
-
-              {t.compliance_rate !== null ? (
-                <View style={styles.complianceWrap}>
-                  <View style={styles.complianceBar}>
-                    <View
-                      style={[
-                        styles.complianceFill,
-                        {
-                          width: `${t.compliance_rate}%` as any,
-                          backgroundColor: reliabilityColor(t.compliance_rate),
-                        },
-                      ]}
-                    />
-                  </View>
-                  <View style={styles.complianceLabel}>
-                    <Shield size={10} color={Colors.textMuted} />
-                    <Text style={styles.complianceText}>{t.compliance_rate}% conformité</Text>
-                  </View>
-                </View>
-              ) : null}
-
-              <Button
-                label="Voir"
-                variant="secondary"
-                fullWidth={false}
-                style={styles.viewBtn}
+            ) : null}
+            {verified.map((t) => (
+              <TontineCard
+                key={t.id}
+                t={t}
                 onPress={() => router.push(`/tontines/${t.id}/profile` as any)}
               />
-            </Card>
-          ))
+            ))}
+            {others.length > 0 ? (
+              <View style={[styles.sectionHead, { marginTop: 8 }]}>
+                <Text style={styles.sectionTitle}>Autres tontines publiques</Text>
+              </View>
+            ) : null}
+            {others.map((t) => (
+              <TontineCard
+                key={t.id}
+                t={t}
+                onPress={() => router.push(`/tontines/${t.id}/profile` as any)}
+              />
+            ))}
+          </>
         )}
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -224,14 +296,23 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   chipActive: { backgroundColor: Colors.secondary, borderColor: Colors.secondary },
+  chipVerified: { backgroundColor: "#10B981", borderColor: "#10B981" },
   chipText: { fontSize: 12, fontWeight: "600", color: Colors.text },
   chipTextActive: { color: "#fff" },
   divider: { width: 1, height: 24, backgroundColor: Colors.border, marginHorizontal: 4 },
   list: { paddingHorizontal: Spacing.xl, gap: 12, paddingBottom: 100 },
+  sectionHead: { gap: 4, marginBottom: 4, marginTop: 4 },
+  sectionTitle: { fontSize: 15, fontWeight: "800", color: Colors.text },
+  sectionSub: { fontSize: 12, color: Colors.textMuted, lineHeight: 17 },
   card: { padding: 16, gap: 10 },
   cardHeader: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  cardName: { fontSize: 16, fontWeight: "700", color: Colors.text, marginBottom: 4 },
-  badgeRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
+  liveDot: {
+    width: 8, height: 8, borderRadius: 4, backgroundColor: "#10B981",
+  },
+  cardName: { flex: 1, fontSize: 16, fontWeight: "700", color: Colors.text },
+  cardDesc: { fontSize: 12, color: Colors.textMuted, lineHeight: 18 },
+  badgeRow: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
   freqBadge: {
     backgroundColor: Colors.secondaryLight,
     paddingHorizontal: 8,

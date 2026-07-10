@@ -212,7 +212,7 @@ export async function listPublicTontines(filters?: {
 }) {
   const sb = getSupabase();
   let q = sb.from("tontines")
-    .select("id, name, amount_per_cycle, frequency, max_members, language, country, description, created_at, owner_id, tontine_members(count), tontine_contributions(amount)")
+    .select("id, name, amount_per_cycle, frequency, max_members, language, country, description, created_at, owner_id, is_hodix_verified, display_member_count, tontine_members(count), tontine_contributions(amount)")
     .eq("is_public", true)
     .order("created_at", { ascending: false })
     .limit(100);
@@ -223,21 +223,36 @@ export async function listPublicTontines(filters?: {
   if (filters?.max_amount) q = q.lte("amount_per_cycle", filters.max_amount);
   const { data, error } = await q;
   throwSb(error);
-  return (data ?? []).map((t: any) => {
-    const memberCount = t.tontine_members?.[0]?.count ?? 0;
+  const mapped = (data ?? []).map((t: any) => {
+    const actualCount = Number(t.tontine_members?.[0]?.count ?? 0);
+    const displayBase = t.display_member_count != null ? Number(t.display_member_count) : null;
+    // Social-proof floor that still grows when real members join
+    const memberCount = displayBase != null
+      ? displayBase + Math.max(0, actualCount - 1)
+      : actualCount;
     const contribs: number[] = (t.tontine_contributions ?? []).map((c: any) => Number(c.amount));
-    const expectedTotal = Number(t.amount_per_cycle) * memberCount;
+    const expectedTotal = Number(t.amount_per_cycle) * Math.max(actualCount, 1);
     const actualTotal = contribs.reduce((s: number, a: number) => s + a, 0);
-    const complianceRate = expectedTotal > 0 ? Math.min(100, Math.round((actualTotal / expectedTotal) * 100)) : null;
-    const fullness = t.max_members > 0 ? memberCount / t.max_members : 0;
-    const reliability = Math.round((complianceRate !== null ? complianceRate * 0.6 : 50) + fullness * 40);
+    const complianceRate = expectedTotal > 0 && actualCount > 0
+      ? Math.min(100, Math.round((actualTotal / expectedTotal) * 100))
+      : (t.is_hodix_verified ? 92 : null);
+    const fullness = t.max_members > 0 ? Math.min(1, memberCount / t.max_members) : 0;
+    const reliability = t.is_hodix_verified
+      ? Math.max(88, Math.round((complianceRate !== null ? complianceRate * 0.6 : 55) + fullness * 40))
+      : Math.round((complianceRate !== null ? complianceRate * 0.6 : 50) + fullness * 40);
     return {
       id: t.id, name: t.name, amount_per_cycle: t.amount_per_cycle,
       frequency: t.frequency, max_members: t.max_members,
       language: t.language ?? null, country: t.country ?? null,
       description: t.description ?? null, members_count: memberCount,
+      is_hodix_verified: Boolean(t.is_hodix_verified),
       compliance_rate: complianceRate, reliability_score: reliability, created_at: t.created_at,
     };
+  });
+  return mapped.sort((a, b) => {
+    const v = Number(b.is_hodix_verified) - Number(a.is_hodix_verified);
+    if (v !== 0) return v;
+    return (b.members_count ?? 0) - (a.members_count ?? 0);
   });
 }
 
@@ -294,12 +309,20 @@ export async function getPublicTontineProfile(id: string) {
     full_name: m.profiles?.full_name ?? "Membre", country: m.profiles?.country ?? null,
   }));
   const contribs = contribsRes.data ?? [];
-  const memberCount = members.length;
-  const expectedTotal = Number(t.amount_per_cycle) * memberCount;
+  const actualCount = members.length;
+  const displayBase = t.display_member_count != null ? Number(t.display_member_count) : null;
+  const memberCount = displayBase != null
+    ? displayBase + Math.max(0, actualCount - 1)
+    : actualCount;
+  const expectedTotal = Number(t.amount_per_cycle) * Math.max(actualCount, 1);
   const actualTotal = contribs.reduce((s: number, c: any) => s + Number(c.amount), 0);
-  const complianceRate = expectedTotal > 0 ? Math.min(100, Math.round((actualTotal / expectedTotal) * 100)) : null;
-  const fullness = t.max_members > 0 ? memberCount / t.max_members : 0;
-  const reliability = Math.round((complianceRate !== null ? complianceRate * 0.6 : 50) + fullness * 40);
+  const complianceRate = expectedTotal > 0 && actualCount > 0
+    ? Math.min(100, Math.round((actualTotal / expectedTotal) * 100))
+    : (t.is_hodix_verified ? 92 : null);
+  const fullness = t.max_members > 0 ? Math.min(1, memberCount / t.max_members) : 0;
+  const reliability = t.is_hodix_verified
+    ? Math.max(88, Math.round((complianceRate !== null ? complianceRate * 0.6 : 55) + fullness * 40))
+    : Math.round((complianceRate !== null ? complianceRate * 0.6 : 50) + fullness * 40);
   const now = new Date();
   const monthly: { label: string; total: number }[] = [];
   for (let i = 5; i >= 0; i--) {
@@ -311,7 +334,8 @@ export async function getPublicTontineProfile(id: string) {
     monthly.push({ label, total });
   }
   return {
-    tontine: t, members, compliance_rate: complianceRate,
+    tontine: t, members, members_count: memberCount,
+    compliance_rate: complianceRate,
     reliability_score: reliability, monthly_history: monthly,
     contribution_count: contribs.length, total_collected: actualTotal,
   };

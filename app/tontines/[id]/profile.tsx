@@ -43,8 +43,10 @@ interface ProfileData {
     language?: string | null;
     country?: string | null;
     creator_id?: string | null;
+    is_hodix_verified?: boolean;
   };
   members: Member[];
+  members_count?: number;
   compliance_rate: number | null;
   reliability_score: number;
   monthly_history: MonthlyEntry[];
@@ -184,8 +186,9 @@ export default function TontineProfile() {
     );
   }
 
-  const { tontine, members, compliance_rate, reliability_score, monthly_history, total_collected, creator_reputation } = data;
+  const { tontine, members, members_count, compliance_rate, reliability_score, monthly_history, total_collected, creator_reputation } = data;
   const rColor = reliabilityColor(reliability_score);
+  const shownMembers = members_count ?? members.length;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -203,6 +206,11 @@ export default function TontineProfile() {
           <View style={styles.heroTop}>
             <View style={{ flex: 1 }}>
               <Text style={styles.heroName}>{tontine.name}</Text>
+              {tontine.is_hodix_verified ? (
+                <View style={{ marginTop: 6, marginBottom: 4 }}>
+                  <VerifiedBadge size="sm" label="HODIX vérifiée" />
+                </View>
+              ) : null}
               {tontine.description ? (
                 <Text style={styles.heroDesc}>{tontine.description}</Text>
               ) : null}
@@ -261,7 +269,7 @@ export default function TontineProfile() {
         <View style={styles.statsRow}>
           <View style={[styles.statBox, Shadow.card]}>
             <Users size={16} color={Colors.secondary} />
-            <Text style={styles.statVal}>{members.length}/{tontine.max_members}</Text>
+            <Text style={styles.statVal}>{shownMembers}</Text>
             <Text style={styles.statLbl}>Membres</Text>
           </View>
           <View style={[styles.statBox, Shadow.card]}>

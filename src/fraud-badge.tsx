@@ -28,12 +28,18 @@ export function TrustBadge({ flags, size = "md" }: Props) {
   );
 }
 
-export function VerifiedBadge({ size = "md" }: { size?: "sm" | "md" }) {
+export function VerifiedBadge({
+  size = "md",
+  label = "Vérifié",
+}: {
+  size?: "sm" | "md";
+  label?: string;
+}) {
   const small = size === "sm";
   return (
     <View style={[styles.badge, { backgroundColor: "#10B98118", borderColor: "#10B98144", padding: small ? 4 : 6 }]}>
       <ShieldCheck size={small ? 11 : 14} color="#10B981" />
-      <Text style={[styles.label, { color: "#10B981", fontSize: small ? 10 : 12 }]}>Vérifié</Text>
+      <Text style={[styles.label, { color: "#10B981", fontSize: small ? 10 : 12 }]}>{label}</Text>
     </View>
   );
 }
