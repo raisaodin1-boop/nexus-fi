@@ -5,7 +5,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
 import { useAuth } from "@/src/auth-context";
-import { useAuth } from "@/src/auth-context";
 import { Colors } from "@/src/theme";
 import { MemberDashboard } from "@/src/member-dashboard";
 import { DiasporaMemberDashboard } from "@/src/diaspora-member-dashboard";
