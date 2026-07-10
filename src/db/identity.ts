@@ -388,25 +388,59 @@ export async function getRegionalRanking(country: string) {
 export async function mintCertificateHash(docId: string, docType: string): Promise<{ hash: string; verify_url: string; polygon_stub: string }> {
   const me = await uid();
   const sb = getSupabase();
-  const { data: profile } = await sb.from("profiles").select("full_name").eq("id", me).single();
-  const payload = `${me}:${docId}:${docType}:${profile?.full_name ?? ""}:${new Date().toISOString()}`;
+
+  // One stable public link per profile + document type (not regenerated on each visit).
+  const { data: existing } = await sb
+    .from("identity_certificates")
+    .select("content_hash, verify_url, chain_ref")
+    .eq("user_id", me)
+    .eq("doc_id", docId)
+    .eq("doc_type", docType)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (existing?.content_hash) {
+    const verifyUrl = `https://www.hodix.app/verify?h=${existing.content_hash}`;
+    if (existing.verify_url !== verifyUrl) {
+      await sb.from("identity_certificates").update({ verify_url: verifyUrl }).eq("content_hash", existing.content_hash);
+    }
+    return {
+      hash: existing.content_hash,
+      verify_url: verifyUrl,
+      polygon_stub: existing.chain_ref ?? `0x${existing.content_hash.slice(0, 40)}`,
+    };
+  }
+
+  const { data: profile } = await sb.from("profiles").select("full_name, email").eq("id", me).maybeSingle();
+  // Stable payload — bound to this profile forever (no timestamp).
+  const payload = `hodix-identity-v1:${me}:${docId}:${docType}`;
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload));
   const hexHash = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
   const verifyUrl = `https://www.hodix.app/verify?h=${hexHash}`;
   const chainRef = `0x${hexHash.slice(0, 40)}`;
 
-  await sb.from("identity_certificates").upsert({
+  const row = {
     user_id: me,
     doc_id: docId,
     doc_type: docType,
     content_hash: hexHash,
     verify_url: verifyUrl,
     chain_ref: chainRef,
-  }, { onConflict: "content_hash" });
+  };
+
+  const { error } = await sb.from("identity_certificates").upsert(row, { onConflict: "content_hash" });
+  if (error) throw new Error(error.message);
 
   await sb.from("identity_events").insert({
     user_id: me, event_type: "nft_certificate", points_delta: 0,
-    metadata: { doc_id: docId, doc_type: docType, hash: hexHash, chain_ref: chainRef },
+    metadata: {
+      doc_id: docId,
+      doc_type: docType,
+      hash: hexHash,
+      chain_ref: chainRef,
+      holder_name: profile?.full_name ?? null,
+    },
   } as any);
 
   return { hash: hexHash, verify_url: verifyUrl, polygon_stub: chainRef };

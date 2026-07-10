@@ -31,6 +31,21 @@ function docTypeLabel(docType: string) {
   return map[docType] ?? `Certificat ${docType}`;
 }
 
+function kycLabel(status?: string | null) {
+  if (status === "approved") return "KYC vérifié";
+  if (status === "pending" || status === "submitted") return "KYC en cours";
+  return "KYC non soumis";
+}
+
+function memberSinceLabel(iso?: string | null) {
+  if (!iso) return null;
+  try {
+    return new Date(iso).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+  } catch {
+    return null;
+  }
+}
+
 /** Resolve hash from /verify/[hash], /verify?h=, or /verify?hash=. */
 export function useVerifyHash(): string {
   const pathname = usePathname();
@@ -105,7 +120,9 @@ export function VerifyCertificateView({ hash }: { hash: string }) {
           <View style={[styles.card, styles.validCard, Shadow.card]}>
             <CheckCircle color={EMERALD} size={44} />
             <Text style={styles.validTitle}>Identité authentique</Text>
-            <Text style={styles.validSub}>Ce certificat a été émis et enregistré par HODIX.</Text>
+            <Text style={styles.validSub}>
+              Certificat lié au profil HODIX de {cert.holder_name}.
+            </Text>
 
             <View style={styles.row}>
               <Text style={styles.label}>Titulaire</Text>
@@ -115,6 +132,30 @@ export function VerifyCertificateView({ hash }: { hash: string }) {
               <Text style={styles.label}>Type</Text>
               <Text style={styles.value}>{docTypeLabel(cert.doc_type)}</Text>
             </View>
+            {(cert.city || cert.country) ? (
+              <View style={styles.row}>
+                <Text style={styles.label}>Localisation</Text>
+                <Text style={styles.value}>
+                  {[cert.city, cert.country].filter(Boolean).join(", ")}
+                </Text>
+              </View>
+            ) : null}
+            {memberSinceLabel(cert.member_since) ? (
+              <View style={styles.row}>
+                <Text style={styles.label}>Membre depuis</Text>
+                <Text style={styles.value}>{memberSinceLabel(cert.member_since)}</Text>
+              </View>
+            ) : null}
+            <View style={styles.row}>
+              <Text style={styles.label}>Statut identité</Text>
+              <Text style={styles.value}>{kycLabel(cert.kyc_status)}</Text>
+            </View>
+            {typeof cert.trust_score === "number" ? (
+              <View style={styles.row}>
+                <Text style={styles.label}>Trust Score</Text>
+                <Text style={styles.value}>{Math.round(cert.trust_score)} / 1000</Text>
+              </View>
+            ) : null}
             <View style={styles.row}>
               <Text style={styles.label}>Émis le</Text>
               <Text style={styles.value}>{formatDate(cert.issued_at)}</Text>

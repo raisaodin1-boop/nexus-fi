@@ -9,6 +9,12 @@ export interface CertificateVerification {
   issued_at: string;
   chain_ref: string | null;
   verify_url: string;
+  country?: string | null;
+  city?: string | null;
+  kyc_status?: string | null;
+  member_since?: string | null;
+  trust_score?: number | null;
+  profile_bound?: boolean;
 }
 
 export async function verifyCertificateByHash(hash: string): Promise<CertificateVerification> {
