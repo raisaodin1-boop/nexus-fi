@@ -76,7 +76,9 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "POST" && s[0] === "tontines" && s[1] === "join")                          return (await db.joinTontineSecure(body?.invite_code)) as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] === "directory")                     return (await db.listPublicTontines()) as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "profile")               return (await db.getPublicTontineProfile(s[1])) as T;
-    if (method === "POST" && s[0] === "tontines" && s[1] === "request-join")                  return (await db.requestJoinTontine(body?.tontine_id)) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] === "request-join")                  return (await db.requestJoinTontine(body?.tontine_id, body?.message)) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] === "join-requests")                 return (await db.listTontineJoinRequests(query.get("tontine_id") ?? undefined)) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] === "respond-join")                  return (await db.respondTontineJoin(body?.request_id, !!body?.approve)) as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] && !s[2])                            return (await db.getTontine(s[1])) as T;
     if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "contribute")
       return db.rejectDirectPaymentRedirect("tontine_contribution", { tontine_id: s[1] }) as T;

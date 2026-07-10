@@ -37,8 +37,11 @@ type Owned = {
 
 type JoinReq = {
   id: string;
-  association_id: string;
-  association_name: string;
+  group_type?: "tontine" | "association";
+  association_id?: string;
+  association_name?: string;
+  tontine_id?: string;
+  tontine_name?: string;
   requester_name: string;
   message?: string | null;
   created_at: string;
@@ -74,12 +77,17 @@ export function CreatorManageDashboard({ embed = false }: { embed?: boolean }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [o, jr] = await Promise.all([
+      const [o, assocJr, tontineJr] = await Promise.all([
         api.get<Owned>("/creator/owned"),
         api.get<JoinReq[]>("/associations/join-requests").catch(() => []),
+        api.get<JoinReq[]>("/tontines/join-requests").catch(() => []),
       ]);
       setOwned(o);
-      setJoinReqs(jr ?? []);
+      const merged = [
+        ...(assocJr ?? []).map((r) => ({ ...r, group_type: "association" as const })),
+        ...(tontineJr ?? []).map((r) => ({ ...r, group_type: "tontine" as const })),
+      ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setJoinReqs(merged);
       if (isPlatformAdmin) {
         const rr = await api.get<RemovalReq[]>("/governance/removal-requests").catch(() => []);
         setRemovals(rr ?? []);
@@ -98,10 +106,14 @@ export function CreatorManageDashboard({ embed = false }: { embed?: boolean }) {
     (owned?.cooperatives.length ?? 0) +
     (owned?.funds.length ?? 0);
 
-  const respondJoin = async (id: string, approve: boolean) => {
+  const respondJoin = async (id: string, approve: boolean, groupType: "tontine" | "association" = "association") => {
     setBusyId(id);
     try {
-      await api.post("/associations/respond-join", { request_id: id, approve });
+      if (groupType === "tontine") {
+        await api.post("/tontines/respond-join", { request_id: id, approve });
+      } else {
+        await api.post("/associations/respond-join", { request_id: id, approve });
+      }
       await load();
     } catch (e: any) {
       Alert.alert("Erreur", e?.detail ?? "Action impossible");
@@ -170,19 +182,32 @@ export function CreatorManageDashboard({ embed = false }: { embed?: boolean }) {
         </Card>
       ) : (
         <>
-          {joinReqs.length > 0 ? (
-            <View style={styles.block}>
-              <Text style={styles.blockTitle}>Demandes d'adhésion ({joinReqs.length})</Text>
-              {joinReqs.map((r) => (
+          <View style={styles.block}>
+            <Text style={styles.blockTitle}>
+              Demandes d'adhésion {joinReqs.length > 0 ? `(${joinReqs.length})` : ""}
+            </Text>
+            {joinReqs.length === 0 ? (
+              <Card>
+                <Text style={{ color: Colors.textMuted, fontSize: 13, lineHeight: 18 }}>
+                  Aucune demande en attente. Quand quelqu'un demande à rejoindre une de vos tontines ou associations publiques, elle apparaîtra ici.
+                </Text>
+              </Card>
+            ) : (
+              joinReqs.map((r) => (
                 <Card key={r.id} style={styles.reqCard}>
                   <Text style={styles.reqTitle}>{r.requester_name}</Text>
-                  <Text style={styles.reqSub}>→ {r.association_name}</Text>
+                  <Text style={styles.reqSub}>
+                    → {r.group_type === "tontine"
+                      ? (r.tontine_name ?? "Tontine")
+                      : (r.association_name ?? "Association")}
+                    {" · "}{r.group_type === "tontine" ? "Tontine" : "Association"}
+                  </Text>
                   {r.message ? <Text style={styles.reqMsg}>{r.message}</Text> : null}
                   <View style={styles.reqActions}>
                     <TouchableOpacity
                       style={[styles.actBtn, styles.actOk]}
                       disabled={busyId === r.id}
-                      onPress={() => respondJoin(r.id, true)}
+                      onPress={() => respondJoin(r.id, true, r.group_type === "tontine" ? "tontine" : "association")}
                     >
                       <Check size={14} color="#fff" />
                       <Text style={styles.actText}>Accepter</Text>
@@ -190,16 +215,16 @@ export function CreatorManageDashboard({ embed = false }: { embed?: boolean }) {
                     <TouchableOpacity
                       style={[styles.actBtn, styles.actNo]}
                       disabled={busyId === r.id}
-                      onPress={() => respondJoin(r.id, false)}
+                      onPress={() => respondJoin(r.id, false, r.group_type === "tontine" ? "tontine" : "association")}
                     >
                       <X size={14} color="#fff" />
                       <Text style={styles.actText}>Refuser</Text>
                     </TouchableOpacity>
                   </View>
                 </Card>
-              ))}
-            </View>
-          ) : null}
+              ))
+            )}
+          </View>
 
           {isPlatformAdmin && removals.length > 0 ? (
             <View style={styles.block}>

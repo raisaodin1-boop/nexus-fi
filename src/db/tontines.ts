@@ -257,43 +257,54 @@ export async function listPublicTontines(filters?: {
   });
 }
 
-export async function requestJoinTontine(tontine_id: string) {
-  const me = await uid();
+export async function requestJoinTontine(tontine_id: string, message?: string) {
+  const { data, error } = await getSupabase().rpc("request_join_tontine", {
+    p_tontine_id: tontine_id,
+    p_message: message ?? null,
+  });
+  if (error) {
+    const msg = error.message ?? "";
+    if (/déjà membre/i.test(msg)) throw { status: 400, detail: "Vous êtes déjà membre de cette tontine" };
+    if (/privée|code d'invitation/i.test(msg)) throw { status: 403, detail: msg };
+    if (/complète/i.test(msg)) throw { status: 400, detail: "La tontine est complète" };
+    if (/introuvable/i.test(msg)) throw { status: 404, detail: "Tontine introuvable" };
+    throwSb(error);
+  }
+  return data as { status: string; request_id: string; tontine_id: string };
+}
+
+export async function listTontineJoinRequests(tontineId?: string) {
   const sb = getSupabase();
-  const { count } = await sb
-    .from("tontine_members").select("*", { count: "exact", head: true })
-    .eq("tontine_id", tontine_id).eq("user_id", me);
-  if ((count ?? 0) > 0) throw { status: 400, detail: "Vous êtes déjà membre de cette tontine" };
+  let q = sb
+    .from("tontine_join_requests")
+    .select("*, tontines(id, name, owner_id)")
+    .eq("status", "pending")
+    .order("created_at", { ascending: false });
+  if (tontineId) q = q.eq("tontine_id", tontineId);
+  const { data, error } = await q;
+  throwSb(error);
+  const rows = data ?? [];
+  const ids = rows.map((r: any) => r.requester_id);
+  const profiles = await profileDisplayMap(ids);
+  return rows.map((r: any) => ({
+    id: r.id,
+    tontine_id: r.tontine_id,
+    requester_id: r.requester_id,
+    requester_name: profileFromMap(profiles, r.requester_id).full_name,
+    tontine_name: r.tontines?.name ?? "Tontine",
+    group_type: "tontine" as const,
+    message: r.message,
+    created_at: r.created_at,
+  }));
+}
 
-  const { data: tontine, error: tErr } = await sb
-    .from("tontines")
-    .select("owner_id, name")
-    .eq("id", tontine_id)
-    .single();
-  if (tErr || !tontine?.owner_id) throw { status: 404, detail: "Tontine introuvable" };
-
-  const requesterProfiles = await profileDisplayMap([me]);
-  const requesterName = profileFromMap(requesterProfiles, me).full_name;
-  const tontineName = tontine.name ?? "votre tontine";
-
-  const { error: ownerErr } = await sb.from("notifications").insert({
-    user_id: tontine.owner_id,
-    title: "Demande d'adhésion",
-    body: `${requesterName} souhaite rejoindre « ${tontineName} ».`,
-    type: "join_request",
-    metadata: { tontine_id, requester_id: me, requester_name: requesterName },
+export async function respondTontineJoin(request_id: string, approve: boolean) {
+  const { data, error } = await getSupabase().rpc("respond_tontine_join", {
+    p_request_id: request_id,
+    p_approve: approve,
   });
-  throwSb(ownerErr);
-
-  await sb.from("notifications").insert({
-    user_id: me,
-    title: "Demande envoyée",
-    body: `Votre demande pour « ${tontineName} » a été transmise au manager.`,
-    type: "join_request_sent",
-    metadata: { tontine_id },
-  });
-
-  return { status: "pending", tontine_id };
+  if (error) throwSb(error);
+  return data;
 }
 
 export async function getPublicTontineProfile(id: string) {

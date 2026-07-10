@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -139,9 +140,15 @@ export function CommunityDiscoverTab() {
     setMsg(null);
     try {
       await api.post("/tontines/request-join", { tontine_id: id });
-      setMsg("Demande envoyée au manager.");
+      setMsg("Demande envoyée au manager — il pourra l'accepter dans son tableau de gestion.");
+      Alert.alert(
+        "Demande envoyée",
+        "Le gestionnaire de la tontine a reçu votre demande d'adhésion.",
+      );
     } catch (e: any) {
-      setMsg(e?.detail ?? "Impossible d'envoyer la demande.");
+      const detail = e?.detail ?? "Impossible d'envoyer la demande.";
+      setMsg(detail);
+      Alert.alert("Erreur", detail);
     }
     setJoiningId(null);
   };
