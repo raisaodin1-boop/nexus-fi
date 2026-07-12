@@ -1,5 +1,5 @@
 // Member dashboard — premium personal fintech home.
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   RefreshControl,
   ScrollView,
@@ -9,14 +9,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Bell, ChevronRight, PiggyBank, Trophy, Users, Wallet, TrendingUp, Sparkles, QrCode, BarChart2, Brain, Repeat, Receipt, PieChart, MessageCircle, CreditCard, Store, Gavel, Target, Crown, Globe } from "lucide-react-native";
 
 import { useAuth } from "@/src/auth-context";
 import { api, formatXAF } from "@/src/api";
-import { supabase } from "@/src/supabase";
 import { type UserSubscription } from "@/src/db/subscriptions";
 import { DegradedDataBanner } from "@/src/degraded-banner";
 import { Card, SectionTitle, StatCard, SkeletonBox, SkeletonCard } from "@/src/ui";
@@ -29,8 +28,8 @@ import { QuickSendBar } from "@/src/quick-send-bar";
 import type { DashboardStory } from "@/src/db/dashboard-story";
 import { buildBadgeShareMessage, computeSocialBadges } from "@/src/social-badges";
 import { LineChart } from "@/src/charts";
-import { debounce } from "@/src/utils/debounce";
 import { useResponsive } from "@/src/hooks/use-responsive";
+import { useLiveDashboardSync } from "@/src/hooks/use-live-dashboard";
 
 interface Summary { total_saved: number; total_target: number; active_goals: number; progress_pct: number; currency: string }
 interface TrustScore {
@@ -68,40 +67,38 @@ export function MemberDashboard() {
   const [myPlan, setMyPlan] = useState<UserSubscription | null>(null);
   const [story, setStory] = useState<DashboardStory | null>(null);
 
-  const load = useCallback(async (opts?: { secondaryOnly?: boolean }) => {
+  const load = useCallback(async () => {
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch { return null; }
     };
 
-    if (!opts?.secondaryOnly) {
-      const [s, t, n, st, myTontines, myAssocs] = await Promise.all([
-        safe(() => api.get<Summary>("/savings/summary")),
-        safe(() => api.get<TrustScore>("/trust-score")),
-        safe(() => api.get<{ unread_count: number }>("/notifications")),
-        safe(() => api.get<DashboardStory>("/dashboard/story")),
-        safe(() => api.get<unknown[]>("/tontines")),
-        safe(() => api.get<unknown[]>("/associations")),
-      ]);
-      if (s) setSummary(s);
-      if (t) {
-        const liveTontines = Array.isArray(myTontines) ? myTontines.length : t.stats?.tontines;
-        const liveAssocs = Array.isArray(myAssocs) ? myAssocs.length : t.stats?.associations;
-        setTrust({
-          ...t,
-          stats: {
-            ...t.stats,
-            tontines: liveTontines ?? t.stats?.tontines ?? 0,
-            associations: liveAssocs ?? t.stats?.associations ?? 0,
-          },
-        });
-      }
-      if (n) setUnread(n.unread_count ?? 0);
-      if (st) setStory(st);
-      setPrimaryDegraded(!s && !t);
-      setLoading(false);
+    const [s, t, n, st, myTontines, myAssocs] = await Promise.all([
+      safe(() => api.get<Summary>("/savings/summary")),
+      safe(() => api.get<TrustScore>("/trust-score")),
+      safe(() => api.get<{ unread_count: number }>("/notifications")),
+      safe(() => api.get<DashboardStory>("/dashboard/story")),
+      safe(() => api.get<unknown[]>("/tontines")),
+      safe(() => api.get<unknown[]>("/associations")),
+    ]);
+    if (s) setSummary(s);
+    if (t) {
+      const liveTontines = Array.isArray(myTontines) ? myTontines.length : t.stats?.tontines;
+      const liveAssocs = Array.isArray(myAssocs) ? myAssocs.length : t.stats?.associations;
+      setTrust({
+        ...t,
+        stats: {
+          ...t.stats,
+          tontines: liveTontines ?? t.stats?.tontines ?? 0,
+          associations: liveAssocs ?? t.stats?.associations ?? 0,
+        },
+      });
     }
+    if (n) setUnread(n.unread_count ?? 0);
+    if (st) setStory(st);
+    setPrimaryDegraded(!s && !t);
+    setLoading(false);
 
-    const [i, ss, al, st, mu, pl] = await Promise.all([
+    const [i, ss, al, streak, mu, pl] = await Promise.all([
       safe(() => api.get<{ items: Insight[] }>("/insights")),
       safe(() => api.get<Series>("/analytics/me/savings?days=14")),
       safe(() => api.get<any[]>("/alerts")),
@@ -112,43 +109,13 @@ export function MemberDashboard() {
     if (i) setInsights(i.items ?? []);
     if (ss) setSavingsSeries(ss);
     if (al) setAlertCount(Array.isArray(al) ? al.length : 0);
-    if (st) setStreakWeeks(st.current_streak ?? 0);
+    if (streak) setStreakWeeks(streak.current_streak ?? 0);
     if (mu) setMsgUnread(mu.unread_count ?? 0);
     if (pl) setMyPlan(pl);
   }, []);
 
-  const loadDebouncedRef = useRef(debounce(() => { load({ secondaryOnly: true }); }, 500));
-
-  // Real-time: subscribe only while screen is focused, auto-cleanup on blur
-  useFocusEffect(useCallback(() => {
-    setLoading(true);
-    load();
-    const userId = user?.id;
-    if (!userId) return;
-    let pollTimer: ReturnType<typeof setInterval> | null = null;
-    const debouncedReload = loadDebouncedRef.current;
-
-    const ch = supabase
-      .channel(`rt-dashboard-member-${userId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "savings_transactions", filter: `user_id=eq.${userId}` }, debouncedReload)
-      .on("postgres_changes", { event: "*", schema: "public", table: "savings_goals", filter: `user_id=eq.${userId}` }, debouncedReload)
-      .on("postgres_changes", { event: "*", schema: "public", table: "tontine_contributions", filter: `user_id=eq.${userId}` }, debouncedReload)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, debouncedReload)
-      .subscribe((status) => {
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-          // Real-time down — fall back to 30s polling
-          console.warn("[dashboard] real-time subscription failed, switching to polling:", status);
-          if (!pollTimer) pollTimer = setInterval(() => { load({ secondaryOnly: true }); }, 30_000);
-        } else if (status === "SUBSCRIBED" && pollTimer) {
-          clearInterval(pollTimer);
-          pollTimer = null;
-        }
-      });
-    return () => {
-      supabase.removeChannel(ch);
-      if (pollTimer) clearInterval(pollTimer);
-    };
-  }, [load, user?.id]));
+  // Focus + Realtime + poll: membership/join/payments → full stats refresh
+  useLiveDashboardSync(user?.id, { mode: "member", reload: load });
 
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 

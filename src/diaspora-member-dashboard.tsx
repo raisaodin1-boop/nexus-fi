@@ -20,6 +20,7 @@ import { CURRENCY_META, type Currency } from "@/src/exchange-rates";
 import { TrustGauge } from "@/src/trust-gauge";
 import { trustLevelFromScore } from "@/src/identity-progression";
 import { DiasporaGuardSpinner } from "@/src/use-diaspora-guard";
+import { useLiveDashboardSync } from "@/src/hooks/use-live-dashboard";
 
 type Props = {
   /** True when rendered as main tab home (no back button). */
@@ -54,10 +55,12 @@ export function DiasporaMemberDashboard({ embeddedInTabs, skipGuard }: Props) {
     }
   }, [skipGuard, user]);
 
+  const canLoad = skipGuard || isDiasporaMember(user);
+  useLiveDashboardSync(canLoad ? user?.id : undefined, { mode: "diaspora", reload: load });
+
   useFocusEffect(useCallback(() => {
-    if (skipGuard || isDiasporaMember(user)) load();
-    else setAccessDenied(true);
-  }, [load, skipGuard, user]));
+    if (!canLoad) setAccessDenied(true);
+  }, [canLoad]));
 
   if (!skipGuard && !isDiasporaMember(user) && accessDenied) {
     router.replace("/diaspora" as any);

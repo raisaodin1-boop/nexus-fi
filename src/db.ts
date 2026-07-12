@@ -26,7 +26,7 @@ export * from "./db/momo-roundup";
 export * from "./db/instant-loan";
 export * from "./db/emoney-license";
 export * from "./db/verify";
-export { invalidateCache } from "./db/helpers";
+export { invalidateCache, invalidateUserStatsCaches } from "./db/helpers";
 
 // Wallet operations (delegated to wallet-db.ts)
 import * as walletDb from "@/src/wallet-db";

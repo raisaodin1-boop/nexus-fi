@@ -1,4 +1,4 @@
-export { invalidateCache } from "./helpers";
+export { invalidateCache, invalidateUserStatsCaches } from "./helpers";
 export * from "./profiles";
 export * from "./tontines";
 export * from "./groups";

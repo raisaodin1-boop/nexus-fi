@@ -1,6 +1,6 @@
 import { getSupabase } from "@/src/supabase";
 import { profileDisplayMap, profileFromMap } from "@/src/profile-display";
-import { uid, throwSb, inviteCode, isUniqueViolation, requireAdmin } from "./helpers";
+import { uid, throwSb, inviteCode, isUniqueViolation, requireAdmin, invalidateCache, invalidateUserStatsCaches } from "./helpers";
 
 type GroupMemberRow = { user_id: string; role?: string; [key: string]: unknown };
 type GroupContribRow = { id: string; user_id: string; amount?: number | string; created_at: string; [key: string]: unknown };
@@ -199,6 +199,13 @@ export async function respondAssociationJoin(request_id: string, approve: boolea
     p_approve: approve,
   });
   if (error) throwSb(error);
+  try {
+    const me = await uid();
+    invalidateUserStatsCaches(me);
+    const requesterId = (data as { requester_id?: string } | null)?.requester_id;
+    if (requesterId) invalidateUserStatsCaches(String(requesterId));
+    invalidateCache("tontines");
+  } catch { /* best-effort */ }
   return data;
 }
 

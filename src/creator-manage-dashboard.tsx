@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   Building2,
@@ -27,6 +27,7 @@ import { useAuth } from "@/src/auth-context";
 import { Button, Card, EmptyState } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { CommunityModulesSheet } from "@/src/community-modules-sheet";
+import { useLiveDashboardSync } from "@/src/hooks/use-live-dashboard";
 
 type Owned = {
   tontines: any[];
@@ -74,8 +75,8 @@ export function CreatorManageDashboard({ embed = false }: { embed?: boolean }) {
   const [modulesGroup, setModulesGroup] = useState<{ id: string; name: string } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts?: { quiet?: boolean }) => {
+    if (!opts?.quiet) setLoading(true);
     try {
       const [o, assocJr, tontineJr] = await Promise.all([
         api.get<Owned>("/creator/owned"),
@@ -95,12 +96,15 @@ export function CreatorManageDashboard({ embed = false }: { embed?: boolean }) {
     } catch (e: any) {
       setOwned({ tontines: [], associations: [], cooperatives: [], funds: [] });
       setJoinReqs([]);
-      Alert.alert("Erreur", e?.detail ?? "Impossible de charger le tableau de gestion.");
+      if (!opts?.quiet) {
+        Alert.alert("Erreur", e?.detail ?? "Impossible de charger le tableau de gestion.");
+      }
     }
     setLoading(false);
   }, [isPlatformAdmin]);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  const quietReload = useCallback(() => load({ quiet: true }), [load]);
+  useLiveDashboardSync(user?.id, { mode: "manager", reload: quietReload });
 
   const totalOwned =
     (owned?.tontines.length ?? 0) +

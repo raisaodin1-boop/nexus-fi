@@ -1,7 +1,7 @@
 // Manager dashboard component — used inside (tabs)/index.tsx when role is tontine_manager.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -10,7 +10,6 @@ import {
 } from "lucide-react-native";
 
 import { api, formatXAF } from "@/src/api";
-import { supabase } from "@/src/supabase";
 import { EMPTY_MANAGER_OVERVIEW, MANAGER_PRO_MONTHLY_XAF } from "@/src/db/extras";
 import { openPaymentScreen } from "@/src/payment-nav";
 import { DegradedDataBanner } from "@/src/degraded-banner";
@@ -19,6 +18,7 @@ import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { LineChart } from "@/src/charts";
 import { useAuth } from "@/src/auth-context";
 import { Tooltip } from "@/src/tooltip";
+import { useLiveDashboardSync } from "@/src/hooks/use-live-dashboard";
 
 interface Overview {
   groups: { tontines: number; associations: number; cooperatives: number; funds: number };
@@ -65,21 +65,7 @@ export function ManagerDashboard() {
 
   const retry = () => { setLoading(true); load(); };
 
-  useFocusEffect(useCallback(() => {
-    setLoading(true);
-    load();
-  }, [load]));
-
-  useEffect(() => {
-    const userId = user?.id;
-    if (!userId) return;
-    const ch = supabase
-      .channel(`rt-dashboard-manager-${userId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "tontine_contributions" }, () => { load(); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "tontine_members" }, () => { load(); })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [load, user?.id]);
+  useLiveDashboardSync(user?.id, { mode: "manager", reload: load });
 
   if (loading) {
     return (

@@ -1,7 +1,7 @@
 // Super Admin home — Investor-Ready Control Center.
 import { useCallback, useState } from "react";
 import { Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -17,6 +17,8 @@ import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 import { LineChart } from "@/src/charts";
 import { AdminPromotionRequestsPanel, type PromotionRequestRow } from "@/src/admin-promotion-requests";
 import { useToast } from "@/src/toast";
+import { useAuth } from "@/src/auth-context";
+import { useLiveDashboardSync } from "@/src/hooks/use-live-dashboard";
 
 interface Series { days: number; series: { date: string; value: number }[] }
 
@@ -99,6 +101,7 @@ function SectionHeader({ children, accent }: { children: string; accent?: string
 
 export function AdminDashboard() {
   const router = useRouter();
+  const { user } = useAuth();
   const { show } = useToast();
   const [analytics, setAnalytics] = useState<Analytics>(DEFAULT_ANALYTICS);
   const [savings, setSavings] = useState<Series | null>(null);
@@ -179,10 +182,7 @@ export function AdminDashboard() {
 
   const retry = () => { setLoading(true); load(); };
 
-  useFocusEffect(useCallback(() => {
-    setLoading(true);
-    load();
-  }, [load]));
+  useLiveDashboardSync(user?.id, { mode: "admin", reload: load });
 
   if (loading) {
     return (
