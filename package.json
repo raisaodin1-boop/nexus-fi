@@ -24,8 +24,7 @@
     "store:polish-screenshots": "node scripts/polish-play-screenshots.mjs",
     "build:android:preview": "eas build -p android --profile preview",
     "build:android:production": "eas build -p android --profile production",
-    "submit:android": "eas submit -p android --profile production",
-    "store:polish-screenshots": "node scripts/polish-play-screenshots.mjs"
+    "submit:android": "eas submit -p android --profile production"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",

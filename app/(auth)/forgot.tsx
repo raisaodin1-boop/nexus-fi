@@ -34,7 +34,7 @@ export default function ForgotScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <LinearGradient colors={[Colors.primary, Colors.gradMid, Colors.secondary]} style={styles.header}>
-        <HodixLogo size={48} />
+        <HodixLogo size={72} variant="mark" />
         <Text style={styles.title}>Mot de passe oublié</Text>
         <Text style={styles.subtitle}>Entrez votre email pour recevoir un lien de réinitialisation</Text>
       </LinearGradient>

@@ -27,6 +27,7 @@ import {
   CommunityAvatars,
 } from "@/src/welcome-visuals";
 import { CAROUSEL_SLIDES, LANDING_I18N, WELCOME_I18N } from "@/src/welcome-content";
+import { HodixLogo } from "@/src/logo";
 import { AuctionHighlight, SecurityFeesSection } from "@/src/landing-visuals";
 import { APP_MAX_WIDTH } from "@/src/hooks/use-responsive";
 import {
@@ -190,8 +191,7 @@ export default function LandingScreen() {
           {/* ── Nav ───────────────────────────────────────────── */}
           <View style={ss.nav}>
             <View style={ss.navBrand}>
-              <Text style={ss.logo}>HODIX</Text>
-              <View style={ss.navDot} />
+              <HodixLogo size={40} variant="mark" />
             </View>
             <View style={ss.navActions}>
               <TouchableOpacity onPress={() => router.push("/login")}>

@@ -24,6 +24,7 @@ import Svg, { Circle, Defs, G, Path, Polygon, Rect } from "react-native-svg";
 import { CAROUSEL_SLIDES, UNITY_SLIDE, WELCOME_I18N } from "@/src/welcome-content";
 import { PremiumVisualStack, CommunityAvatars, TRUST_BLOCK_COPY } from "@/src/welcome-visuals";
 import { useFirstLaunch } from "@/src/use-first-launch";
+import { HodixLogo } from "@/src/logo";
 
 const { width: W, height: H } = Dimensions.get("window");
 
@@ -294,33 +295,6 @@ function AnimatedBackground({
   );
 }
 
-// ── Hodix Logo mark ──────────────────────────────────────────────────────────
-
-function HodixMark({ size = 56, color = "#C9A227" }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 56 56">
-      {/* Outer hexagon ring — pan-African motif */}
-      <Polygon
-        points="28,2 52,14 52,42 28,54 4,42 4,14"
-        fill="none"
-        stroke={color}
-        strokeWidth="2.5"
-        opacity={0.9}
-      />
-      {/* Inner diamond */}
-      <Polygon
-        points="28,10 44,28 28,46 12,28"
-        fill={color}
-        opacity={0.15}
-      />
-      {/* H letterform */}
-      <Rect x="17" y="18" width="4" height="20" fill={color} rx={2} />
-      <Rect x="35" y="18" width="4" height="20" fill={color} rx={2} />
-      <Rect x="17" y="26" width="22" height="4" fill={color} rx={2} />
-    </Svg>
-  );
-}
-
 // ── Carousel slide content ───────────────────────────────────────────────────
 
 function SlideContent({
@@ -562,7 +536,7 @@ export default function WelcomeScreen() {
           <View style={styles.topSection}>
             <Animated.View style={[styles.logoWrap, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}>
               <View style={styles.logoGlow} />
-              <HodixMark size={44} color="#C9A227" />
+              <HodixLogo size={72} variant="mark" />
             </Animated.View>
 
             <Animated.View style={{ opacity: titleOpacity, transform: [{ translateY: titleSlide }] }}>

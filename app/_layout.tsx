@@ -33,6 +33,7 @@ import { attachPushNotificationListeners, requestPushPermissionAndRegister, sync
 import { runDueAutoSavings } from "@/src/db/auto-savings";
 import { FloatingBackButton } from "@/src/screen-back";
 import { WebShellChrome } from "@/src/web-shell";
+import { HodixBootAnimation, HodixLogo } from "@/src/logo";
 
 if (Platform.OS !== "web") {
   SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -145,7 +146,7 @@ function BiometricGate({ children }: { children: React.ReactNode }) {
   if (!locked) return <>{children}</>;
   return (
     <View style={gateStyles.container}>
-      <Text style={gateStyles.emoji}>🔒</Text>
+      <HodixLogo size={88} variant="lockup" tone="dark" />
       <Text style={gateStyles.title}>Hodix est verrouillé</Text>
       <Text style={gateStyles.sub}>Authentifiez-vous pour accéder à votre compte.</Text>
       <TouchableOpacity style={gateStyles.btn} onPress={tryUnlock}>
@@ -156,28 +157,30 @@ function BiometricGate({ children }: { children: React.ReactNode }) {
 }
 
 const gateStyles = StyleSheet.create({
-  container: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: Colors.brandNavy, padding: 32 },
-  emoji: { fontSize: 48, marginBottom: 16 },
-  title: { color: "#FFFFFF", fontSize: 22, fontWeight: "700", marginBottom: 8 },
+  container: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#000000", padding: 32, gap: 12 },
+  title: { color: "#FFFFFF", fontSize: 22, fontWeight: "700", marginTop: 8, marginBottom: 8 },
   sub: { color: "#9CA3AF", fontSize: 15, textAlign: "center", marginBottom: 28 },
-  btn: { backgroundColor: Colors.primary, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 14 },
-  btnText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
+  btn: { backgroundColor: "#D4AF37", paddingHorizontal: 32, paddingVertical: 14, borderRadius: 14 },
+  btnText: { color: "#000000", fontSize: 16, fontWeight: "800" },
 });
 
 function RootLayoutInner() {
   const { width } = useWindowDimensions();
   const [loaded, error] = useIconFonts();
+  const [bootDone, setBootDone] = useState(false);
   useDeviceFingerprint();
   const showWebPhoneFrame = shouldShowWebPhoneFrame(width);
+  const fontsReady = loaded || !!error;
+  const finishBoot = useRef(() => setBootDone(true)).current;
 
   useEffect(() => {
-    if (Platform.OS !== "web" && (loaded || error)) {
+    if (Platform.OS !== "web" && fontsReady) {
       SplashScreen.hideAsync().catch(() => {});
     }
-  }, [loaded, error]);
+  }, [fontsReady]);
 
-  // On web, always render — no splash screen blocking
-  if (Platform.OS !== "web" && !loaded && !error) return null;
+  // On native, keep system splash until fonts ready
+  if (Platform.OS !== "web" && !fontsReady) return null;
 
   const stack = (
     <BiometricGate>
@@ -186,7 +189,7 @@ function RootLayoutInner() {
       <DeepLinkHandler />
       <PushSetup />
       <FirstLaunchGuard />
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
       <OfflineBanner />
       <WebShellChrome />
       <FloatingBackButton />
@@ -194,18 +197,31 @@ function RootLayoutInner() {
     </BiometricGate>
   );
 
-  if (Platform.OS === "web") {
-    if (showWebPhoneFrame) {
-      return (
+  const framed =
+    Platform.OS === "web" ? (
+      showWebPhoneFrame ? (
         <View style={webFrameStyles.root}>
           <View style={webFrameStyles.frame}>{stack}</View>
         </View>
-      );
-    }
-    return <View style={webFullStyles.root}>{stack}</View>;
-  }
+      ) : (
+        <View style={webFullStyles.root}>{stack}</View>
+      )
+    ) : (
+      stack
+    );
 
-  return stack;
+  return (
+    <View style={{ flex: 1 }}>
+      {framed}
+      {!bootDone ? (
+        <HodixBootAnimation
+          visible
+          minDurationMs={2600}
+          onFinished={finishBoot}
+        />
+      ) : null}
+    </View>
+  );
 }
 
 const webFrameStyles = StyleSheet.create({

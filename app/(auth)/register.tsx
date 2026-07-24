@@ -368,7 +368,7 @@ export default function RegisterScreen() {
           </TouchableOpacity>
 
           <View style={{ alignItems: "center", marginTop: 8, marginBottom: 24 }}>
-            <HodixLogo size={44} />
+            <HodixLogo size={120} variant="lockup" tone="light" />
             <Text style={styles.title}>Créer mon compte Hodix</Text>
             <Text style={styles.subtitle}>Démarrez votre identité financière en 30 secondes.</Text>
           </View>

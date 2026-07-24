@@ -81,8 +81,8 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <LinearGradient colors={[Colors.primary, Colors.gradMid, Colors.secondary]} style={styles.header}>
-        <HodixLogo size={56} />
-        <Text style={styles.title}>Bon retour 👋</Text>
+        <HodixLogo size={64} variant="mark" />
+        <Text style={styles.title}>Bon retour</Text>
         <Text style={styles.subtitle}>Connectez-vous à votre espace HODIX</Text>
       </LinearGradient>
 
