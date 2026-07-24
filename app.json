@@ -8,10 +8,18 @@
     "icon": "./assets/images/icon.png",
     "scheme": "hodix",
     "userInterfaceStyle": "light",
+    "primaryColor": "#0F2847",
+    "description": "Épargne communautaire africaine : tontines, wallet Mobile Money, trust score et paiements sécurisés.",
+    "privacy": "https://www.hodix.app/privacy",
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#0F2847"
+    },
+    "androidStatusBar": {
+      "barStyle": "light-content",
+      "backgroundColor": "#0F2847",
+      "translucent": false
     },
     "ios": {
       "supportsTablet": false,
@@ -32,15 +40,25 @@
       },
       "package": "app.hodix.mobile",
       "versionCode": 1,
+      "playStoreUrl": "https://play.google.com/store/apps/details?id=app.hodix.mobile",
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
         "POST_NOTIFICATIONS"
+      ],
+      "blockedPermissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.READ_CONTACTS",
+        "android.permission.WRITE_CONTACTS"
       ],
       "intentFilters": [
         {
@@ -91,8 +109,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "HODIX a besoin d'accéder à vos photos pour le KYC.",
-          "cameraPermission": "HODIX a besoin d'accéder à votre caméra pour le selfie KYC."
+          "photosPermission": "HODIX a besoin d'accéder à vos photos pour téléverser vos documents KYC et justificatifs."
         }
       ],
       [
@@ -107,13 +124,14 @@
         "expo-build-properties",
         {
           "android": {
-            "compileSdkVersion": 34,
-            "targetSdkVersion": 34,
-            "buildToolsVersion": "34.0.0",
-            "minSdkVersion": 23,
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0",
+            "minSdkVersion": 24,
             "buildArchs": ["armeabi-v7a", "arm64-v8a"],
             "enableProguardInReleaseBuilds": true,
-            "enableShrinkResourcesInReleaseBuilds": true
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "usesCleartextTraffic": false
           },
           "ios": {
             "deploymentTarget": "13.4"
@@ -130,7 +148,12 @@
       },
       "router": {
         "origin": false
-      }
+      },
+      "privacyPolicyUrl": "https://www.hodix.app/privacy",
+      "termsUrl": "https://www.hodix.app/cgu",
+      "supportEmail": "support@hodix.app",
+      "dpoEmail": "privacy@hodix.app",
+      "accountDeletionUrl": "https://www.hodix.app/data-rights"
     }
   }
 }

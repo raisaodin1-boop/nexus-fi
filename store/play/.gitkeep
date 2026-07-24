@@ -1,0 +1,3 @@
+# Play Store assets (do not delete)
+# Generate: npm run store:play-assets
+# Replace phone-*.png with real device screenshots before production listing.

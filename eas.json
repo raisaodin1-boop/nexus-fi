@@ -41,6 +41,7 @@
     },
     "production": {
       "node": "20.18.0",
+      "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://lrbhojxlofweotajnrhh.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxyYmhvanhsb2Z3ZW90YWpucmhoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3ODgzOTAsImV4cCI6MjA5NjM2NDM5MH0.b0ftbbS23W7_d0mdM5WYECvCQXzAazGdhZtbMGld7gA"
@@ -51,6 +52,12 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft",
+        "changesNotSentForReview": false
+      }
+    }
   }
 }

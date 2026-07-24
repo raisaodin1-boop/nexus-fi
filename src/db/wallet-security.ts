@@ -1,5 +1,6 @@
 import { getSupabase } from "@/src/supabase";
 import { emitFraudAlert } from "@/src/fraud-alerts";
+import { shouldBlockOnFraudUnavailable } from "@/src/fraud-fail-closed";
 import { uid } from "./helpers";
 
 const LIMITS = {
@@ -186,8 +187,7 @@ export async function preTransactionCheck(amountXaf: number, recipientPhone?: st
       },
     });
     if (fraudErr) {
-      // Fail-closed for large outbound amounts when anti-fraude is unavailable
-      if (amountXaf >= 100_000) {
+      if (shouldBlockOnFraudUnavailable(amountXaf)) {
         return {
           allowed: false,
           reason: "Contrôle anti-fraude indisponible — réessayez dans quelques minutes.",
@@ -217,7 +217,7 @@ export async function preTransactionCheck(amountXaf: number, recipientPhone?: st
       };
     }
   } catch {
-    if (amountXaf >= 100_000) {
+    if (shouldBlockOnFraudUnavailable(amountXaf)) {
       return {
         allowed: false,
         reason: "Contrôle anti-fraude indisponible — réessayez dans quelques minutes.",

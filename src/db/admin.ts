@@ -1,6 +1,7 @@
 import { getSupabase } from "@/src/supabase";
 import { notifyUser } from "./notifications";
 import { uid, cached, throwSb, invalidateCache, requireAdmin } from "./helpers";
+import { buildTrustScoreAnalytics } from "@/src/admin-trust-analytics";
 
 const PENDING_KYC = ["pending", "pending_review"] as const;
 const KYC_BUCKET = "kyc-documents";
@@ -58,7 +59,7 @@ export async function getAdminAnalytics() {
       try { return await fn(); } catch { return fallback; }
     };
     const [users, allTontines, assocCount, coopCount, savingsData, contribData, kycData, fundsData, paymentsData] = await Promise.all([
-      safe(() => getSupabase().from("profiles").select("id, created_at, role").then(r => r.data ?? []), []),
+      safe(() => getSupabase().from("profiles").select("id, created_at, role, trust_score").then(r => r.data ?? []), []),
       safe(() => getSupabase().from("tontines").select("id").then(r => r.data ?? []), []),
       safe(() => getSupabase().from("associations").select("id", { count: "exact", head: true }).then(r => r.count ?? 0), 0),
       safe(() => getSupabase().from("cooperatives").select("id", { count: "exact", head: true }).then(r => r.count ?? 0), 0),
@@ -84,6 +85,7 @@ export async function getAdminAnalytics() {
     const fundsCollected = fundsArr.reduce((s, f) => s + Number(f.current_balance ?? 0), 0);
     const payArr = paymentsData as any[];
     const payAmount = payArr.reduce((s, p) => s + Number(p.amount ?? 0), 0);
+    const trust = buildTrustScoreAnalytics((users as any[]).map((u) => u.trust_score));
     const userSeries: { date: string; value: number }[] = [];
     for (let i = 29; i >= 0; i--) {
       const d = new Date(now - i * 86400000).toISOString().slice(0, 10);
@@ -97,9 +99,10 @@ export async function getAdminAnalytics() {
       kyc: { pending: kycPending, approved: kycApproved, level1: (users as any[]).length, level2_approved: kycApproved, pending_review: kycPending },
       user_series: userSeries,
       active_groups: { tontines: (allTontines as any[]).length, tontines_active: (allTontines as any[]).length, associations: assocCount as number, cooperatives: coopCount as number },
-      score_distribution: { excellent: 0, very_good: 0, good: 0, emerging: 0, new: (users as any[]).length },
-      tier_distribution: { bronze: (users as any[]).length, silver: 0, gold: 0, platinum: 0 },
-      avg_trust_score: 0, savings_count: (savingsData as any[]).length, tontine_contributions_volume: contribVol, tontine_contributions_count: (contribData as any[]).length,
+      score_distribution: trust.score_distribution,
+      tier_distribution: trust.tier_distribution,
+      avg_trust_score: trust.avg_trust_score,
+      savings_count: (savingsData as any[]).length, tontine_contributions_volume: contribVol, tontine_contributions_count: (contribData as any[]).length,
       funds: { count: fundsArr.length, balance: fundsBalance, collected: fundsCollected },
       payments: { count: payArr.length, amount_minor: payAmount, commission_minor: 0, currency: "XAF" },
     };

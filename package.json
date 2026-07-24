@@ -16,7 +16,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:smoke": "vitest run tests/smoke",
-    "test:e2e": "vitest run tests/e2e"
+    "test:e2e": "vitest run tests/e2e",
+    "db:apply": "node scripts/db-apply.mjs",
+    "db:sync-history": "node scripts/sync-migration-history.mjs",
+    "db:realign-versions": "node scripts/realign-local-migration-versions.mjs",
+    "store:play-assets": "node scripts/generate-play-store-assets.mjs",
+    "build:android:preview": "eas build -p android --profile preview",
+    "build:android:production": "eas build -p android --profile production",
+    "submit:android": "eas submit -p android --profile production"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",

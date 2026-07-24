@@ -1,0 +1,16 @@
+HODIX — Tontines digitales & épargne communautaire africaine.
+
+Créez ou rejoignez une tontine, cotisez en Mobile Money, suivez vos cycles et construisez votre Trust Score — une identité financière portable conçue pour la CEMAC et la diaspora.
+
+Fonctionnalités :
+• Tontines et associations avec cotisations suivies
+• Wallet sécurisé (transferts, retraits MoMo, contrôles anti-fraude)
+• KYC et documents pour la conformité
+• Trust Score /1000 et parcours d’identité financière
+• Notifications de cotisation et alertes sécurité
+• Espace diaspora et contributions transnationales
+
+Sécurité :
+PIN wallet, biométrie, gel automatique en cas d’activité suspecte, politique de confidentialité et droits RGPD/CEMAC accessibles dans l’app.
+
+Réservé aux majeurs (18+). Conditions : https://www.hodix.app/cgu — Confidentialité : https://www.hodix.app/privacy — Support : support@hodix.app
