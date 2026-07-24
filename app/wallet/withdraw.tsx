@@ -9,7 +9,7 @@ import { api } from "@/src/api";
 import { useDisplayCurrency } from "@/src/hooks/use-display-currency";
 import { Button, Field } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
-import { formatAmount, type Currency } from "@/src/exchange-rates";
+import { getRates, convert, formatAmount, type Currency, type Rates } from "@/src/exchange-rates";
 import type { WalletBalance, MobileMoneyProvider, WalletTx } from "@/src/wallet-db";
 import { txStatusLabel } from "@/src/wallet-tx-meta";
 import { PinConfirmModal } from "@/src/pin-modal";
@@ -36,8 +36,10 @@ export default function WithdrawScreen() {
   const [amountXaf, setAmountXaf] = useState(0);
   const [userId, setUserId]       = useState("");
   const [kycStatus, setKycStatus] = useState<string>("not_submitted");
+  const [rates, setRates]         = useState<Rates | null>(null);
 
   useEffect(() => {
+    getRates().then(setRates).catch(() => {});
     api.get<WalletBalance>("/wallet").then(setWallet).catch(() => {});
     Promise.all([
       api.get<{ id: string; kyc_status?: string }>("/users/me"),
@@ -72,6 +74,11 @@ export default function WithdrawScreen() {
     } finally { setLoading(false); }
   };
 
+  const toXaf = (amt: number) => {
+    if (currency === "XAF" || !rates) return Math.round(amt);
+    return Math.round(convert(amt, currency, "XAF", rates));
+  };
+
   const submit = async () => {
     setError(null);
     if (!kycApproved) {
@@ -82,17 +89,19 @@ export default function WithdrawScreen() {
     if (!amt || amt <= 0) { setError("Entrez un montant valide."); return; }
     if (amt > maxBal) { setError(`Solde insuffisant (max ${formatAmount(maxBal, currency)}).`); return; }
     if (!phone.trim()) { setError("Entrez votre numéro Mobile Money."); return; }
+    if (currency !== "XAF" && !rates) { setError("Taux de change indisponible. Réessayez."); return; }
+    const amtXaf = toXaf(amt);
     setLoading(true);
     try {
       const check = await api.post<{ allowed: boolean; reason?: string; requires_pin: boolean; requires_otp: boolean; risk: string }>(
         "/wallet/check-tx",
-        { amount_xaf: amt }
+        { amount_xaf: amtXaf }
       );
       if (!check.allowed) {
         setError(check.reason ?? "Transaction non autorisée.");
         return;
       }
-      setAmountXaf(amt);
+      setAmountXaf(amtXaf);
       if (check.requires_pin) {
         setPendingOtp(check.requires_otp);
         setShowPin(true);

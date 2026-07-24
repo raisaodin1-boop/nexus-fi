@@ -40,7 +40,12 @@ function parseHodixScheme(url: string): string | null {
 
   if (host === "join") {
     const code = u.searchParams.get("code");
-    const type = u.searchParams.get("type") ?? "tontines";
+    const typeRaw = (u.searchParams.get("type") ?? "tontines").toLowerCase();
+    const type =
+      typeRaw === "association" || typeRaw === "associations" ? "associations"
+      : typeRaw === "cooperative" || typeRaw === "cooperatives" ? "cooperatives"
+      : typeRaw === "tontine" || typeRaw === "tontines" ? "tontines"
+      : "tontines";
     const base =
       type === "associations" ? "/associations/join"
       : type === "cooperatives" ? "/cooperatives/join"

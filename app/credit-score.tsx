@@ -201,6 +201,7 @@ export default function CreditScoreScreen() {
   const [data, setData] = useState<(CreditScoreResult & { tips: string[] }) | null>(null);
   const [history, setHistory] = useState<MonthlySnapshot[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [instantElig, setInstantElig] = useState<InstantEligibility | null>(null);
   const [activeLoan, setActiveLoan] = useState<InstantLoanRow | null>(null);
@@ -221,16 +222,23 @@ export default function CreditScoreScreen() {
     }
   }, []);
 
-  useEffect(() => {
+  const loadScore = useCallback(() => {
+    setLoading(true);
+    setLoadError(null);
     Promise.all([
       api.get<any>("/credit-score"),
       api.get<MonthlySnapshot[]>("/credit-score/history").catch(() => []),
     ]).then(([score, hist]) => {
       setData(score);
       setHistory(Array.isArray(hist) ? hist : []);
+    }).catch((e: any) => {
+      setData(null);
+      setLoadError(e?.detail ?? e?.message ?? "Impossible de charger le score de crédit.");
     }).finally(() => setLoading(false));
     loadInstantCredit();
   }, [loadInstantCredit]);
+
+  useEffect(() => { loadScore(); }, [loadScore]);
 
   const handleExportPdf = useCallback(async () => {
     if (!data) return;
@@ -280,7 +288,23 @@ export default function CreditScoreScreen() {
     );
   }
 
-  if (!data) return null;
+  if (!data) {
+    return (
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <View style={{ padding: Spacing.xl, alignItems: "center", gap: 12 }}>
+          <Text style={{ color: Colors.textMuted, textAlign: "center", fontWeight: "600" }}>
+            {loadError ?? "Score indisponible pour le moment."}
+          </Text>
+          <TouchableOpacity onPress={loadScore}>
+            <Text style={{ color: Colors.secondary, fontWeight: "700" }}>Réessayer</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Text style={{ color: Colors.textMuted, fontWeight: "600" }}>← Retour</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const tier = getTier(data.score);
   const { breakdown } = data;

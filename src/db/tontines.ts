@@ -308,7 +308,6 @@ export async function listTontineJoinRequests(tontineId?: string) {
 
   const rows = (data ?? []).filter((r: any) => {
     if (r.requester_id === me) return false; // never show own requests in manage inbox
-    if (tontineId) return true;
     if (isPlatformAdmin) return true;
     if (r.tontines?.owner_id === me) return true;
     return adminOfSet.has(r.tontine_id);

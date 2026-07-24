@@ -9,7 +9,7 @@ import { api, formatXAF } from "@/src/api";
 import { useDisplayCurrency } from "@/src/hooks/use-display-currency";
 import { Button, Field } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
-import { formatAmount, type Currency } from "@/src/exchange-rates";
+import { getRates, convert, formatAmount, type Currency, type Rates } from "@/src/exchange-rates";
 import { PinConfirmModal } from "@/src/pin-modal";
 import { OtpModal } from "@/src/otp-modal";
 
@@ -31,9 +31,11 @@ export default function TransferScreen() {
   const [amountXaf, setAmountXaf] = useState(0);
   const [userId, setUserId]       = useState("");
   const [recipientUserId, setRecipientUserId] = useState<string | undefined>();
+  const [rates, setRates]         = useState<Rates | null>(null);
 
   useEffect(() => {
     api.get<{ id: string }>("/users/me").then(me => setUserId(me.id)).catch(() => {});
+    getRates().then(setRates).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -62,22 +64,29 @@ export default function TransferScreen() {
     } finally { setLoading(false); }
   };
 
+  const toXaf = (amt: number) => {
+    if (currency === "XAF" || !rates) return Math.round(amt);
+    return Math.round(convert(amt, currency, "XAF", rates));
+  };
+
   const submit = async () => {
     setError(null);
     const amt = parseFloat(amount.replace(/\s/g, "").replace(",", "."));
     if (!recipientUserId && !recipient.trim()) { setError("Entrez l'email ou le téléphone du destinataire."); return; }
     if (!amt || amt <= 0) { setError("Entrez un montant valide."); return; }
+    if (currency !== "XAF" && !rates) { setError("Taux de change indisponible. Réessayez."); return; }
+    const amtXaf = toXaf(amt);
     setLoading(true);
     try {
       const check = await api.post<{ allowed: boolean; reason?: string; requires_pin: boolean; requires_otp: boolean; risk: string }>(
         "/wallet/check-tx",
-        { amount_xaf: amt, recipient_phone: recipientPhone }
+        { amount_xaf: amtXaf, recipient_phone: recipientPhone }
       );
       if (!check.allowed) {
         setError(check.reason ?? "Transaction non autorisée.");
         return;
       }
-      setAmountXaf(amt);
+      setAmountXaf(amtXaf);
       if (check.requires_pin) {
         setPendingOtp(check.requires_otp);
         setShowPin(true);

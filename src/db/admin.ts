@@ -57,7 +57,7 @@ export async function getAdminAnalytics() {
     const safe = async <T>(fn: () => PromiseLike<T>, fallback: T): Promise<T> => {
       try { return await fn(); } catch { return fallback; }
     };
-    const [users, allTontines, assocCount, coopCount, savingsData, contribData, kycData] = await Promise.all([
+    const [users, allTontines, assocCount, coopCount, savingsData, contribData, kycData, fundsData, paymentsData] = await Promise.all([
       safe(() => getSupabase().from("profiles").select("id, created_at, role").then(r => r.data ?? []), []),
       safe(() => getSupabase().from("tontines").select("id").then(r => r.data ?? []), []),
       safe(() => getSupabase().from("associations").select("id", { count: "exact", head: true }).then(r => r.count ?? 0), 0),
@@ -65,6 +65,8 @@ export async function getAdminAnalytics() {
       safe(() => getSupabase().from("savings_goals").select("current_amount").then(r => r.data ?? []), []),
       safe(() => getSupabase().from("tontine_contributions").select("amount").then(r => r.data ?? []), []),
       safe(() => getSupabase().from("kyc_submissions").select("status").then(r => r.data ?? []), []),
+      safe(() => getSupabase().from("community_funds").select("id, current_balance, target_amount").then(r => r.data ?? []), []),
+      safe(() => getSupabase().from("payments").select("amount, status").eq("status", "succeeded").then(r => r.data ?? []), []),
     ]);
 
     const now = Date.now();
@@ -77,6 +79,11 @@ export async function getAdminAnalytics() {
     const kycArr = kycData as any[];
     const kycPending = kycArr.filter(k => k.status === "pending").length;
     const kycApproved = kycArr.filter(k => k.status === "approved").length;
+    const fundsArr = fundsData as any[];
+    const fundsBalance = fundsArr.reduce((s, f) => s + Number(f.current_balance ?? 0), 0);
+    const fundsCollected = fundsArr.reduce((s, f) => s + Number(f.current_balance ?? 0), 0);
+    const payArr = paymentsData as any[];
+    const payAmount = payArr.reduce((s, p) => s + Number(p.amount ?? 0), 0);
     const userSeries: { date: string; value: number }[] = [];
     for (let i = 29; i >= 0; i--) {
       const d = new Date(now - i * 86400000).toISOString().slice(0, 10);
@@ -93,7 +100,8 @@ export async function getAdminAnalytics() {
       score_distribution: { excellent: 0, very_good: 0, good: 0, emerging: 0, new: (users as any[]).length },
       tier_distribution: { bronze: (users as any[]).length, silver: 0, gold: 0, platinum: 0 },
       avg_trust_score: 0, savings_count: (savingsData as any[]).length, tontine_contributions_volume: contribVol, tontine_contributions_count: (contribData as any[]).length,
-      funds: { count: 0, balance: 0, collected: 0 }, payments: { count: 0, amount_minor: 0, commission_minor: 0, currency: "XAF" },
+      funds: { count: fundsArr.length, balance: fundsBalance, collected: fundsCollected },
+      payments: { count: payArr.length, amount_minor: payAmount, commission_minor: 0, currency: "XAF" },
     };
     } catch {
       return { ...EMPTY_ADMIN_ANALYTICS };

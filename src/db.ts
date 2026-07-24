@@ -26,6 +26,13 @@ export * from "./db/momo-roundup";
 export * from "./db/instant-loan";
 export * from "./db/emoney-license";
 export * from "./db/verify";
+export * from "./db/platform-stats";
+export * from "./db/dashboard-story";
+export * from "./db/diaspora";
+export * from "./db/diaspora-enrollment";
+export * from "./db/auto-savings";
+export * from "./db/split-expense";
+export * from "./db/budget";
 export { invalidateCache, invalidateUserStatsCaches } from "./db/helpers";
 
 // Wallet operations (delegated to wallet-db.ts)

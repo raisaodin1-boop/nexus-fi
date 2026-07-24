@@ -14,21 +14,42 @@ export default function FundDetail() {
   const [loading, setLoading] = useState(true);
   const [amount, setAmount] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    setLoadError(null);
     try {
       const d = await api.get<any>(`/funds/${id}`);
       setData(d);
-    } catch {}
+    } catch (e: any) {
+      setData(null);
+      setLoadError(e?.detail ?? e?.message ?? "Impossible de charger ce fonds.");
+    }
     setLoading(false);
   }, [id]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  if (loading || !data) {
+  if (loading) {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.center}><ActivityIndicator color={Colors.secondary} /></View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!data) {
+    return (
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <View style={styles.center}>
+          <Text style={styles.loadError}>{loadError ?? "Fonds introuvable."}</Text>
+          <TouchableOpacity onPress={() => { setLoading(true); load(); }} style={{ marginTop: 16 }}>
+            <Text style={styles.back}>Réessayer</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 12 }}>
+            <Text style={styles.back}>← Retour</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
@@ -106,7 +127,8 @@ export default function FundDetail() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bg },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: Spacing.xl },
+  loadError: { fontSize: 15, color: Colors.textMuted, textAlign: "center", fontWeight: "600" },
   content: { padding: Spacing.xl, paddingBottom: 60 },
   back: { color: Colors.textMuted, fontWeight: "600", marginBottom: 12 },
   title: { fontSize: 24, fontWeight: "900", color: Colors.primary, letterSpacing: -0.5 },

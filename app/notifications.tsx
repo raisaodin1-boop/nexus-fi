@@ -64,8 +64,10 @@ export default function Notifications() {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [pushEnabled, setPushEnabled] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    setLoadError(null);
     try {
       const [d, me] = await Promise.all([
         api.get<{ items?: Notif[] } | Notif[]>("/notifications"),
@@ -74,8 +76,9 @@ export default function Notifications() {
       const list = Array.isArray(d) ? d : (d?.items ?? []);
       setItems(list);
       if (me) setPushEnabled(!!me.push_consent);
-    } catch {
+    } catch (e: any) {
       setItems([]);
+      setLoadError(e?.detail ?? e?.message ?? "Impossible de charger les notifications.");
     }
     setLoading(false);
   }, []);
@@ -196,9 +199,11 @@ export default function Notifications() {
           <View style={styles.emptyBell}>
             <Bell color={Colors.textSubtle} size={40} />
           </View>
-          <Text style={styles.emptyTitle}>Tout est calme par ici</Text>
+          <Text style={styles.emptyTitle}>{loadError ? "Chargement impossible" : "Tout est calme par ici"}</Text>
           <Text style={styles.emptyDesc}>
-            {filter === "unread"
+            {loadError
+              ? loadError
+              : filter === "unread"
               ? "Aucune notification non lue."
               : filter === "success"
               ? "Aucune notification de succès."
@@ -206,6 +211,11 @@ export default function Notifications() {
               ? "Aucune alerte pour le moment."
               : "Vous serez notifié pour vos contributions, objectifs et trust score."}
           </Text>
+          {loadError ? (
+            <TouchableOpacity onPress={() => { setLoading(true); load(); }} style={{ marginTop: 16 }}>
+              <Text style={{ color: Colors.secondary, fontWeight: "700" }}>Réessayer</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       ) : (
         <FlatList

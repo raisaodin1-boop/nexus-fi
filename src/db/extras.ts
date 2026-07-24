@@ -120,7 +120,9 @@ export async function getManagerOverview() {
       totalMembers += t.members_count;
       totalCollected += t.total_collected;
       if (t.amount_per_cycle > 0 && t.members_count > 0) {
-        complianceSum += Math.min(100, (t.total_collected / (t.amount_per_cycle * t.members_count)) * 100);
+        const cycles = Math.max(1, Number(t.current_cycle ?? 1));
+        const expected = t.amount_per_cycle * t.members_count * cycles;
+        complianceSum += Math.min(100, (t.total_collected / expected) * 100);
         complianceCount += 1;
       }
     }

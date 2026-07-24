@@ -132,7 +132,7 @@ export async function detectTransactionAnomalies(amountXaf: number, deviceFp?: s
   if (amountXaf >= 300_000) flags.push("large_amount");
   const shouldFreeze = flags.includes("high_frequency") || (flags.includes("new_device") && flags.includes("large_amount"));
   if (shouldFreeze) {
-    await sb.from("profiles").update({ wallet_frozen: true }).eq("id", me);
+    await getSupabase().rpc("set_wallet_frozen", { p_user_id: me, p_frozen: true, p_reason: "anomaly_detection" });
     await sb.from("notifications").insert({ user_id: me, title: "⚠️ Wallet temporairement gelé", body: "Activité inhabituelle détectée sur votre wallet.", type: "security_freeze" });
     await logSecurityEvent(me, "wallet_frozen", { flags, amount: amountXaf });
     await emitFraudAlert({
@@ -158,7 +158,7 @@ export async function getWalletFreezeStatus(): Promise<{ frozen: boolean; reason
 
 export async function unfreezeWallet(userId?: string) {
   const me = userId ?? await uid();
-  await getSupabase().from("profiles").update({ wallet_frozen: false }).eq("id", me);
+  await getSupabase().rpc("set_wallet_frozen", { p_user_id: me, p_frozen: false, p_reason: "admin_unfreeze" });
   await logSecurityEvent(me, "wallet_unfrozen", {});
   return { ok: true };
 }
@@ -185,7 +185,18 @@ export async function preTransactionCheck(amountXaf: number, recipientPhone?: st
         device_fingerprint: deviceFp ?? null,
       },
     });
-    if (!fraudErr && fraudResult?.should_block) {
+    if (fraudErr) {
+      // Fail-closed for large outbound amounts when anti-fraude is unavailable
+      if (amountXaf >= 100_000) {
+        return {
+          allowed: false,
+          reason: "Contrôle anti-fraude indisponible — réessayez dans quelques minutes.",
+          requires_pin: false,
+          requires_otp: false,
+          risk: "high",
+        };
+      }
+    } else if (fraudResult?.should_block) {
       if (fraudResult.should_freeze) {
         await emitFraudAlert({
           userId: (await uid()),
@@ -205,7 +216,17 @@ export async function preTransactionCheck(amountXaf: number, recipientPhone?: st
         fraud_score: fraudResult.score,
       };
     }
-  } catch { /* edge function optional in dev */ }
+  } catch {
+    if (amountXaf >= 100_000) {
+      return {
+        allowed: false,
+        reason: "Contrôle anti-fraude indisponible — réessayez dans quelques minutes.",
+        requires_pin: false,
+        requires_otp: false,
+        risk: "high",
+      };
+    }
+  }
 
   const limits = await checkTransactionLimits(amountXaf);
   if (!limits.allowed) return { allowed: false, reason: limits.reason, requires_pin: false, requires_otp: false, risk: "blocked" };

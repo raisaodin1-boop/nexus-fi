@@ -30,13 +30,15 @@ export async function getAuctionState(tontineId: string): Promise<AuctionState> 
 
   const { data: tontine, error: te } = await sb
     .from("tontines")
-    .select("current_cycle, contribution_amount, members_count, auction_ends_at, auction_closed")
+    .select("current_cycle, contribution_amount, amount_per_cycle, auction_ends_at, auction_closed, tontine_members(count)")
     .eq("id", tontineId)
     .maybeSingle();
   throwSb(te);
   if (!tontine) throw new Error("Tontine introuvable.");
 
-  const pot = (tontine.contribution_amount ?? 0) * (tontine.members_count ?? 1);
+  const membersCount = Number((tontine as any).tontine_members?.[0]?.count ?? 0);
+  const contrib = Number((tontine as any).contribution_amount ?? (tontine as any).amount_per_cycle ?? 0);
+  const pot = contrib * Math.max(membersCount, 1);
 
   const { data: bids } = await sb
     .from("tontine_auction_bids")
