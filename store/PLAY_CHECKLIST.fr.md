@@ -6,6 +6,7 @@ Package: `app.hodix.mobile` · Privacy: https://www.hodix.app/privacy · CGU: ht
 
 1. Compte Google Play Console (frais unique) + app créée avec package `app.hodix.mobile`
 2. Générer les visuels : `npm run store:play-assets` → dossier `store/play/`
+   - Ou polir vos captures réelles : déposer dans `store/play/raw/screenshots/` puis `npm run store:polish-screenshots`
 3. Build AAB production : `npx eas build -p android --profile production`
 4. Vérifier dans le build : **targetSdk 35**, pas de CAMERA / storage legacy
 5. Upload via `npx eas submit -p android --profile production` (piste **internal** + draft)

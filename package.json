@@ -21,9 +21,11 @@
     "db:sync-history": "node scripts/sync-migration-history.mjs",
     "db:realign-versions": "node scripts/realign-local-migration-versions.mjs",
     "store:play-assets": "node scripts/generate-play-store-assets.mjs",
+    "store:polish-screenshots": "node scripts/polish-play-screenshots.mjs",
     "build:android:preview": "eas build -p android --profile preview",
     "build:android:production": "eas build -p android --profile production",
-    "submit:android": "eas submit -p android --profile production"
+    "submit:android": "eas submit -p android --profile production",
+    "store:polish-screenshots": "node scripts/polish-play-screenshots.mjs"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",
