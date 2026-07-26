@@ -79,6 +79,145 @@ export function isPaynoteFailedStatus(body: Record<string, unknown>): boolean {
     || status === "REJECTED";
 }
 
+/**
+ * Exact reason text returned by MTN / Paynote (never invent it).
+ * Prefers Reason / ErrorMessage from status API or nested message JSON.
+ */
+export function extractPaynoteReason(body: Record<string, unknown>): string {
+  const nestedBits: string[] = [];
+  const nestedMsg = body?.message;
+  if (typeof nestedMsg === "string" && nestedMsg.trim()) {
+    const raw = nestedMsg.trim();
+    // Paynote often embeds a Python-ish dict with single quotes
+    try {
+      const normalized = raw
+        .replace(/'/g, '"')
+        .replace(/\bNone\b/g, "null")
+        .replace(/\bTrue\b/g, "true")
+        .replace(/\bFalse\b/g, "false");
+      const parsed = JSON.parse(normalized) as Record<string, unknown>;
+      for (const key of ["Reason", "reason", "ErrorMessage", "errorMessage", "body", "Body", "message"]) {
+        const v = String(parsed?.[key] ?? "").trim();
+        if (v && !/^pay request accepted$/i.test(v)) nestedBits.push(v);
+      }
+    } catch {
+      if (!/^pay request accepted$/i.test(raw) && raw.length < 400) nestedBits.push(raw);
+    }
+  }
+
+  const candidates = [
+    body?.reason,
+    body?.Reason,
+    body?.ErrorMessage,
+    body?.errorMessage,
+    body?.error_description,
+    body?.errorDescription,
+    body?.statusMessage,
+    body?.StatusMessage,
+    // Avoid treating initiate "Pay Request Accepted" as a failure reason
+    (typeof body?.body === "string" && !/^pay request accepted$/i.test(String(body.body))
+      ? body.body
+      : ""),
+    ...nestedBits,
+  ];
+  for (const c of candidates) {
+    const s = String(c ?? "").trim();
+    if (!s || s.length > 400) continue;
+    if (/^pay request accepted$/i.test(s)) continue;
+    return s;
+  }
+  return "";
+}
+
+export type PaynoteUserOutcome = {
+  kind: "paid" | "failed" | "pending";
+  operator_status: string;
+  /** Exact operator / Paynote reason string (may be empty while pending) */
+  reason: string;
+  /** End-user message — on failure ALWAYS includes exact operator reason when present */
+  user_message: string;
+  user_title: string;
+};
+
+function hintForFailure(operator_status: string, reason: string): string {
+  const blob = `${operator_status} ${reason}`.toLowerCase();
+  if (/insufficient|solde|balance|fond|not enough|manque|low balance|no money|funds|lowbalance/.test(blob)) {
+    return "Solde MTN MoMo insuffisant — rechargez puis réessayez.";
+  }
+  if (/timeout|expir|timed?\s*out/.test(blob) || operator_status === "EXPIRED" || operator_status === "TIMEOUT") {
+    return "Délai dépassé — PIN non validé à temps.";
+  }
+  if (/cancel|annul|abort/.test(blob) || operator_status === "CANCELLED" || operator_status === "CANCELED") {
+    return "Paiement annulé sur MTN.";
+  }
+  if (/reject|refus|denied|decline|pin/.test(blob) || operator_status === "REJECTED") {
+    return "Paiement refusé par MTN.";
+  }
+  if (/subscriber|msisdn|num[eé]ro|invalid/.test(blob)) {
+    return "Numéro MTN invalide ou non éligible MoMo.";
+  }
+  return "Le paiement MTN n’a pas abouti.";
+}
+
+/**
+ * HARD RULE:
+ * - paid   → only after operator status SUCCESSFUL (real debit)
+ * - failed → surface the EXACT reason sent by the operator/Paynote
+ * - pending → still waiting for PIN / operator (never treat as success)
+ */
+export function describePaynoteOutcome(body: Record<string, unknown>): PaynoteUserOutcome {
+  const operator_status = extractPaynoteStatus(body) || "UNKNOWN";
+  const reason = extractPaynoteReason(body);
+
+  // Positive ONLY after confirmed operator debit
+  if (isPaynotePaidStatus(body)) {
+    return {
+      kind: "paid",
+      operator_status,
+      reason: reason || "SUCCESSFUL",
+      user_title: "Paiement réussi",
+      user_message: "Débit MTN confirmé par l’opérateur. Votre crédit HODIX est enregistré.",
+    };
+  }
+
+  // Still waiting — initiate accept (SUCCESSFULL) is NOT a debit
+  if (
+    !isPaynoteFailedStatus(body)
+    && (
+      operator_status === "PENDING"
+      || operator_status === "INITIATED"
+      || operator_status === "SUCCESSFULL"
+      || !operator_status
+      || operator_status === "UNKNOWN"
+    )
+  ) {
+    return {
+      kind: "pending",
+      operator_status: operator_status || "PENDING",
+      reason,
+      user_title: "En attente de l’opérateur",
+      user_message:
+        "Paynote attend le débit MTN. Validez le PIN sur votre téléphone — HODIX ne crédite qu’après réponse positive de l’opérateur.",
+    };
+  }
+
+  // Negative — always expose exact operator reason
+  const hint = hintForFailure(operator_status, reason);
+  const exact = reason
+    ? `Raison opérateur : ${reason}`
+    : `Statut opérateur : ${operator_status}`;
+  const user_message =
+    `${hint} ${exact}. Aucun crédit n’a été enregistré sur HODIX.`;
+
+  return {
+    kind: "failed",
+    operator_status,
+    reason,
+    user_title: "Paiement échoué",
+    user_message,
+  };
+}
+
 export function extractMessageId(body: Record<string, unknown>): string {
   const nested = [
     body?.MessageId,

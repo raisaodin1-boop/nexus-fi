@@ -1,16 +1,19 @@
 /**
  * Webhook Paynote / Y-Note — MTN MoMo
  *
- * NEVER credit from webhook payload alone.
- * ErrorCode 200 / status SUCCESSFULL = request accepted, not paid.
- * Always re-query Paynote status API; credit only on SUCCESSFUL.
+ * Paynote posts here as soon as the operator finishes (success OR failure).
+ * We re-verify via status API, then immediately:
+ *  - SUCCESSFUL → credit HODIX + notify user
+ *  - FAILED/EXPIRED/… → mark failed + notify user with clear FR message
+ * Never credit from payload alone (SUCCESSFULL / ErrorCode 200 ≠ paid).
  */
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import {
   checkPaynotePaymentStatus,
+  describePaynoteOutcome,
   extractMessageId,
-  extractPaynoteStatus,
   getPaynoteAccessToken,
+  isPaynoteFailedStatus,
   isPaynotePaidStatus,
   paynoteConfigured,
 } from "../_shared/paynote.ts";
@@ -55,6 +58,68 @@ function isUuid(v: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
 }
 
+function parseMetaRaw(description: string | null): Record<string, unknown> {
+  if (!description) return {};
+  const raw = description.split(" · ref:")[0]?.trim() ?? description;
+  try {
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+async function notifyPayment(
+  sb: SupabaseClient,
+  userId: string,
+  title: string,
+  body: string,
+  type: string,
+  paymentId: string,
+) {
+  const { error } = await sb.from("notifications").insert({
+    user_id: userId,
+    title,
+    body,
+    type,
+    is_read: false,
+    metadata: { payment_id: paymentId, action_url: "/payments", source: "paynote_webhook" },
+  });
+  if (error) console.error("paynote-webhook notify failed", error.message);
+}
+
+async function markPaymentFailed(
+  sb: SupabaseClient,
+  payment: { id: string; user_id: string; description: string | null },
+  outcome: ReturnType<typeof describePaynoteOutcome>,
+) {
+  const meta = parseMetaRaw(payment.description);
+  meta.paynote_failure = {
+    operator_status: outcome.operator_status,
+    reason: outcome.reason,
+    operator_reason: outcome.reason,
+    user_message: outcome.user_message,
+    at: new Date().toISOString(),
+  };
+  const { error } = await sb
+    .from("payments")
+    .update({
+      status: "failed",
+      description: JSON.stringify(meta),
+    })
+    .eq("id", payment.id)
+    .eq("status", "pending_paynote");
+  if (error) {
+    console.error("paynote-webhook mark failed", payment.id, error.message);
+    return false;
+  }
+  // Prefer exact operator wording in the notification body
+  const notifyBody = outcome.reason
+    ? `${outcome.user_message}`
+    : outcome.user_message;
+  await notifyPayment(sb, payment.user_id, outcome.user_title, notifyBody, "alert", payment.id);
+  return true;
+}
+
 async function parseBody(req: Request): Promise<Record<string, unknown>> {
   const ct = req.headers.get("content-type") ?? "";
   const text = await req.text();
@@ -97,7 +162,6 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: "unauthorized" }, 401);
     }
   } else {
-    // Status re-verify below is the real gate; secret still recommended.
     console.error("CRITICAL: PAYNOTE_WEBHOOK_SECRET unset — set it and append ?secret=… to notifUrl");
   }
 
@@ -146,16 +210,27 @@ Deno.serve(async (req) => {
 
   if (!paymentId) {
     console.error("paynote-webhook: payment not found", orderId, messageId);
-    // Acknowledge receipt so Paynote does not hammer retries forever
     return json({ ok: true, ignored: true, reason: "payment_not_found", order_id: orderId, ref: messageId });
   }
 
-  // Persist MessageId for future polls (does NOT mean paid)
+  const { data: payment } = await sb
+    .from("payments")
+    .select("id, user_id, status, description, provider_ref, amount")
+    .eq("id", paymentId)
+    .maybeSingle();
+
+  if (!payment) {
+    return json({ ok: true, ignored: true, reason: "payment_not_found" });
+  }
+
+  if (payment.status === "succeeded") {
+    return json({ ok: true, already_fulfilled: true, payment_id: paymentId });
+  }
+
   if (messageId && messageId !== paymentId) {
     await sb.from("payments").update({ provider_ref: messageId }).eq("id", paymentId);
   }
 
-  // Mandatory re-verification — webhook payload alone is never enough
   let token: string;
   try {
     token = await getPaynoteAccessToken();
@@ -165,25 +240,43 @@ Deno.serve(async (req) => {
   }
 
   const { ok, body } = await checkPaynotePaymentStatus(token, messageId || paymentId);
-  const operatorStatus = extractPaynoteStatus(body);
-  const paid = ok && isPaynotePaidStatus(body);
+  const outcome = describePaynoteOutcome(body);
 
-  if (!paid) {
+  // Immediate failure path — notify user clearly (insufficient funds, etc.)
+  if (ok && isPaynoteFailedStatus(body)) {
+    if (payment.status === "pending_paynote") {
+      await markPaymentFailed(sb, payment, outcome);
+    }
+    return json({
+      ok: true,
+      fulfilled: false,
+      failed: true,
+      payment_id: paymentId,
+      operator_status: outcome.operator_status,
+      operator_reason: outcome.reason || null,
+      user_message: outcome.user_message,
+      notified: true,
+    });
+  }
+
+  if (!(ok && isPaynotePaidStatus(body))) {
     console.log(
-      "paynote-webhook: not paid yet — no credit",
+      "paynote-webhook: still pending",
       paymentId,
       "operator_status=",
-      operatorStatus || "none",
+      outcome.operator_status,
     );
     return json({
       ok: true,
       ignored: true,
       reason: "awaiting_operator_debit",
       payment_id: paymentId,
-      operator_status: operatorStatus || null,
+      operator_status: outcome.operator_status,
+      user_message: outcome.user_message,
     });
   }
 
+  // Immediate success — credit then notify so the app sees succeeded ASAP
   const paymentRef = String(
     body?.paymentRef ?? body?.PaymentRef ?? messageId ?? paymentId,
   );
@@ -198,11 +291,27 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: rpcErr.message }, 500);
   }
 
+  const amount = Number(payment.amount ?? 0);
+  const successBody = amount > 0
+    ? `${outcome.user_message} Montant : ${amount.toLocaleString("fr-FR")} XAF.`
+    : outcome.user_message;
+
+  await notifyPayment(
+    sb,
+    payment.user_id,
+    outcome.user_title,
+    successBody,
+    "payment",
+    paymentId,
+  );
+
   return json({
     ok: true,
     fulfilled: true,
     payment_id: paymentId,
     operator_status: "SUCCESSFUL",
+    user_message: successBody,
+    notified: true,
     result,
   });
 });

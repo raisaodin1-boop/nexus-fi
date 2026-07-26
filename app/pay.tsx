@@ -1,4 +1,5 @@
-// HODIX Payment — MTN Mobile Money via Paynote (instant confirm)
+// HODIX Payment — MTN Mobile Money via Paynote
+// Flow: initiate → PIN on phone → Paynote webhook/status → credit OR clear failure
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator, Animated, Easing, ScrollView,
@@ -7,14 +8,14 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { CheckCircle2, Smartphone, Lock } from "lucide-react-native";
+import { CheckCircle2, Smartphone, Lock, XCircle } from "lucide-react-native";
 
 import { api, ApiError, formatXAF } from "@/src/api";
 import type { PaymentKind } from "@/src/payment-nav";
 import { Button, Card, Field } from "@/src/ui";
 import { Colors, Radius, Spacing, Shadow } from "@/src/theme";
 
-type Stage = "form" | "processing" | "success";
+type Stage = "form" | "processing" | "success" | "failed";
 
 interface PaynoteInit {
   payment_id: string;
@@ -22,9 +23,16 @@ interface PaynoteInit {
   message?: string;
 }
 
+type ConfirmRes = {
+  status?: string;
+  verified?: boolean;
+  user_message?: string;
+  operator_reason?: string | null;
+};
+
 const MTN = {
   label: "MTN Mobile Money",
-  sub: "Crédit uniquement après validation PIN MTN",
+  sub: "Crédit immédiat après débit MTN · échec expliqué clairement",
   color: "#FFCC00",
   dark: "#CC9900",
   icon: "🟡",
@@ -68,6 +76,8 @@ export default function PayContribution() {
   const [phone, setPhone] = useState(paramPhone ?? "");
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [failMessage, setFailMessage] = useState<string | null>(null);
+  const [operatorReason, setOperatorReason] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState("En attente de votre PIN MTN — aucun débit tant que vous n’avez pas validé");
   const doneRef = useRef(false);
@@ -114,7 +124,7 @@ export default function PayContribution() {
     }
   };
 
-  const markSuccess = async (id: string) => {
+  const markSuccess = async (id: string, message?: string) => {
     if (doneRef.current) return;
     doneRef.current = true;
     if (paymentKind === "subscription" && plan_id) {
@@ -125,38 +135,61 @@ export default function PayContribution() {
         // Payment already succeeded — user can retry activation from /subscription if needed
       }
     }
+    setHint(message ?? "Paiement confirmé — MTN a débité votre compte");
     setStage("success");
-    setHint("Paiement confirmé — MTN a débité votre compte");
     setTimeout(() => goReceipt(id), 900);
   };
 
-  const tryConfirm = async (id: string): Promise<boolean> => {
+  const markFailed = (message: string, reason?: string | null) => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    setFailMessage(message);
+    setOperatorReason(reason?.trim() || null);
+    setError(message);
+    setStage("failed");
+  };
+
+  const tryConfirm = async (id: string): Promise<"success" | "failed" | "pending"> => {
     try {
-      // Only succeed if DB already marked succeeded (webhook/confirm after operator debit)
-      const st = await api.get<{ status: string }>(`/payments/${id}/status`);
+      const st = await api.get<{
+        status: string;
+        user_message?: string;
+        operator_reason?: string | null;
+      }>(`/payments/${id}/status`);
       if (st?.status === "succeeded") {
-        await markSuccess(id);
-        return true;
+        await markSuccess(id, st.user_message);
+        return "success";
       }
       if (st?.status === "failed") {
-        setError("Paiement refusé ou expiré côté MTN. Relancez une nouvelle demande.");
-        return false;
+        markFailed(
+          st.user_message
+            ?? "Le paiement MTN a échoué. Aucun crédit n’a été enregistré sur HODIX.",
+          st.operator_reason,
+        );
+        return "failed";
       }
-    } catch { /* continue */ }
+    } catch { /* continue to confirm */ }
 
     try {
-      const res = await api.post<{ status?: string; verified?: boolean }>(
-        "/payments/paynote/confirm",
-        { payment_id: id },
-      );
-      // Never trust HTTP 200 alone — require succeeded / verified
-      if (res?.status === "succeeded" || res?.verified === true) {
-        await markSuccess(id);
-        return true;
+      const res = await api.post<ConfirmRes>("/payments/paynote/confirm", { payment_id: id });
+      // Success ONLY if verified + succeeded (operator debit confirmed)
+      if (res?.verified === true && res?.status === "succeeded") {
+        await markSuccess(id, res.user_message);
+        return "success";
       }
-      return false;
-    } catch {
-      return false;
+      if (res?.status === "failed") {
+        markFailed(
+          res.user_message
+            ?? "Le paiement MTN a échoué. Aucun crédit n’a été enregistré sur HODIX.",
+          res.operator_reason,
+        );
+        return "failed";
+      }
+      if (res?.user_message) setHint(res.user_message);
+      return "pending";
+    } catch (e) {
+      if (e instanceof ApiError && e.detail) setHint(e.detail);
+      return "pending";
     }
   };
 
@@ -164,11 +197,11 @@ export default function PayContribution() {
     if (!phone || phone.replace(/\D/g, "").length < 9) {
       setError("Numéro MTN invalide"); return;
     }
-    setError(null); setBusy(true); doneRef.current = false;
+    setError(null); setFailMessage(null); setOperatorReason(null); setBusy(true); doneRef.current = false;
     try {
       const r = await api.post<PaynoteInit>("/payments/mtn/initiate", buildInitPayload());
       setPaymentId(r.payment_id);
-      setHint("Demande envoyée — validez le PIN sur votre téléphone. Rien n’est crédité tant que MTN n’a pas débité.");
+      setHint("Demande envoyée à Paynote. MTN doit d’abord débiter — HODIX attend la réponse positive ou la raison d’échec.");
       setStage("processing");
     } catch (e) {
       setError(e instanceof ApiError ? e.detail : "Erreur de paiement MTN");
@@ -179,9 +212,9 @@ export default function PayContribution() {
     if (!paymentId) { setError("Paiement introuvable"); return; }
     setError(null); setBusy(true);
     setHint("Vérification du débit MTN auprès de Paynote…");
-    const ok = await tryConfirm(paymentId);
-    if (!ok) {
-      setError("Pas encore débité. Validez le PIN sur votre téléphone MTN — on vérifie automatiquement.");
+    const outcome = await tryConfirm(paymentId);
+    if (outcome === "pending") {
+      setError("Pas encore débité. Validez le PIN sur votre téléphone — la confirmation est automatique.");
     }
     setBusy(false);
   };
@@ -190,26 +223,26 @@ export default function PayContribution() {
     if (stage !== "processing" || !paymentId) return;
     let cancelled = false;
     let ticks = 0;
-    const maxTicks = 90; // ~3 min at 2s
+    const maxTicks = 120; // ~3 min at 1.5s
 
     const poll = async () => {
       if (cancelled || doneRef.current) return;
       ticks += 1;
-      if (ticks === 3) setHint("Attente du PIN MTN… ouvrez la notification USSD / MoMo");
-      if (ticks === 10) setHint("Toujours en attente — sans validation PIN, aucun paiement n’est enregistré");
-      if (ticks === 25) setHint("Pas de notification ? Vérifiez le numéro MTN et le solde, puis réessayez");
+      if (ticks === 2) setHint("Attente du PIN MTN… ouvrez la notification USSD / MoMo");
+      if (ticks === 8) setHint("Dès validation, Paynote notifie HODIX — crédit immédiat");
+      if (ticks === 20) setHint("Toujours en attente — sans PIN, aucun paiement. Solde insuffisant ? Rechargez MTN.");
       if (ticks >= maxTicks) {
-        setError("Délai dépassé. Aucun débit confirmé — vous pouvez réessayer sans risque de double paiement.");
+        setError("Délai dépassé. Aucun débit confirmé — vous pouvez réessayer sans double paiement.");
         cancelled = true;
         return;
       }
-      const ok = await tryConfirm(paymentId);
-      if (ok) cancelled = true;
+      const outcome = await tryConfirm(paymentId);
+      if (outcome !== "pending") cancelled = true;
     };
 
-    // Wait before first poll — give USSD time to arrive; never race-credit
-    const interval = setInterval(poll, 2500);
-    const t1 = setTimeout(poll, 4000);
+    // Fast poll so webhook success/failure appears in the app within ~1–2s
+    const interval = setInterval(poll, 1500);
+    const t1 = setTimeout(poll, 2000);
     return () => {
       cancelled = true;
       clearInterval(interval);
@@ -223,8 +256,53 @@ export default function PayContribution() {
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: Spacing.xl }}>
           <CheckCircle2 color={Colors.success} size={64} />
           <Text style={[styles.processingTitle, { marginTop: 16 }]}>Paiement confirmé</Text>
-          <Text style={styles.processingDesc}>Crédit enregistré instantanément.</Text>
+          <Text style={styles.processingDesc}>
+            {hint || "MTN a débité votre compte. Crédit HODIX enregistré."}
+          </Text>
         </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (stage === "failed") {
+    return (
+      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+        <ScrollView contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 100, flexGrow: 1, justifyContent: "center" }}>
+          <View style={{ alignItems: "center", marginBottom: 20 }}>
+            <XCircle color={Colors.danger} size={64} />
+            <Text style={[styles.processingTitle, { marginTop: 16 }]}>Paiement échoué</Text>
+            <Text style={styles.processingDesc}>
+              {failMessage
+                ?? "Le paiement MTN n’a pas abouti. Aucun crédit n’a été enregistré sur HODIX."}
+            </Text>
+          </View>
+          <Card style={{ gap: 12 }}>
+            {operatorReason ? (
+              <View style={styles.operatorBox}>
+                <Text style={styles.operatorLabel}>Raison exacte de l’opérateur</Text>
+                <Text style={styles.operatorText}>{operatorReason}</Text>
+              </View>
+            ) : (
+              <Text style={styles.failHint}>
+                Aucun crédit HODIX sans débit MTN. Réessayez après avoir vérifié solde et PIN.
+              </Text>
+            )}
+            <Button
+              testID="pay-mm-retry"
+              label="Réessayer le paiement"
+              onPress={() => {
+                doneRef.current = false;
+                setPaymentId(null);
+                setFailMessage(null);
+                setOperatorReason(null);
+                setError(null);
+                setStage("form");
+              }}
+              icon={<Smartphone color="#fff" size={16} />}
+            />
+            <Button label="Retour" variant="ghost" onPress={() => router.back()} />
+          </Card>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -241,7 +319,7 @@ export default function PayContribution() {
 
           <Text style={styles.processingTitle}>Validez sur MTN MoMo</Text>
           <Text style={styles.processingDesc}>
-            {`Notification envoyée sur ${phone}. Entrez votre code PIN MTN. HODIX ne crédite qu’après le débit réel par l’opérateur.`}
+            {`Notification envoyée sur ${phone}. Paynote doit d’abord faire débiter MTN, puis renvoyer succès ou la raison exacte d’échec.`}
           </Text>
 
           <Card style={{ gap: 12, marginTop: 8, alignItems: "center" }}>
@@ -286,7 +364,7 @@ export default function PayContribution() {
           <Text style={styles.heroAmt}>{formatXAF(amt)}</Text>
           <View style={styles.heroRow}>
             <Lock size={12} color="rgba(255,255,255,0.6)" />
-            <Text style={styles.heroSub}>MTN MoMo · après validation PIN</Text>
+            <Text style={styles.heroSub}>MTN MoMo · réponse immédiate après débit</Text>
           </View>
         </LinearGradient>
 
@@ -299,10 +377,10 @@ export default function PayContribution() {
         <Card style={{ marginTop: 20, gap: 12 }}>
           <Text style={styles.formTitle}>Payer avec MTN Mobile Money</Text>
           <View style={[styles.infoBox, { borderColor: MTN.color + "55", backgroundColor: MTN.color + "11" }]}>
-            <Text style={[styles.infoBoxTitle, { color: MTN.dark }]}>En 3 étapes</Text>
+            <Text style={[styles.infoBoxTitle, { color: MTN.dark }]}>Comment ça marche</Text>
             <Text style={styles.infoBoxStep}>1. Entrez votre numéro MTN</Text>
             <Text style={styles.infoBoxStep}>2. Validez le PIN sur votre téléphone</Text>
-            <Text style={styles.infoBoxStep}>3. Après débit MTN, le crédit apparaît dans HODIX</Text>
+            <Text style={styles.infoBoxStep}>3. Paynote débite d’abord via MTN, puis répond : succès → crédit, ou échec → raison exacte opérateur</Text>
           </View>
 
           <Field
@@ -325,7 +403,7 @@ export default function PayContribution() {
 
         <View style={styles.secureBar}>
           <Lock size={12} color={Colors.accent} />
-          <Text style={styles.secureText}>Sécurisé Paynote · aucun crédit sans débit MTN</Text>
+          <Text style={styles.secureText}>Paynote → HODIX en direct · solde insuffisant = message explicite</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -352,6 +430,13 @@ const styles = StyleSheet.create({
   infoBoxTitle: { fontWeight: "900", fontSize: 13, marginBottom: 4 },
   infoBoxStep: { color: Colors.textMuted, fontSize: 12, fontWeight: "600", lineHeight: 18 },
   error: { backgroundColor: "#FEE2E2", color: Colors.danger, padding: 10, borderRadius: 12, fontSize: 13, fontWeight: "600" },
+  failHint: { color: Colors.textMuted, fontSize: 13, fontWeight: "600", lineHeight: 20, textAlign: "center" },
+  operatorBox: {
+    borderWidth: 1, borderColor: Colors.danger + "55", backgroundColor: "#FEF2F2",
+    borderRadius: Radius.lg, padding: 14, gap: 6,
+  },
+  operatorLabel: { color: Colors.danger, fontSize: 11, fontWeight: "900", letterSpacing: 0.5, textTransform: "uppercase" },
+  operatorText: { color: Colors.text, fontSize: 14, fontWeight: "700", lineHeight: 20 },
   secureBar: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
     gap: 6, marginTop: 20, padding: 12, backgroundColor: Colors.surfaceAlt, borderRadius: Radius.md,

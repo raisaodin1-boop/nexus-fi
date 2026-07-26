@@ -9,8 +9,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   PAYNOTE_WEBPAY_URL,
   checkPaynotePaymentStatus,
+  describePaynoteOutcome,
   extractMessageId,
-  extractPaynoteStatus,
   getPaynoteAccessToken,
   isPaynoteFailedStatus,
   isPaynotePaidStatus,
@@ -129,6 +129,53 @@ async function loadPaymentForUser(paymentId: string, userId: string) {
   return data;
 }
 
+async function notifyUser(
+  userId: string,
+  title: string,
+  body: string,
+  type: string,
+  paymentId: string,
+) {
+  const admin = adminClient();
+  const { error } = await admin.from("notifications").insert({
+    user_id: userId,
+    title,
+    body,
+    type,
+    is_read: false,
+    metadata: { payment_id: paymentId, action_url: "/payments", source: "paynote_mtn" },
+  });
+  if (error) console.error("paynote-mtn notify failed", error.message);
+}
+
+async function markPaymentFailed(
+  payment: { id: string; user_id: string; description: string | null },
+  outcome: ReturnType<typeof describePaynoteOutcome>,
+  notify: boolean,
+) {
+  const admin = adminClient();
+  const meta = parseMetaRaw(payment.description);
+  meta.paynote_failure = {
+    operator_status: outcome.operator_status,
+    reason: outcome.reason,
+    operator_reason: outcome.reason,
+    user_message: outcome.user_message,
+    at: new Date().toISOString(),
+  };
+  const { error } = await admin
+    .from("payments")
+    .update({ status: "failed", description: JSON.stringify(meta) })
+    .eq("id", payment.id)
+    .eq("status", "pending_paynote");
+  if (error) {
+    console.error("markPaymentFailed", payment.id, error.message);
+    return;
+  }
+  if (notify) {
+    await notifyUser(payment.user_id, outcome.user_title, outcome.user_message, "alert", payment.id);
+  }
+}
+
 /** Read-only operator status — never credits. */
 async function readOperatorStatus(
   payment: {
@@ -140,7 +187,30 @@ async function readOperatorStatus(
   preferredMessageId?: string,
 ) {
   if (payment.status === "succeeded") {
-    return { verified: true, status: "succeeded", payment_ref: payment.id, already_fulfilled: true };
+    return {
+      verified: true,
+      status: "succeeded",
+      payment_ref: payment.id,
+      already_fulfilled: true,
+      user_message: "MTN a débité votre compte. Votre crédit HODIX est enregistré.",
+    };
+  }
+  if (payment.status === "failed") {
+    const meta = parseMetaRaw(payment.description);
+    const failure = meta.paynote_failure as {
+      user_message?: string;
+      operator_reason?: string;
+      reason?: string;
+      operator_status?: string;
+    } | undefined;
+    return {
+      verified: false,
+      status: "failed",
+      operator_status: failure?.operator_status ?? null,
+      operator_reason: failure?.operator_reason ?? failure?.reason ?? null,
+      user_message: failure?.user_message
+        ?? "Le paiement MTN a échoué. Aucun crédit n’a été enregistré.",
+    };
   }
 
   const meta = parseMetaRaw(payment.description);
@@ -157,20 +227,25 @@ async function readOperatorStatus(
       status: "pending",
       error: "missing_message_id",
       operator_status: null,
+      operator_reason: null,
+      user_message: "Validez le PIN sur votre téléphone MTN. Aucun débit avant confirmation opérateur.",
     };
   }
 
   const token = await getPaynoteAccessToken();
   const { ok, body } = await checkPaynotePaymentStatus(token, messageId);
-  const operatorStatus = extractPaynoteStatus(body) || "UNKNOWN";
+  const outcome = describePaynoteOutcome(ok ? body : {});
+  // HARD RULE: verified only if Paynote status === SUCCESSFUL (real debit)
   const paid = ok && isPaynotePaidStatus(body);
-  const failed = isPaynoteFailedStatus(body);
 
   return {
     verified: paid,
-    status: paid ? "succeeded" : (failed ? "failed" : "pending"),
-    operator_status: operatorStatus,
+    status: paid ? "succeeded" : outcome.kind === "failed" ? "failed" : "pending",
+    operator_status: outcome.operator_status,
+    operator_reason: outcome.reason || null,
     payment_ref: String(body?.paymentRef ?? body?.PaymentRef ?? messageId),
+    user_message: outcome.user_message,
+    user_title: outcome.user_title,
     paynote: body,
     already_fulfilled: false,
   };
@@ -181,6 +256,7 @@ async function confirmPaymentAtomic(
   payment: {
     id: string;
     user_id: string;
+    amount?: number;
     status: string;
     description: string | null;
     provider_ref?: string | null;
@@ -188,7 +264,30 @@ async function confirmPaymentAtomic(
   preferredMessageId?: string,
 ) {
   if (payment.status === "succeeded") {
-    return { verified: true, status: "succeeded", payment_ref: payment.id, already_fulfilled: true };
+    return {
+      verified: true,
+      status: "succeeded",
+      payment_ref: payment.id,
+      already_fulfilled: true,
+      user_message: "MTN a débité votre compte. Votre crédit HODIX est enregistré.",
+    };
+  }
+  if (payment.status === "failed") {
+    const meta = parseMetaRaw(payment.description);
+    const failure = meta.paynote_failure as {
+      user_message?: string;
+      operator_reason?: string;
+      reason?: string;
+      operator_status?: string;
+    } | undefined;
+    return {
+      verified: false,
+      status: "failed",
+      operator_status: failure?.operator_status ?? null,
+      operator_reason: failure?.operator_reason ?? failure?.reason ?? null,
+      user_message: failure?.user_message
+        ?? "Le paiement MTN a échoué. Aucun crédit n’a été enregistré.",
+    };
   }
   if (payment.status !== "pending_paynote") {
     return { verified: false, status: payment.status, error: "not_pending" };
@@ -207,31 +306,40 @@ async function confirmPaymentAtomic(
       verified: false,
       status: "pending",
       error: "missing_message_id",
+      user_message: "Validez le PIN sur votre téléphone MTN. Aucun débit avant confirmation opérateur.",
     };
   }
 
   const token = await getPaynoteAccessToken();
   const { ok, body } = await checkPaynotePaymentStatus(token, messageId);
-  const operatorStatus = extractPaynoteStatus(body);
+  const outcome = describePaynoteOutcome(ok ? body : {});
+  // HARD RULE: never credit until Paynote reports SUCCESSFUL (debit done)
   const verified = ok && isPaynotePaidStatus(body);
   const paymentRef = String(
     body?.paymentRef ?? body?.PaymentRef ?? body?.MessageId ?? messageId,
   );
 
   if (!verified) {
-    console.log(
-      "paynote confirm not paid yet",
-      payment.id,
-      "operator_status=",
-      operatorStatus || "none",
-      "http_ok=",
-      ok,
-    );
+    if (ok && isPaynoteFailedStatus(body)) {
+      await markPaymentFailed(payment, outcome, true);
+      return {
+        verified: false,
+        status: "failed",
+        operator_status: outcome.operator_status,
+        operator_reason: outcome.reason || null,
+        payment_ref: paymentRef,
+        user_message: outcome.user_message,
+        user_title: outcome.user_title,
+        paynote: body,
+      };
+    }
     return {
       verified: false,
-      status: isPaynoteFailedStatus(body) ? "failed" : "pending",
-      operator_status: operatorStatus || null,
+      status: "pending",
+      operator_status: outcome.operator_status || null,
+      operator_reason: outcome.reason || null,
       payment_ref: paymentRef,
+      user_message: outcome.user_message,
       paynote: body,
     };
   }
@@ -250,11 +358,23 @@ async function confirmPaymentAtomic(
     throw new Error(rpcErr.message);
   }
 
+  const amount = Number(payment.amount ?? 0);
+  const successMsg = amount > 0
+    ? `${outcome.user_message} Montant : ${amount.toLocaleString("fr-FR")} XAF.`
+    : outcome.user_message;
+
+  // Notify immediately so the app + inbox update as soon as debit is confirmed
+  if (!(result as { already_fulfilled?: boolean })?.already_fulfilled) {
+    await notifyUser(payment.user_id, outcome.user_title, successMsg, "payment", payment.id);
+  }
+
   return {
     verified: true,
     status: "succeeded",
     operator_status: "SUCCESSFUL",
     payment_ref: paymentRef,
+    user_message: successMsg,
+    user_title: outcome.user_title,
     result,
     already_fulfilled: !!(result as { already_fulfilled?: boolean })?.already_fulfilled,
   };
@@ -347,7 +467,8 @@ Deno.serve(async (req) => {
         status: "pending_paynote",
         // Explicit: initiate acceptance ≠ payment success
         paid: false,
-        message: "Demande envoyée. Validez le PIN sur votre téléphone MTN — HODIX crédite uniquement après débit opérateur.",
+        message:
+          "Demande envoyée. Paynote / MTN doit d’abord débiter. HODIX attend ensuite SUCCESSFUL, ou la raison exacte d’échec de l’opérateur.",
         paynote: body,
       });
     }

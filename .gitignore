@@ -101,3 +101,5 @@ expo-env.d.ts
 nexus-fi/
 debug-*.log
 .cursor/debug-*.log
+
+.paynote-smoke-token

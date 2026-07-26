@@ -267,8 +267,40 @@ export async function confirmPaynoteMtnPayment(payload: { payment_id: string }) 
     if (!payment.receipt_email_sent_at) {
       try { await sendPaymentReceiptEmail(payment.id); } catch { /* best-effort */ }
     }
-    return { payment_id: payment.id, status: "succeeded", already_fulfilled: true, meta };
+    return {
+      payment_id: payment.id,
+      status: "succeeded" as const,
+      verified: true,
+      already_fulfilled: true,
+      user_message: "MTN a débité votre compte. Votre crédit HODIX est enregistré.",
+      meta,
+    };
   }
+
+  if (payment.status === "failed") {
+    const meta = parsePaymentMeta(payment.description) as PaymentMeta & {
+      paynote_failure?: {
+        user_message?: string;
+        operator_reason?: string;
+        reason?: string;
+        operator_status?: string;
+      };
+    } | null;
+    const userMessage = meta?.paynote_failure?.user_message
+      ?? "Le paiement MTN a échoué. Aucun crédit n’a été enregistré sur HODIX.";
+    return {
+      payment_id: payment.id,
+      status: "failed" as const,
+      verified: false,
+      user_message: userMessage,
+      operator_reason: meta?.paynote_failure?.operator_reason
+        ?? meta?.paynote_failure?.reason
+        ?? null,
+      operator_status: meta?.paynote_failure?.operator_status ?? null,
+      meta,
+    };
+  }
+
   if (payment.status !== "pending_paynote") {
     throw { status: 400, detail: "Ce paiement n'est plus en attente." };
   }
@@ -281,12 +313,34 @@ export async function confirmPaynoteMtnPayment(payload: { payment_id: string }) 
     result?: unknown;
     already_fulfilled?: boolean;
     error?: string;
+    user_message?: string;
+    user_title?: string;
+    operator_status?: string;
+    operator_reason?: string | null;
   }>("confirm", { payment_id: payment.id });
 
-  if (!confirmRes.verified) {
-    throw {
-      status: 402,
-      detail: "Paiement MTN MoMo non confirmé. Validez sur votre téléphone — confirmation automatique en cours.",
+  if (confirmRes.status === "failed") {
+    return {
+      payment_id: payment.id,
+      status: "failed" as const,
+      verified: false,
+      user_message: confirmRes.user_message
+        ?? "Le paiement MTN a échoué. Aucun crédit n’a été enregistré sur HODIX.",
+      operator_status: confirmRes.operator_status,
+      operator_reason: confirmRes.operator_reason ?? null,
+    };
+  }
+
+  // Never treat as success unless edge verified real debit (SUCCESSFUL)
+  if (!confirmRes.verified || confirmRes.status !== "succeeded") {
+    return {
+      payment_id: payment.id,
+      status: "pending" as const,
+      verified: false,
+      user_message: confirmRes.user_message
+        ?? "En attente du débit MTN. HODIX crédite uniquement après réponse positive de l’opérateur.",
+      operator_status: confirmRes.operator_status,
+      operator_reason: confirmRes.operator_reason ?? null,
     };
   }
 
@@ -299,10 +353,13 @@ export async function confirmPaynoteMtnPayment(payload: { payment_id: string }) 
   return {
     payment_id: payment.id,
     status: "succeeded" as const,
+    verified: true,
     meta,
     result: confirmRes.result,
     receipt_email: receiptEmail,
     already_fulfilled: !!confirmRes.already_fulfilled,
+    user_message: confirmRes.user_message
+      ?? "MTN a débité votre compte. Votre crédit HODIX est enregistré.",
   };
 }
 
@@ -353,7 +410,34 @@ export async function getPaymentStatus(paymentId: string) {
     .maybeSingle();
   throwSb(error);
   if (!data) throw { status: 404, detail: "Paiement introuvable." };
-  return data;
+
+  const meta = parsePaymentMeta(data.description) as PaymentMeta & {
+    paynote_failure?: {
+      user_message?: string;
+      operator_status?: string;
+      operator_reason?: string;
+      reason?: string;
+    };
+  } | null;
+
+  let user_message: string | null = null;
+  if (data.status === "succeeded") {
+    user_message = "Débit MTN confirmé par l’opérateur. Votre crédit HODIX est enregistré.";
+  } else if (data.status === "failed") {
+    user_message = meta?.paynote_failure?.user_message
+      ?? "Le paiement MTN a échoué. Aucun crédit n’a été enregistré sur HODIX.";
+  } else if (data.status === "pending_paynote") {
+    user_message = "En attente du débit MTN — HODIX crédite uniquement après réponse positive de l’opérateur.";
+  }
+
+  return {
+    ...data,
+    user_message,
+    operator_status: meta?.paynote_failure?.operator_status ?? null,
+    operator_reason: meta?.paynote_failure?.operator_reason
+      ?? meta?.paynote_failure?.reason
+      ?? null,
+  };
 }
 
 // Legacy aliases used by api router during transition
