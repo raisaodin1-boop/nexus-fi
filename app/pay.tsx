@@ -24,7 +24,7 @@ interface PaynoteInit {
 
 const MTN = {
   label: "MTN Mobile Money",
-  sub: "Confirmation instantanée via Paynote",
+  sub: "Crédit uniquement après validation PIN MTN",
   color: "#FFCC00",
   dark: "#CC9900",
   icon: "🟡",
@@ -69,7 +69,7 @@ export default function PayContribution() {
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [hint, setHint] = useState("En attente de votre validation PIN…");
+  const [hint, setHint] = useState("En attente de votre PIN MTN — aucun débit tant que vous n’avez pas validé");
   const doneRef = useRef(false);
 
   const pulse = useRef(new Animated.Value(1)).current;
@@ -126,24 +126,35 @@ export default function PayContribution() {
       }
     }
     setStage("success");
-    setHint("Paiement confirmé — crédit instantané");
+    setHint("Paiement confirmé — MTN a débité votre compte");
     setTimeout(() => goReceipt(id), 900);
   };
 
   const tryConfirm = async (id: string): Promise<boolean> => {
     try {
-      // Fast path: webhook may already have credited
+      // Only succeed if DB already marked succeeded (webhook/confirm after operator debit)
       const st = await api.get<{ status: string }>(`/payments/${id}/status`);
       if (st?.status === "succeeded") {
         await markSuccess(id);
         return true;
       }
+      if (st?.status === "failed") {
+        setError("Paiement refusé ou expiré côté MTN. Relancez une nouvelle demande.");
+        return false;
+      }
     } catch { /* continue */ }
 
     try {
-      await api.post("/payments/paynote/confirm", { payment_id: id });
-      await markSuccess(id);
-      return true;
+      const res = await api.post<{ status?: string; verified?: boolean }>(
+        "/payments/paynote/confirm",
+        { payment_id: id },
+      );
+      // Never trust HTTP 200 alone — require succeeded / verified
+      if (res?.status === "succeeded" || res?.verified === true) {
+        await markSuccess(id);
+        return true;
+      }
+      return false;
     } catch {
       return false;
     }
@@ -157,7 +168,7 @@ export default function PayContribution() {
     try {
       const r = await api.post<PaynoteInit>("/payments/mtn/initiate", buildInitPayload());
       setPaymentId(r.payment_id);
-      setHint("Demande USSD envoyée — validez avec votre PIN");
+      setHint("Demande envoyée — validez le PIN sur votre téléphone. Rien n’est crédité tant que MTN n’a pas débité.");
       setStage("processing");
     } catch (e) {
       setError(e instanceof ApiError ? e.detail : "Erreur de paiement MTN");
@@ -167,10 +178,10 @@ export default function PayContribution() {
   const confirmPayment = async () => {
     if (!paymentId) { setError("Paiement introuvable"); return; }
     setError(null); setBusy(true);
-    setHint("Vérification Paynote…");
+    setHint("Vérification du débit MTN auprès de Paynote…");
     const ok = await tryConfirm(paymentId);
     if (!ok) {
-      setError("Pas encore confirmé. Validez le PIN sur votre téléphone — on réessaie automatiquement.");
+      setError("Pas encore débité. Validez le PIN sur votre téléphone MTN — on vérifie automatiquement.");
     }
     setBusy(false);
   };
@@ -179,25 +190,30 @@ export default function PayContribution() {
     if (stage !== "processing" || !paymentId) return;
     let cancelled = false;
     let ticks = 0;
+    const maxTicks = 90; // ~3 min at 2s
 
     const poll = async () => {
       if (cancelled || doneRef.current) return;
       ticks += 1;
-      if (ticks === 3) setHint("Toujours en attente du PIN MTN…");
-      if (ticks === 8) setHint("Dès validation, le crédit est instantané");
+      if (ticks === 3) setHint("Attente du PIN MTN… ouvrez la notification USSD / MoMo");
+      if (ticks === 10) setHint("Toujours en attente — sans validation PIN, aucun paiement n’est enregistré");
+      if (ticks === 25) setHint("Pas de notification ? Vérifiez le numéro MTN et le solde, puis réessayez");
+      if (ticks >= maxTicks) {
+        setError("Délai dépassé. Aucun débit confirmé — vous pouvez réessayer sans risque de double paiement.");
+        cancelled = true;
+        return;
+      }
       const ok = await tryConfirm(paymentId);
       if (ok) cancelled = true;
     };
 
-    const interval = setInterval(poll, 2000);
-    // First check quickly after USSD prompt
-    const t1 = setTimeout(poll, 1500);
-    const t2 = setTimeout(poll, 3500);
+    // Wait before first poll — give USSD time to arrive; never race-credit
+    const interval = setInterval(poll, 2500);
+    const t1 = setTimeout(poll, 4000);
     return () => {
       cancelled = true;
       clearInterval(interval);
       clearTimeout(t1);
-      clearTimeout(t2);
     };
   }, [stage, paymentId]);
 
@@ -225,7 +241,7 @@ export default function PayContribution() {
 
           <Text style={styles.processingTitle}>Validez sur MTN MoMo</Text>
           <Text style={styles.processingDesc}>
-            {`Demande envoyée sur ${phone}. Entrez votre code PIN — HODIX crédite dès confirmation Paynote.`}
+            {`Notification envoyée sur ${phone}. Entrez votre code PIN MTN. HODIX ne crédite qu’après le débit réel par l’opérateur.`}
           </Text>
 
           <Card style={{ gap: 12, marginTop: 8, alignItems: "center" }}>
@@ -270,7 +286,7 @@ export default function PayContribution() {
           <Text style={styles.heroAmt}>{formatXAF(amt)}</Text>
           <View style={styles.heroRow}>
             <Lock size={12} color="rgba(255,255,255,0.6)" />
-            <Text style={styles.heroSub}>MTN MoMo · crédit instantané</Text>
+            <Text style={styles.heroSub}>MTN MoMo · après validation PIN</Text>
           </View>
         </LinearGradient>
 
@@ -286,7 +302,7 @@ export default function PayContribution() {
             <Text style={[styles.infoBoxTitle, { color: MTN.dark }]}>En 3 étapes</Text>
             <Text style={styles.infoBoxStep}>1. Entrez votre numéro MTN</Text>
             <Text style={styles.infoBoxStep}>2. Validez le PIN sur votre téléphone</Text>
-            <Text style={styles.infoBoxStep}>3. Le crédit apparaît immédiatement dans HODIX</Text>
+            <Text style={styles.infoBoxStep}>3. Après débit MTN, le crédit apparaît dans HODIX</Text>
           </View>
 
           <Field
@@ -309,7 +325,7 @@ export default function PayContribution() {
 
         <View style={styles.secureBar}>
           <Lock size={12} color={Colors.accent} />
-          <Text style={styles.secureText}>Paiement sécurisé Paynote · confirmation automatique</Text>
+          <Text style={styles.secureText}>Sécurisé Paynote · aucun crédit sans débit MTN</Text>
         </View>
       </ScrollView>
     </SafeAreaView>

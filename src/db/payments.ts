@@ -1,13 +1,8 @@
 import { getSupabase } from "@/src/supabase";
 import { uid, throwSb } from "./helpers";
-import { contributeTontineSecure } from "./tontines";
-import { depositSaving } from "./savings";
-import { contributeAssociation, contributeCooperative, contributeFund } from "./groups";
-import { markCertificatePaid } from "./extras";
 import type { PaymentKind } from "@/src/payment-nav";
 import { parsePaymentMetaSafe } from "@/src/payment-meta-schema";
 import { paymentToReceipt } from "@/src/payment-receipt";
-import { notifyUser } from "./notifications";
 import { invokePaynoteMtn } from "./paynote-mtn";
 
 const PAYMENT_BLOCKED =
@@ -180,67 +175,6 @@ async function validatePaymentTarget(me: string, payload: InitiatePayload): Prom
   return amount;
 }
 
-async function fulfillPayment(meta: PaymentMeta, paymentId: string) {
-  const amount = Number(meta.amount_xaf);
-  switch (meta.kind) {
-    case "tontine_contribution":
-      if (!meta.tontine_id) break;
-      await contributeTontineSecure(meta.tontine_id, amount, paymentId);
-      break;
-    case "savings_deposit":
-      if (!meta.goal_id) break;
-      await depositSaving(meta.goal_id, amount, "Dépôt MTN Paynote", paymentId);
-      break;
-    case "association_contribution":
-      if (!meta.association_id) break;
-      await contributeAssociation(meta.association_id, amount, paymentId);
-      break;
-    case "cooperative_contribution":
-      if (!meta.cooperative_id) break;
-      await contributeCooperative(meta.cooperative_id, amount, paymentId);
-      break;
-    case "fund_contribution":
-      if (!meta.fund_id) break;
-      await contributeFund(meta.fund_id, amount, paymentId);
-      break;
-    case "wallet_topup": {
-      const { error: rpcErr } = await getSupabase().rpc("wallet_topup", {
-        p_amount: amount,
-        p_currency: "XAF",
-        p_provider: meta.gateway === "paynote" ? "MTN MoMo (Paynote)" : (meta.provider ?? "CinetPay"),
-        p_phone: meta.phone ?? "",
-        p_amount_xaf: amount,
-        p_payment_id: paymentId,
-      });
-      throwSb(rpcErr);
-      const me = await uid();
-      const { addIdentityEvent } = await import("./identity");
-      await addIdentityEvent(me, "wallet_topup", 1);
-      break;
-    }
-    case "certified_report":
-      await markCertificatePaid(meta.cert_kind ?? "identity", paymentId ?? "");
-      break;
-    case "manager_pro_subscription": {
-      const me = await uid();
-      const sb = getSupabase();
-      const { data: profile } = await sb.from("profiles").select("manager_pro_until").eq("id", me).single();
-      const base = profile?.manager_pro_until && new Date(profile.manager_pro_until) > new Date()
-        ? new Date(profile.manager_pro_until)
-        : new Date();
-      const until = new Date(base.getTime() + 30 * 86400000).toISOString();
-      await sb.from("profiles").update({ manager_pro_plan: "pro", manager_pro_until: until }).eq("id", me);
-      break;
-    }
-    case "subscription": {
-      if (!meta.plan_id) break;
-      const { subscribeToPlan } = await import("./subscriptions");
-      await subscribeToPlan(meta.plan_id as any, paymentId);
-      break;
-    }
-  }
-}
-
 async function initiatePaynoteMtnPayment(payload: InitiatePayload, amount: number, me: string) {
   const paymentId = crypto.randomUUID();
   const meta: PaymentMeta = {
@@ -280,18 +214,8 @@ async function initiatePaynoteMtnPayment(payload: InitiatePayload, amount: numbe
     phone: payload.phone?.trim() ?? "",
   });
 
-  if (paynote.message_id) {
-    meta.paynote_message_id = paynote.message_id;
-    const { error: updErr } = await getSupabase()
-      .from("payments")
-      .update({
-        description: encodeMeta(meta),
-        provider_ref: paynote.message_id,
-      })
-      .eq("id", paymentId)
-      .eq("user_id", me);
-    throwSb(updErr);
-  }
+  // MessageId is persisted by the edge function (service role).
+  // Client UPDATE on payments is blocked by RLS — do not rely on it.
 
   return {
     payment_id: paymentId,
@@ -326,48 +250,6 @@ export async function initiateMtnPayment(payload: InitiatePayload) {
 
 /** @deprecated Alias — MTN Paynote uniquement */
 export const initiateCinetpayPayment = initiateMtnPayment;
-
-async function finalizePaynotePayment(
-  payment: { id: string; description: string },
-  transactionId: string,
-) {
-  const me = await uid();
-  const meta = parsePaymentMeta(payment.description);
-  if (!meta) throw { status: 500, detail: "Métadonnées de paiement invalides." };
-
-  const { data: locked, error: lockErr } = await getSupabase()
-    .from("payments")
-    .update({
-      status: "succeeded",
-      description: `${payment.description.split(" · ref:")[0]} · ref:${transactionId}`,
-    })
-    .eq("id", payment.id)
-    .eq("status", "pending_paynote")
-    .select("id")
-    .maybeSingle();
-  throwSb(lockErr);
-  if (!locked) {
-    throw { status: 409, detail: "Ce paiement est déjà en cours de traitement ou finalisé." };
-  }
-
-  await fulfillPayment(meta, payment.id);
-
-  await notifyUser({
-    user_id: me,
-    title: "Paiement confirmé",
-    body: `${meta.amount_xaf.toLocaleString("fr-FR")} XAF — opération enregistrée après validation du paiement.`,
-    type: "success",
-  });
-
-  let receiptEmail: { delivery?: string } | null = null;
-  try {
-    receiptEmail = await sendPaymentReceiptEmail(payment.id);
-  } catch {
-    // Reçu toujours disponible dans l'app même si l'email échoue.
-  }
-
-  return { payment_id: payment.id, status: "succeeded" as const, meta, receipt_email: receiptEmail };
-}
 
 export async function confirmPaynoteMtnPayment(payload: { payment_id: string }) {
   const me = await uid();

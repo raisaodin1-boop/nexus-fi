@@ -1,12 +1,21 @@
 /**
  * HODIX — Paynote / Y-Note MTN Mobile Money (Cameroun)
- * initiate | status | confirm (atomic verify + credit)
+ * initiate | status (read-only) | confirm (verify SUCCESSFUL + credit)
+ *
+ * Credit ONLY after Paynote status API returns SUCCESSFUL
+ * (= customer PIN validated and MTN debit completed).
  */
 import { createClient } from "npm:@supabase/supabase-js@2";
-
-const TOKEN_URL = "https://omapi-token.ynote.africa/oauth2/token";
-const WEBPAY_URL = "https://omapi.ynote.africa/prod/webpayment";
-const STATUS_URL = "https://omapi.ynote.africa/prod/webpaymentmtn/status";
+import {
+  PAYNOTE_WEBPAY_URL,
+  checkPaynotePaymentStatus,
+  extractMessageId,
+  extractPaynoteStatus,
+  getPaynoteAccessToken,
+  isPaynoteFailedStatus,
+  isPaynotePaidStatus,
+  paynoteConfigured,
+} from "../_shared/paynote.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -20,20 +29,14 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-function paynoteConfigured() {
-  return !!(
-    Deno.env.get("PAYNOTE_CLIENT_ID")?.trim()
-    && Deno.env.get("PAYNOTE_CLIENT_SECRET")?.trim()
-    && Deno.env.get("PAYNOTE_CUSTOMER_KEY")?.trim()
-    && Deno.env.get("PAYNOTE_CUSTOMER_SECRET")?.trim()
-  );
-}
-
 function webhookUrl(): string {
   const explicit = Deno.env.get("PAYNOTE_WEBHOOK_URL")?.trim();
   if (explicit) return explicit;
   const base = Deno.env.get("SUPABASE_URL")?.replace(/\/$/, "") ?? "";
-  return `${base}/functions/v1/paynote-webhook`;
+  const secret = Deno.env.get("PAYNOTE_WEBHOOK_SECRET")?.trim();
+  const url = `${base}/functions/v1/paynote-webhook`;
+  // Paynote posts to notifUrl as-is — embed secret so webhook can auth
+  return secret ? `${url}?secret=${encodeURIComponent(secret)}` : url;
 }
 
 function adminClient() {
@@ -60,60 +63,6 @@ function parseMetaRaw(description: string | null): Record<string, unknown> {
   }
 }
 
-function extractMessageId(body: Record<string, unknown>): string {
-  const nested = [
-    body?.MessageId,
-    body?.messageId,
-    body?.message_id,
-    body?.paymentRef,
-    body?.PaymentRef,
-    (body?.QueueId as Record<string, unknown> | undefined)?.MessageId,
-    (body?.parameters as Record<string, unknown> | undefined)?.MessageId,
-    (body?.data as Record<string, unknown> | undefined)?.MessageId,
-  ];
-  for (const c of nested) {
-    const s = String(c ?? "").trim();
-    if (s.length >= 8) return s;
-  }
-  const m = JSON.stringify(body).match(/"MessageId"\s*:\s*"([^"]+)"/i);
-  return m?.[1]?.trim() ?? "";
-}
-
-function isSuccessfulStatus(body: Record<string, unknown>): boolean {
-  const candidates = [
-    body?.status,
-    body?.Status,
-    body?.body,
-    body?.paymentStatus,
-    body?.message,
-    (body?.data as Record<string, unknown> | undefined)?.status,
-  ];
-  return candidates.some((v) => {
-    const s = String(v ?? "").toUpperCase();
-    return s.includes("SUCCESS");
-  });
-}
-
-async function getAccessToken(): Promise<string> {
-  const clientId = Deno.env.get("PAYNOTE_CLIENT_ID")!.trim();
-  const clientSecret = Deno.env.get("PAYNOTE_CLIENT_SECRET")!.trim();
-  const basic = btoa(`${clientId}:${clientSecret}`);
-
-  const res = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${basic}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: "grant_type=client_credentials",
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok || !body?.access_token) {
-    throw new Error(body?.message ?? body?.error ?? "Token Paynote indisponible.");
-  }
-  return body.access_token as string;
-}
-
 async function initiateWebPayment(
   token: string,
   orderId: string,
@@ -124,7 +73,7 @@ async function initiateWebPayment(
   const customerkey = Deno.env.get("PAYNOTE_CUSTOMER_KEY")!.trim();
   const customersecret = Deno.env.get("PAYNOTE_CUSTOMER_SECRET")!.trim();
 
-  const res = await fetch(WEBPAY_URL, {
+  const res = await fetch(PAYNOTE_WEBPAY_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -145,28 +94,6 @@ async function initiateWebPayment(
   });
   const body = await res.json().catch(() => ({}));
   return { ok: res.ok, body: body as Record<string, unknown> };
-}
-
-async function checkPaymentStatus(token: string, messageId: string) {
-  const customerkey = Deno.env.get("PAYNOTE_CUSTOMER_KEY")!.trim();
-  const customersecret = Deno.env.get("PAYNOTE_CUSTOMER_SECRET")!.trim();
-
-  const res = await fetch(STATUS_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ customerkey, customersecret, message_id: messageId }),
-  });
-  const text = await res.text();
-  let body: Record<string, unknown> = {};
-  try {
-    body = JSON.parse(text) as Record<string, unknown>;
-  } catch {
-    body = { body: text, status: text };
-  }
-  return { ok: res.ok, body };
 }
 
 async function persistMessageId(
@@ -190,6 +117,66 @@ async function persistMessageId(
   if (error) console.error("persistMessageId failed", paymentId, error.message);
 }
 
+async function loadPaymentForUser(paymentId: string, userId: string) {
+  const admin = adminClient();
+  const { data, error } = await admin
+    .from("payments")
+    .select("id, user_id, amount, status, description, provider_ref")
+    .eq("id", paymentId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data;
+}
+
+/** Read-only operator status — never credits. */
+async function readOperatorStatus(
+  payment: {
+    id: string;
+    status: string;
+    description: string | null;
+    provider_ref?: string | null;
+  },
+  preferredMessageId?: string,
+) {
+  if (payment.status === "succeeded") {
+    return { verified: true, status: "succeeded", payment_ref: payment.id, already_fulfilled: true };
+  }
+
+  const meta = parseMetaRaw(payment.description);
+  const messageId = String(
+    preferredMessageId
+      ?? payment.provider_ref
+      ?? meta.paynote_message_id
+      ?? "",
+  ).trim();
+
+  if (!messageId) {
+    return {
+      verified: false,
+      status: "pending",
+      error: "missing_message_id",
+      operator_status: null,
+    };
+  }
+
+  const token = await getPaynoteAccessToken();
+  const { ok, body } = await checkPaynotePaymentStatus(token, messageId);
+  const operatorStatus = extractPaynoteStatus(body) || "UNKNOWN";
+  const paid = ok && isPaynotePaidStatus(body);
+  const failed = isPaynoteFailedStatus(body);
+
+  return {
+    verified: paid,
+    status: paid ? "succeeded" : (failed ? "failed" : "pending"),
+    operator_status: operatorStatus,
+    payment_ref: String(body?.paymentRef ?? body?.PaymentRef ?? messageId),
+    paynote: body,
+    already_fulfilled: false,
+  };
+}
+
+/** Verify SUCCESSFUL with Paynote status API, then credit via RPC. */
 async function confirmPaymentAtomic(
   payment: {
     id: string;
@@ -223,27 +210,27 @@ async function confirmPaymentAtomic(
     };
   }
 
-  const token = await getAccessToken();
-  const { ok, body } = await checkPaymentStatus(token, messageId);
-  let verified = ok && isSuccessfulStatus(body);
-  let paymentRef = String(
+  const token = await getPaynoteAccessToken();
+  const { ok, body } = await checkPaynotePaymentStatus(token, messageId);
+  const operatorStatus = extractPaynoteStatus(body);
+  const verified = ok && isPaynotePaidStatus(body);
+  const paymentRef = String(
     body?.paymentRef ?? body?.PaymentRef ?? body?.MessageId ?? messageId,
   );
 
-  if (!verified && messageId !== payment.id) {
-    const retry = await checkPaymentStatus(token, payment.id);
-    verified = retry.ok && isSuccessfulStatus(retry.body);
-    if (verified) {
-      paymentRef = String(
-        retry.body?.paymentRef ?? retry.body?.MessageId ?? payment.id,
-      );
-    }
-  }
-
   if (!verified) {
+    console.log(
+      "paynote confirm not paid yet",
+      payment.id,
+      "operator_status=",
+      operatorStatus || "none",
+      "http_ok=",
+      ok,
+    );
     return {
       verified: false,
-      status: body?.status ?? body?.body ?? "pending",
+      status: isPaynoteFailedStatus(body) ? "failed" : "pending",
+      operator_status: operatorStatus || null,
       payment_ref: paymentRef,
       paynote: body,
     };
@@ -266,6 +253,7 @@ async function confirmPaymentAtomic(
   return {
     verified: true,
     status: "succeeded",
+    operator_status: "SUCCESSFUL",
     payment_ref: paymentRef,
     result,
     already_fulfilled: !!(result as { already_fulfilled?: boolean })?.already_fulfilled,
@@ -300,7 +288,6 @@ Deno.serve(async (req) => {
     }
 
     const action = String(payload.action ?? "");
-    const admin = adminClient();
 
     if (action === "initiate") {
       const paymentId = String(payload.payment_id ?? "").trim();
@@ -314,13 +301,8 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "Numéro MTN invalide (9 chiffres, commence par 6)." }, 400);
       }
 
-      const { data: payment, error: payErr } = await admin
-        .from("payments")
-        .select("id, user_id, amount, status, description, provider_ref")
-        .eq("id", paymentId)
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (payErr || !payment) return json({ ok: false, error: "Paiement introuvable." }, 404);
+      const payment = await loadPaymentForUser(paymentId, user.id);
+      if (!payment) return json({ ok: false, error: "Paiement introuvable." }, 404);
       if (payment.status !== "pending_paynote") {
         return json({ ok: false, error: "Ce paiement n'est pas en attente Paynote." }, 400);
       }
@@ -328,7 +310,7 @@ Deno.serve(async (req) => {
       const meta = parseMetaRaw(payment.description);
       const label = String(meta.label ?? "Paiement HODIX");
 
-      const token = await getAccessToken();
+      const token = await getPaynoteAccessToken();
       const { ok, body } = await initiateWebPayment(
         token,
         paymentId,
@@ -337,6 +319,7 @@ Deno.serve(async (req) => {
         label,
       );
 
+      // ErrorCode 200 = request ACCEPTED (USSD queued), not paid.
       const errorCode = Number(body?.ErrorCode ?? body?.errorCode ?? 0);
       if (!ok || (errorCode && errorCode !== 200)) {
         return json({
@@ -349,14 +332,11 @@ Deno.serve(async (req) => {
       const messageId = extractMessageId(body);
       if (!messageId) {
         console.error("paynote initiate missing MessageId", paymentId, JSON.stringify(body));
-        // Keep pending — USSD may already be on phone; webhook can still credit via order_id
         return json({
-          ok: true,
-          message_id: null,
-          warning: "message_id_missing",
-          message: "Demande envoyée. Validez sur votre téléphone — confirmation via webhook.",
+          ok: false,
+          error: "Paynote n'a pas renvoyé de MessageId. Réessayez — aucun débit n'a été confirmé.",
           paynote: body,
-        });
+        }, 502);
       }
 
       await persistMessageId(paymentId, user.id, payment.description, messageId);
@@ -364,26 +344,44 @@ Deno.serve(async (req) => {
       return json({
         ok: true,
         message_id: messageId,
-        message: "Demande envoyée sur votre téléphone MTN. Validez avec votre code PIN.",
+        status: "pending_paynote",
+        // Explicit: initiate acceptance ≠ payment success
+        paid: false,
+        message: "Demande envoyée. Validez le PIN sur votre téléphone MTN — HODIX crédite uniquement après débit opérateur.",
         paynote: body,
       });
     }
 
-    if (action === "status" || action === "confirm") {
+    if (action === "status") {
       const paymentId = String(payload.payment_id ?? "").trim();
       if (!paymentId) return json({ ok: false, error: "payment_id requis." }, 400);
 
-      const { data: payment, error: payErr } = await admin
-        .from("payments")
-        .select("id, user_id, status, description, provider_ref")
-        .eq("id", paymentId)
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (payErr || !payment) return json({ ok: false, error: "Paiement introuvable." }, 404);
+      const payment = await loadPaymentForUser(paymentId, user.id);
+      if (!payment) return json({ ok: false, error: "Paiement introuvable." }, 404);
 
-      if (action === "status" && payment.status === "succeeded") {
-        return json({ ok: true, verified: true, status: "succeeded", payment_ref: paymentId });
-      }
+      const outcome = await readOperatorStatus(
+        payment,
+        String(payload.message_id ?? "").trim() || undefined,
+      );
+      // Read-only: never credit from status action
+      return json({
+        ok: true,
+        db_status: payment.status,
+        operator_paid: !!outcome.verified && payment.status !== "succeeded"
+          ? outcome.verified
+          : payment.status === "succeeded",
+        ...outcome,
+        // Prevent accidental credit if a client treats `verified` as "go credit"
+        verified: payment.status === "succeeded",
+      });
+    }
+
+    if (action === "confirm") {
+      const paymentId = String(payload.payment_id ?? "").trim();
+      if (!paymentId) return json({ ok: false, error: "payment_id requis." }, 400);
+
+      const payment = await loadPaymentForUser(paymentId, user.id);
+      if (!payment) return json({ ok: false, error: "Paiement introuvable." }, 404);
 
       const outcome = await confirmPaymentAtomic(
         payment,

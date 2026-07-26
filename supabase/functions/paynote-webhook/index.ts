@@ -1,7 +1,19 @@
 /**
- * Webhook Paynote / Y-Note — MTN MoMo SUCCESS → crédit instantané HODIX.
+ * Webhook Paynote / Y-Note — MTN MoMo
+ *
+ * NEVER credit from webhook payload alone.
+ * ErrorCode 200 / status SUCCESSFULL = request accepted, not paid.
+ * Always re-query Paynote status API; credit only on SUCCESSFUL.
  */
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  checkPaynotePaymentStatus,
+  extractMessageId,
+  extractPaynoteStatus,
+  getPaynoteAccessToken,
+  isPaynotePaidStatus,
+  paynoteConfigured,
+} from "../_shared/paynote.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -13,27 +25,6 @@ function json(body: unknown, status = 200): Response {
     status,
     headers: { ...CORS, "Content-Type": "application/json" },
   });
-}
-
-function isSuccessful(payload: Record<string, unknown>): boolean {
-  const candidates = [
-    payload?.status,
-    payload?.Status,
-    payload?.body,
-    payload?.paymentStatus,
-    payload?.message,
-    payload?.Message,
-    (payload?.data as Record<string, unknown> | undefined)?.status,
-    (payload?.parameters as Record<string, unknown> | undefined)?.status,
-  ];
-  const hit = candidates.some((v) => String(v ?? "").toUpperCase().includes("SUCCESS"));
-  if (hit) return true;
-  // Some Paynote callbacks only send ErrorCode 200 + paymentRef
-  const code = Number(payload?.ErrorCode ?? payload?.errorCode ?? NaN);
-  if (code === 200 && (payload?.paymentRef || payload?.MessageId || payload?.order_id)) {
-    return true;
-  }
-  return false;
 }
 
 function orderIdFrom(payload: Record<string, unknown>): string {
@@ -79,14 +70,13 @@ async function parseBody(req: Request): Promise<Record<string, unknown>> {
   try {
     return JSON.parse(text) as Record<string, unknown>;
   } catch {
-    // Try form-encoded even without header
     if (text.includes("=") && text.includes("&")) {
       const params = new URLSearchParams(text);
       const out: Record<string, unknown> = {};
       params.forEach((v, k) => { out[k] = v; });
       if (Object.keys(out).length) return out;
     }
-    return { raw: text, status: text };
+    return { raw: text };
   }
 }
 
@@ -94,18 +84,25 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ ok: false }, 405);
 
-  const webhookSecret = Deno.env.get("PAYNOTE_WEBHOOK_SECRET") ?? "";
+  const webhookSecret = Deno.env.get("PAYNOTE_WEBHOOK_SECRET")?.trim() ?? "";
+  const urlSecret = new URL(req.url).searchParams.get("secret") ?? "";
   const provided =
     req.headers.get("x-paynote-secret")
     ?? req.headers.get("x-webhook-secret")
     ?? req.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
+    ?? urlSecret
     ?? "";
   if (webhookSecret) {
     if (provided !== webhookSecret) {
       return json({ ok: false, error: "unauthorized" }, 401);
     }
   } else {
-    console.error("CRITICAL: PAYNOTE_WEBHOOK_SECRET unset — set it in Edge Function secrets ASAP");
+    // Status re-verify below is the real gate; secret still recommended.
+    console.error("CRITICAL: PAYNOTE_WEBHOOK_SECRET unset — set it and append ?secret=… to notifUrl");
+  }
+
+  if (!paynoteConfigured()) {
+    return json({ ok: false, error: "paynote_not_configured" }, 503);
   }
 
   let payload: Record<string, unknown>;
@@ -117,33 +114,30 @@ Deno.serve(async (req) => {
 
   console.log("paynote-webhook payload", JSON.stringify(payload).slice(0, 2000));
 
-  if (!isSuccessful(payload)) {
-    return json({ ok: true, ignored: true, reason: "not successful" });
-  }
-
   const orderId = orderIdFrom(payload);
-  const paymentRef = refFrom(payload, orderId || "paynote");
+  const payloadRef = refFrom(payload, orderId || "");
+  const messageId = extractMessageId(payload) || payloadRef;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey);
 
   let paymentId = orderId && isUuid(orderId) ? orderId : "";
 
-  if (!paymentId && paymentRef) {
+  if (!paymentId && messageId) {
     const { data: byRef } = await sb
       .from("payments")
       .select("id")
-      .eq("provider_ref", paymentRef)
+      .eq("provider_ref", messageId)
       .eq("status", "pending_paynote")
       .maybeSingle();
     paymentId = byRef?.id ?? "";
   }
 
-  if (!paymentId && paymentRef) {
+  if (!paymentId && messageId) {
     const { data: byDesc } = await sb
       .from("payments")
       .select("id")
       .eq("status", "pending_paynote")
-      .ilike("description", `%${paymentRef}%`)
+      .ilike("description", `%${messageId}%`)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -151,14 +145,48 @@ Deno.serve(async (req) => {
   }
 
   if (!paymentId) {
-    console.error("paynote-webhook: payment not found", orderId, paymentRef);
-    return json({ ok: false, error: "payment not found", order_id: orderId, ref: paymentRef }, 404);
+    console.error("paynote-webhook: payment not found", orderId, messageId);
+    // Acknowledge receipt so Paynote does not hammer retries forever
+    return json({ ok: true, ignored: true, reason: "payment_not_found", order_id: orderId, ref: messageId });
   }
 
-  // Persist provider_ref for future polls
-  if (paymentRef && paymentRef !== paymentId) {
-    await sb.from("payments").update({ provider_ref: paymentRef }).eq("id", paymentId);
+  // Persist MessageId for future polls (does NOT mean paid)
+  if (messageId && messageId !== paymentId) {
+    await sb.from("payments").update({ provider_ref: messageId }).eq("id", paymentId);
   }
+
+  // Mandatory re-verification — webhook payload alone is never enough
+  let token: string;
+  try {
+    token = await getPaynoteAccessToken();
+  } catch (e) {
+    console.error("paynote-webhook token error", e);
+    return json({ ok: false, error: "token_unavailable" }, 502);
+  }
+
+  const { ok, body } = await checkPaynotePaymentStatus(token, messageId || paymentId);
+  const operatorStatus = extractPaynoteStatus(body);
+  const paid = ok && isPaynotePaidStatus(body);
+
+  if (!paid) {
+    console.log(
+      "paynote-webhook: not paid yet — no credit",
+      paymentId,
+      "operator_status=",
+      operatorStatus || "none",
+    );
+    return json({
+      ok: true,
+      ignored: true,
+      reason: "awaiting_operator_debit",
+      payment_id: paymentId,
+      operator_status: operatorStatus || null,
+    });
+  }
+
+  const paymentRef = String(
+    body?.paymentRef ?? body?.PaymentRef ?? messageId ?? paymentId,
+  );
 
   const { data: result, error: rpcErr } = await sb.rpc("confirm_cinetpay_payment", {
     p_payment_id: paymentId,
@@ -170,5 +198,11 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: rpcErr.message }, 500);
   }
 
-  return json({ ok: true, fulfilled: true, payment_id: paymentId, result });
+  return json({
+    ok: true,
+    fulfilled: true,
+    payment_id: paymentId,
+    operator_status: "SUCCESSFUL",
+    result,
+  });
 });
