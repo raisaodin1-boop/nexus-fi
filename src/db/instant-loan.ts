@@ -27,15 +27,13 @@ export function maxInstantLoanForScore(score: number): number {
   return 0;
 }
 
-export async function syncTrustScoreSnapshot(score: number) {
-  const me = await uid();
-  await getSupabase().from("profiles").update({ trust_score: score }).eq("id", me);
+export async function syncTrustScoreSnapshot(_score: number) {
+  // profiles.trust_score is server-protected; eligibility uses getCreditScore() + RPC score.
 }
 
 export async function getInstantCreditEligibility() {
   invalidateCache(`credit-score-${await uid()}`);
   const { score } = await getCreditScore();
-  await syncTrustScoreSnapshot(score);
 
   const max_amount_xaf = maxInstantLoanForScore(score);
   const sb = getSupabase();

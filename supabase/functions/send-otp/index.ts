@@ -154,7 +154,9 @@ Deno.serve(async (req) => {
     const otpTitle = "Code de vérification HODIX";
     const otpBody = verifyMode
       ? `Un code a été envoyé par SMS au ${phone.slice(0, 4)}•••${phone.slice(-2)}.`
-      : `Votre code : ${otp}. Valable ${OTP_TTL_MIN} min.`;
+      : delivery === "sms"
+        ? `Un code de vérification a été envoyé par SMS. Valable ${OTP_TTL_MIN} min.`
+        : `Entrez le code affiché dans l'écran de confirmation (valable ${OTP_TTL_MIN} min).`;
 
     if (delivery === "app" && !verifyMode) {
       await admin.from("notifications").insert({
@@ -163,7 +165,15 @@ Deno.serve(async (req) => {
     }
 
     const masked = phone.length >= 6 ? `${phone.slice(0, 4)}•••${phone.slice(-2)}` : null;
-    return json({ ok: true, expires_at: expiresAt, delivery, phone_masked: delivery === "sms" ? masked : null, verify_mode: verifyMode });
+    return json({
+      ok: true,
+      expires_at: expiresAt,
+      delivery,
+      phone_masked: delivery === "sms" ? masked : null,
+      verify_mode: verifyMode,
+      // In-app fallback only: never log OTP in notifications; client shows it once here.
+      in_app_code: delivery === "app" && !verifyMode ? otp : undefined,
+    });
   }
 
   if (body.action === "verify") {

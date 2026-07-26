@@ -82,11 +82,13 @@ export function OtpModal({ visible, onSuccess, onCancel, amountXaf }: OtpModalPr
     setGenerating(true);
     setError(null);
     try {
-      const res = await api.post<{ expires_at?: string; delivery?: "sms" | "app"; phone_masked?: string | null }>("/wallet/otp/generate");
+      const res = await api.post<{ expires_at?: string; delivery?: "sms" | "app"; phone_masked?: string | null; in_app_code?: string }>("/wallet/otp/generate");
       setDeliveryHint(
         res?.delivery === "sms"
           ? `Un code a été envoyé par SMS au ${res.phone_masked ?? "numéro enregistré"}`
-          : "Un code a été envoyé dans vos notifications Hodix",
+          : res?.in_app_code
+            ? `Code de vérification : ${res.in_app_code.slice(0, 3)} ${res.in_app_code.slice(3)} (valable 10 min)`
+            : "Consultez vos notifications ou SMS pour le code de vérification",
       );
       startResendCooldown();
       startExpiryCountdown(res?.expires_at ?? null);

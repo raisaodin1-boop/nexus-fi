@@ -189,9 +189,6 @@ export async function getTrustScore() {
     invalidateCache(`identity-${me}`);
     const identity = await getIdentity();
     const ts = identity.trust_score;
-    try {
-      await getSupabase().from("profiles").update({ trust_score: ts.score }).eq("id", me);
-    } catch { /* non-blocking */ }
     return ts;
   });
 }

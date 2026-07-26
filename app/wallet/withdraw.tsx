@@ -15,6 +15,7 @@ import type { WalletBalance, MobileMoneyProvider, WalletTx } from "@/src/wallet-
 import { txStatusLabel } from "@/src/wallet-tx-meta";
 import { PinConfirmModal } from "@/src/pin-modal";
 import { OtpModal } from "@/src/otp-modal";
+import { getStoredPinHash } from "@/src/security";
 
 const PROVIDERS: MobileMoneyProvider[] = ["MTN MoMo", "Orange Money", "Moov Money", "Wave"];
 const CURRENCIES: Currency[] = ["XAF", "XOF", "NGN", "GHS", "EUR", "USD"];
@@ -62,11 +63,17 @@ export default function WithdrawScreen() {
     : wallet.balance_usd
     : 0;
 
-  const doWithdraw = async () => {
+  const doWithdraw = async (pinHash?: string | null) => {
     const amt = parseFloat(amount.replace(/\s/g, "").replace(",", "."));
     setLoading(true);
     try {
-      const tx = await api.post<WalletTx>("/wallet/withdraw", { amount: amt, currency, provider, phone: phone.trim() });
+      const tx = await api.post<WalletTx>("/wallet/withdraw", {
+        amount: amt,
+        currency,
+        provider,
+        phone: phone.trim(),
+        pin_hash: pinHash ?? null,
+      });
       setTxRef(tx.reference ?? tx.id);
       setTxStatus(tx.status ?? "completed");
       setSuccess(true);
@@ -125,7 +132,7 @@ export default function WithdrawScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <View style={styles.successBox}>
-          <CheckCircle2 size={64} color=Colors.success />
+          <CheckCircle2 size={64} color={Colors.success} />
           <Text style={styles.successTitle}>Retrait enregistré</Text>
           <View style={[styles.statusPill, { backgroundColor: st.color + "22" }]}>
             <Text style={[styles.statusPillText, { color: st.color }]}>{st.label}</Text>
@@ -151,17 +158,22 @@ export default function WithdrawScreen() {
         visible={showPin}
         userId={userId}
         amount={amountXaf}
-        onSuccess={() => {
+        onSuccess={async () => {
           setShowPin(false);
+          const pinHash = await getStoredPinHash();
           if (pendingOtp) { setShowOtp(true); }
-          else { doWithdraw(); }
+          else { await doWithdraw(pinHash); }
         }}
         onCancel={() => { setShowPin(false); setLoading(false); }}
       />
       <OtpModal
         visible={showOtp}
         amountXaf={amountXaf}
-        onSuccess={() => { setShowOtp(false); doWithdraw(); }}
+        onSuccess={async () => {
+          setShowOtp(false);
+          const pinHash = await getStoredPinHash();
+          await doWithdraw(pinHash);
+        }}
         onCancel={() => { setShowOtp(false); setLoading(false); }}
       />
 

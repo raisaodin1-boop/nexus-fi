@@ -18,11 +18,17 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ ok: false, error: "Method not allowed" }, 405);
 
-  const secret = Deno.env.get("CINETPAY_WEBHOOK_SECRET")?.trim();
-  if (secret) {
-    const hdr = req.headers.get("x-cinetpay-webhook-secret")
-      ?? req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-    if (hdr !== secret) return json({ ok: false, error: "Non autorisé" }, 401);
+  const secret = Deno.env.get("CINETPAY_WEBHOOK_SECRET")?.trim() ?? "";
+  if (!secret) {
+    console.error("CRITICAL: CINETPAY_WEBHOOK_SECRET unset — refusing webhook (fail-closed)");
+    return json({ ok: false, error: "webhook_secret_not_configured" }, 503);
+  }
+  const hdr = req.headers.get("x-cinetpay-webhook-secret")
+    ?? req.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
+    ?? "";
+  if (hdr !== secret) {
+    console.error("cinetpay-webhook: unauthorized — secret mismatch or missing header");
+    return json({ ok: false, error: "Non autorisé" }, 401);
   }
 
   const payload = await parseNotifyBody(req);

@@ -1032,7 +1032,7 @@ export function TontineDetailView({ id }: { id: string }) {
 
             {tontine.is_hodix_verified ? (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 4, marginBottom: 8 }}>
-                <Award size={16} color=Colors.secondary />
+                <Award size={16} color={Colors.secondary} />
                 <Text style={{ color: Colors.secondary, fontWeight: "800", fontSize: 13 }}>
                   Badge Vérifié HODIX
                   {tontine.verified_source === "auto"
@@ -1069,7 +1069,7 @@ export function TontineDetailView({ id }: { id: string }) {
               && !tontine.is_personal ? (
               <Card style={{ padding: 14, marginBottom: 12, gap: 10, backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <Award size={20} color=Colors.secondary />
+                  <Award size={20} color={Colors.secondary} />
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: "#1E40AF", fontWeight: "800", fontSize: 13 }}>Badge Vérifié HODIX</Text>
                     <Text style={{ color: "#3B82F6", fontSize: 11, marginTop: 2 }}>
@@ -1233,7 +1233,7 @@ export function TontineDetailView({ id }: { id: string }) {
                       params: { peer_id: msgContacts.platform_admin!.id, peer_name: "Admin HODIX" },
                     } as any)}
                   >
-                    <Shield size={14} color=Colors.secondary />
+                    <Shield size={14} color={Colors.secondary} />
                     <Text style={[styles.msgContactText, { color: Colors.secondary }]}>Admin HODIX</Text>
                   </TouchableOpacity>
                 ) : null}

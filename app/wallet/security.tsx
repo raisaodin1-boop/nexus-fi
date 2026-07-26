@@ -95,8 +95,16 @@ export default function WalletSecurityScreen() {
       await api.post("/wallet/unfreeze", {});
       await load();
       Alert.alert("Wallet débloqué", "Votre wallet est de nouveau actif.");
-    } catch {
-      Alert.alert("Erreur", "Impossible de débloquer le wallet. Réessayez.");
+    } catch (e: any) {
+      const msg = String(e?.detail ?? e?.message ?? "");
+      if (msg.includes("administrateur") || msg.includes("Non autorisé") || msg.includes("dégeler")) {
+        Alert.alert(
+          "Déblocage impossible",
+          "Seul le support HODIX peut débloquer un wallet gelé pour activité suspecte. Contactez support@hodix.app avec votre identifiant.",
+        );
+      } else {
+        Alert.alert("Erreur", "Impossible de débloquer le wallet. Contactez le support HODIX.");
+      }
     }
     setUnfreezing(false);
   };
@@ -145,7 +153,7 @@ export default function WalletSecurityScreen() {
             </View>
           ) : (
             <View style={styles.bannerActive}>
-              <CheckCircle size={16} color=Colors.success />
+              <CheckCircle size={16} color={Colors.success} />
               <Text style={styles.bannerActiveText}>Wallet actif et sécurisé</Text>
             </View>
           )}
@@ -235,7 +243,7 @@ export default function WalletSecurityScreen() {
               </View>
             ) : (
               <View style={styles.deviceOk}>
-                <CheckCircle size={14} color=Colors.success />
+                <CheckCircle size={14} color={Colors.success} />
                 <Text style={styles.deviceOkText}>Appareil sécurisé</Text>
               </View>
             )}

@@ -130,6 +130,7 @@ export interface WithdrawPayload {
   currency: Currency;
   provider: MobileMoneyProvider;
   phone: string;
+  pin_hash?: string | null;
 }
 
 export async function withdrawToMobileMoney(payload: WithdrawPayload): Promise<WalletTx> {
@@ -144,6 +145,7 @@ export async function withdrawToMobileMoney(payload: WithdrawPayload): Promise<W
     p_provider: payload.provider,
     p_phone: payload.phone,
     p_amount_xaf: amountXaf,
+    p_pin_hash: payload.pin_hash ?? null,
   });
   if (error) {
     const msg = error.message.includes("insufficient") || error.message.includes("balance")
@@ -176,6 +178,7 @@ export interface TransferPayload {
   amount: number;
   currency: Currency;
   note?: string;
+  pin_hash?: string | null;
 }
 
 export async function transferToMember(payload: TransferPayload): Promise<WalletTx> {
@@ -221,6 +224,7 @@ export async function transferToMember(payload: TransferPayload): Promise<Wallet
     p_currency: payload.currency,
     p_amount_xaf: amountXaf,
     p_note: payload.note ?? null,
+    p_pin_hash: payload.pin_hash ?? null,
   });
   if (error) {
     const msg = error.message.includes("insufficient") || error.message.includes("balance")

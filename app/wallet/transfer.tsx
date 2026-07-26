@@ -13,6 +13,7 @@ import { Colors, Radius, Spacing } from "@/src/theme";
 import { getRates, convert, formatAmount, type Currency, type Rates } from "@/src/exchange-rates";
 import { PinConfirmModal } from "@/src/pin-modal";
 import { OtpModal } from "@/src/otp-modal";
+import { getStoredPinHash } from "@/src/security";
 
 const CURRENCIES: Currency[] = ["XAF", "EUR", "USD"];
 
@@ -49,7 +50,7 @@ export default function TransferScreen() {
   // Extract phone from recipient if it looks like a phone number
   const recipientPhone = /^\+?\d[\d\s]{7,}$/.test(recipient.trim()) ? recipient.trim() : undefined;
 
-  const doTransfer = async () => {
+  const doTransfer = async (pinHash?: string | null) => {
     const amt = parseFloat(amount.replace(/\s/g, "").replace(",", "."));
     setLoading(true);
     try {
@@ -58,6 +59,7 @@ export default function TransferScreen() {
         amount: amt,
         currency,
         note: note.trim() || undefined,
+        pin_hash: pinHash ?? null,
       });
       setSuccess(`${formatAmount(amt, currency)} transféré avec succès.`);
     } catch (e: any) {
@@ -126,17 +128,22 @@ export default function TransferScreen() {
         visible={showPin}
         userId={userId}
         amount={amountXaf}
-        onSuccess={() => {
+        onSuccess={async () => {
           setShowPin(false);
+          const pinHash = await getStoredPinHash();
           if (pendingOtp) { setShowOtp(true); }
-          else { doTransfer(); }
+          else { await doTransfer(pinHash); }
         }}
         onCancel={() => { setShowPin(false); setLoading(false); }}
       />
       <OtpModal
         visible={showOtp}
         amountXaf={amountXaf}
-        onSuccess={() => { setShowOtp(false); doTransfer(); }}
+        onSuccess={async () => {
+          setShowOtp(false);
+          const pinHash = await getStoredPinHash();
+          await doTransfer(pinHash);
+        }}
         onCancel={() => { setShowOtp(false); setLoading(false); }}
       />
 

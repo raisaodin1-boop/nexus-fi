@@ -54,10 +54,15 @@ export default function QRPaymentScreen() {
         <View style={styles.center}>
           <Card style={styles.scanCard}>
             <QrCode color={Colors.textMuted} size={56} />
-            <Text style={styles.scanTitle}>Scanner disponible bientôt</Text>
+            <Text style={styles.scanTitle}>Scan caméra bientôt disponible</Text>
             <Text style={styles.scanSub}>
-              Utilisez la caméra de votre téléphone pour scanner un QR HODIX.
+              En attendant, demandez au payeur d'ouvrir votre QR (Recevoir) ou transférez via email/téléphone dans Wallet → Virement.
             </Text>
+            <Button
+              label="Aller au virement"
+              onPress={() => router.push("/wallet/transfer" as any)}
+              variant="secondary"
+            />
           </Card>
         </View>
       ) : loading ? (

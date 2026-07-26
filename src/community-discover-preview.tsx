@@ -94,7 +94,7 @@ export function CommunityDiscoverPreview() {
             </View>
             {t.is_hodix_verified ? (
               <View style={styles.verifiedPill}>
-                <Sparkles color=Colors.success size={12} />
+                <Sparkles color={Colors.success} size={12} />
                 <Text style={styles.verifiedText}>OK</Text>
               </View>
             ) : t.reliability_score != null ? (

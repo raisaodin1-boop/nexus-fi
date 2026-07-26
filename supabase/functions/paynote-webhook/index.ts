@@ -157,12 +157,13 @@ Deno.serve(async (req) => {
     ?? req.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
     ?? urlSecret
     ?? "";
-  if (webhookSecret) {
-    if (provided !== webhookSecret) {
-      return json({ ok: false, error: "unauthorized" }, 401);
-    }
-  } else {
-    console.error("CRITICAL: PAYNOTE_WEBHOOK_SECRET unset — set it and append ?secret=… to notifUrl");
+  if (!webhookSecret) {
+    console.error("CRITICAL: PAYNOTE_WEBHOOK_SECRET unset — refusing webhook (fail-closed)");
+    return json({ ok: false, error: "webhook_secret_not_configured" }, 503);
+  }
+  if (provided !== webhookSecret) {
+    console.error("paynote-webhook: unauthorized — secret mismatch or missing header");
+    return json({ ok: false, error: "unauthorized" }, 401);
   }
 
   if (!paynoteConfigured()) {
