@@ -152,10 +152,18 @@ export function DiasporaMemberDashboard({ embeddedInTabs, skipGuard }: Props) {
                   <Text style={styles.focusEyeline}>Espace prêt</Text>
                   <Text style={styles.focusTitle}>Aucune cotisation en attente</Text>
                   <Text style={styles.focusDue}>
-                    Rejoignez une tontine ou parrainez un proche pour commencer.
+                    Créez une cotisation dans votre devise, ou rejoignez une tontine.
                   </Text>
                   <TouchableOpacity
                     style={styles.primaryBtn}
+                    onPress={() => router.push("/diaspora/create-contribution" as any)}
+                    activeOpacity={0.9}
+                  >
+                    <PlusCircle color="#fff" size={18} />
+                    <Text style={styles.primaryBtnText}>Créer une cotisation</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.primaryBtn, { backgroundColor: Colors.brandNavy, marginTop: 8 }]}
                     onPress={() => router.push("/diaspora/join" as any)}
                     activeOpacity={0.9}
                   >
@@ -203,9 +211,9 @@ export function DiasporaMemberDashboard({ embeddedInTabs, skipGuard }: Props) {
                 }}
               />
               <QuickAction
-                icon={Users}
-                label="Rejoindre"
-                onPress={() => router.push("/diaspora/join" as any)}
+                icon={PlusCircle}
+                label="Nouvelle cotisation"
+                onPress={() => router.push("/diaspora/create-contribution" as any)}
               />
             </View>
           </DiasporaFadeIn>

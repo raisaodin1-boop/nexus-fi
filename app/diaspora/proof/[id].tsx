@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ArrowLeft, Camera, FileUp, MessageCircle } from "lucide-react-native";
 
 import { api, ApiError } from "@/src/api";
-import { formatXAFAmount } from "@/src/exchange-rates";
+import { formatAmount, formatXAFAmount, type Currency } from "@/src/exchange-rates";
 import type { DiasporaRequest } from "@/src/db/diaspora";
 import { Button, Card, Field } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
@@ -15,7 +15,6 @@ import { buildDiasporaWhatsAppUrl, maskPhone } from "@/src/diaspora-config";
 import { DiasporaManualBanner } from "@/src/diaspora-ui";
 import { pickMedia, pickMediaErrorMessage } from "@/src/pick-media";
 import { DiasporaAmount } from "@/src/diaspora-amount";
-import type { Currency } from "@/src/exchange-rates";
 
 export default function DiasporaProofScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -42,8 +41,15 @@ export default function DiasporaProofScreen() {
     try {
       const data = await api.get<DiasporaRequest>(`/diaspora/requests/${id}`);
       setReq(data);
-      setAmount(String(data.amount_expected));
-      setCurrency(data.currency);
+      const localCur = (data.local_currency || user?.diaspora_currency || "EUR") as string;
+      const localAmt = data.declared_amount ?? data.amount_local;
+      if (localAmt != null && (data.declared_currency || data.local_currency)) {
+        setAmount(String(localAmt));
+        setCurrency(data.declared_currency || localCur);
+      } else {
+        setAmount(String(data.amount_expected));
+        setCurrency(data.currency || "XAF");
+      }
       setPayerName(data.payer_name ?? user?.full_name ?? "");
       setPayerPhone(data.payer_phone ?? "");
     } catch {
@@ -104,7 +110,9 @@ export default function DiasporaProofScreen() {
     const url = buildDiasporaWhatsAppUrl({
       reference: req.reference_code,
       tontine: req.tontine_name ?? "Tontine",
-      amount: formatXAFAmount(req.amount_expected),
+      amount: req.amount_local != null && req.local_currency
+        ? formatAmount(req.amount_local, req.local_currency as Currency)
+        : formatXAFAmount(req.amount_expected),
       method: req.payment_method ?? "—",
       userName: user?.full_name ?? "Membre",
     });
@@ -138,11 +146,20 @@ export default function DiasporaProofScreen() {
         {req ? (
           <View style={{ gap: 4 }}>
             <Text style={styles.ref}>Réf. {req.reference_code} · {req.tontine_name}</Text>
-            <DiasporaAmount
-              amountXaf={req.amount_expected}
-              currency={(user?.diaspora_currency as Currency) || "EUR"}
-              size="md"
-            />
+            {req.amount_local != null && req.local_currency ? (
+              <>
+                <Text style={{ fontSize: 18, fontWeight: "900", color: Colors.primary }}>
+                  {formatAmount(req.amount_local, req.local_currency as Currency)}
+                </Text>
+                <Text style={{ fontSize: 12, color: Colors.textMuted }}>≈ {formatXAFAmount(req.amount_expected)}</Text>
+              </>
+            ) : (
+              <DiasporaAmount
+                amountXaf={req.amount_expected}
+                currency={(user?.diaspora_currency as Currency) || "EUR"}
+                size="md"
+              />
+            )}
           </View>
         ) : null}
 

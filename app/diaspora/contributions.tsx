@@ -9,7 +9,8 @@ import { DiasporaStatusBadge } from "@/src/diaspora-ui";
 import { useDiasporaGuard, DiasporaGuardSpinner } from "@/src/use-diaspora-guard";
 import { useAuth } from "@/src/auth-context";
 import { DiasporaAmount } from "@/src/diaspora-amount";
-import type { Currency } from "@/src/exchange-rates";
+import { formatAmount, formatXAFAmount, type Currency } from "@/src/exchange-rates";
+import { Plus } from "lucide-react-native";
 import { DiasporaPanel, DiasporaScreenShell } from "@/src/diaspora-shell";
 
 const FILTERS = [
@@ -55,7 +56,26 @@ export default function DiasporaContributionsScreen() {
       subtitle="Suivi, paiements et preuves"
       scroll={false}
       contentStyle={styles.body}
+      rightSlot={
+        <TouchableOpacity
+          onPress={() => router.push("/diaspora/create-contribution" as any)}
+          style={styles.createHit}
+          hitSlop={8}
+          accessibilityLabel="Créer une cotisation"
+        >
+          <Plus color="#fff" size={22} />
+        </TouchableOpacity>
+      }
     >
+      <TouchableOpacity
+        style={styles.createBanner}
+        onPress={() => router.push("/diaspora/create-contribution" as any)}
+        activeOpacity={0.9}
+      >
+        <Plus color={Colors.brandNavy} size={16} />
+        <Text style={styles.createBannerText}>Créer une cotisation en {displayCur}</Text>
+      </TouchableOpacity>
+
       <View style={styles.filters}>
         {FILTERS.map((f) => (
           <TouchableOpacity
@@ -78,7 +98,16 @@ export default function DiasporaContributionsScreen() {
             <View style={styles.row}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{item.tontine_name ?? "Tontine"}</Text>
-                <DiasporaAmount amountXaf={item.amount_expected} currency={displayCur} size="md" />
+                {item.amount_local != null && item.local_currency ? (
+                  <>
+                    <Text style={styles.localAmount}>
+                      {formatAmount(item.amount_local, item.local_currency as Currency)}
+                    </Text>
+                    <Text style={styles.fcfaHint}>≈ {formatXAFAmount(item.amount_expected)}</Text>
+                  </>
+                ) : (
+                  <DiasporaAmount amountXaf={item.amount_expected} currency={displayCur} size="md" />
+                )}
                 <Text style={styles.meta}>{item.reference_code}</Text>
                 {item.due_date ? (
                   <Text style={styles.meta}>
@@ -123,6 +152,21 @@ export default function DiasporaContributionsScreen() {
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   body: { flex: 1, paddingHorizontal: 0, gap: 0 },
+  createHit: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
+  createBanner: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: 10,
+    backgroundColor: "#fff",
+    borderRadius: Radius.lg,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  createBannerText: { fontSize: 13, fontWeight: "800", color: Colors.brandNavy },
+  localAmount: { fontSize: 18, fontWeight: "900", color: Colors.primary },
+  fcfaHint: { fontSize: 11, fontWeight: "600", color: Colors.textMuted, marginTop: 2 },
   filters: {
     flexDirection: "row",
     flexWrap: "wrap",

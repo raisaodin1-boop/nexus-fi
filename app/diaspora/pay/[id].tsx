@@ -76,14 +76,18 @@ export default function DiasporaPayScreen() {
     }
     setLoading(true);
     try {
+      const isMomo = method === "mtn_momo" || method === "orange_money";
+      const localCur = (req.local_currency || displayCur) as Currency;
+      const localAmt = req.amount_local ?? indicativeEur;
       await api.post(`/diaspora/requests/${req.id}/payment-started`, {
         payment_method: method,
         payer_type: payerType,
         payer_name: payerType === "relative" ? payerName.trim() : user?.full_name,
         payer_phone: payerPhone.trim() || undefined,
         payer_relation: payerRelation.trim() || undefined,
-        declared_amount: req.amount_expected,
-        declared_currency: req.currency,
+        // MoMo collecte en FCFA ; virement international déclaré en devise locale.
+        declared_amount: isMomo ? req.amount_expected : (localAmt ?? req.amount_expected),
+        declared_currency: isMomo ? "XAF" : localCur,
       });
       router.push(`/diaspora/proof/${req.id}` as any);
     } catch (e) {
@@ -116,7 +120,16 @@ export default function DiasporaPayScreen() {
         <Card>
           <Text style={styles.label}>Tontine</Text>
           <Text style={styles.value}>{req.tontine_name}</Text>
-          <DiasporaAmount amountXaf={req.amount_expected} currency={displayCur} size="lg" />
+          {req.amount_local != null && req.local_currency ? (
+            <>
+              <Text style={styles.localHero}>
+                {formatAmount(req.amount_local, req.local_currency as Currency)}
+              </Text>
+              <Text style={styles.meta}>≈ {formatXAFAmount(req.amount_expected)} (montant tontine)</Text>
+            </>
+          ) : (
+            <DiasporaAmount amountXaf={req.amount_expected} currency={displayCur} size="lg" />
+          )}
           {req.due_date ? (
             <Text style={styles.meta}>Échéance : {new Date(req.due_date).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}</Text>
           ) : null}
@@ -175,9 +188,19 @@ export default function DiasporaPayScreen() {
             <CopyRow label="IBAN" value={DIASPORA_BANK.iban} />
             <CopyRow label="BIC/SWIFT" value={DIASPORA_BANK.swift} />
             <CopyRow label="Référence obligatoire" value={req.reference_code} />
-            <CopyRow label="Montant attendu" value={formatXAFAmount(req.amount_expected)} />
+            <CopyRow
+              label={`Montant à virer (${req.local_currency || displayCur})`}
+              value={
+                req.amount_local != null && req.local_currency
+                  ? formatAmount(req.amount_local, req.local_currency as Currency)
+                  : indicativeEur != null
+                    ? formatAmount(indicativeEur, transferCurrency)
+                    : formatXAFAmount(req.amount_expected)
+              }
+            />
+            <CopyRow label="Équivalent tontine (FCFA)" value={formatXAFAmount(req.amount_expected)} />
             <View style={styles.calc}>
-              <Text style={styles.calcTitle}>Équivalent dans votre devise (indicatif)</Text>
+              <Text style={styles.calcTitle}>Convertisseur indicatif</Text>
               <View style={styles.opRow}>
                 {([displayCur, "EUR", "USD", "GBP", "CAD", "CHF"] as Currency[])
                   .filter((c, i, arr) => arr.indexOf(c) === i)
@@ -252,6 +275,7 @@ const styles = StyleSheet.create({
   label: { fontSize: 11, color: Colors.textMuted, fontWeight: "700" },
   value: { fontSize: 16, fontWeight: "800", color: Colors.text },
   amount: { fontSize: 26, fontWeight: "900", color: Colors.primary, marginVertical: 6 },
+  localHero: { fontSize: 28, fontWeight: "900", color: Colors.primary, marginVertical: 6 },
   meta: { fontSize: 13, color: Colors.textMuted },
   member: { fontSize: 12, color: Colors.textMuted, marginTop: 8 },
   section: { fontSize: 14, fontWeight: "900", color: Colors.text, marginTop: 4 },

@@ -541,8 +541,17 @@ function AdminDiasporaContributions({ embedded }: { embedded?: boolean }) {
             <Text style={styles.ref}>Réf. {selected.reference_code}</Text>
             <DiasporaStatusBadge status={selected.status} />
             <View style={styles.compare}>
-              <Text style={styles.compareLine}>Attendu : {formatXAF(selected.amount_expected)}</Text>
-              <Text style={styles.compareLine}>Déclaré : {selected.declared_amount ? formatXAF(selected.declared_amount) : "—"}</Text>
+              <Text style={styles.compareLine}>Attendu (FCFA) : {formatXAF(selected.amount_expected)}</Text>
+              {selected.amount_local != null && selected.local_currency ? (
+                <Text style={styles.compareLine}>
+                  Attendu ({selected.local_currency}) : {Number(selected.amount_local).toLocaleString("fr-FR")} {selected.local_currency}
+                </Text>
+              ) : null}
+              <Text style={styles.compareLine}>
+                Déclaré : {selected.declared_amount != null
+                  ? `${Number(selected.declared_amount).toLocaleString("fr-FR")} ${selected.declared_currency ?? ""}`.trim()
+                  : "—"}
+              </Text>
               <Text style={styles.compareLine}>Méthode : {selected.payment_method ?? "—"}</Text>
               <Text style={styles.compareLine}>Payeur : {selected.payer_name ?? "—"}</Text>
             </View>

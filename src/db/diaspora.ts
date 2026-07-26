@@ -4,7 +4,8 @@ import { notifyUser } from "./notifications";
 import { addIdentityEvent, getTrustScore } from "./identity";
 import { listTontines, getPublicTontineProfile } from "./tontines";
 import { secureRandomAlphanumeric } from "./secure-random";
-import { requireDiasporaAccess } from "./diaspora-enrollment";
+import { getDiasporaAccess, requireDiasporaAccess } from "./diaspora-enrollment";
+import { convert, getRates, type Currency, CURRENCY_META } from "@/src/exchange-rates";
 
 const PROOF_BUCKET = "diaspora-proofs";
 
@@ -21,6 +22,9 @@ export interface DiasporaRequest {
   reference_code: string;
   amount_expected: number;
   currency: string;
+  /** Indicative amount in member local currency at creation. */
+  amount_local?: number | null;
+  local_currency?: string | null;
   cycle: number;
   due_date?: string | null;
   status: DiasporaStatus;
@@ -102,6 +106,8 @@ function mapRequest(row: Record<string, unknown>, tontineName?: string): Diaspor
     reference_code: String(row.reference_code),
     amount_expected: Number(row.amount_expected ?? 0),
     currency: String(row.currency ?? "XAF"),
+    amount_local: row.amount_local != null ? Number(row.amount_local) : null,
+    local_currency: (row.local_currency as string | null) ?? null,
     cycle: Number(row.cycle ?? 1),
     due_date: row.due_date as string | null,
     status: row.status as DiasporaStatus,
@@ -173,7 +179,16 @@ export async function ensureDiasporaRequest(tontineId: string): Promise<Diaspora
     .select("id").eq("tontine_id", tontineId).eq("user_id", me).eq("cycle", cycle).maybeSingle();
   if (paid) throw { status: 400, detail: "Cotisation déjà validée pour ce cycle." };
 
-  const amount = Number(tontine.amount_per_cycle ?? tontine.contribution_amount ?? 0);
+  const amountXaf = Number(tontine.amount_per_cycle ?? tontine.contribution_amount ?? 0);
+  if (!(amountXaf > 0)) throw { status: 400, detail: "Montant de cotisation invalide pour cette tontine." };
+
+  const access = await getDiasporaAccess();
+  const localCurrency = (access.preferred_currency ?? "EUR") as Currency;
+  const rates = await getRates();
+  const decimals = CURRENCY_META[localCurrency]?.decimals ?? 2;
+  const factor = 10 ** decimals;
+  const amountLocal = Math.round(convert(amountXaf, "XAF", localCurrency, rates) * factor) / factor;
+
   const ref = generateReference(tontine.name);
   const due = tontine.cycle_deadline ?? new Date(Date.now() + 30 * 86400000).toISOString();
 
@@ -181,8 +196,10 @@ export async function ensureDiasporaRequest(tontineId: string): Promise<Diaspora
     user_id: me,
     tontine_id: tontineId,
     reference_code: ref,
-    amount_expected: amount,
-    currency: tontine.currency ?? "XAF",
+    amount_expected: amountXaf,
+    currency: "XAF",
+    amount_local: amountLocal,
+    local_currency: localCurrency,
     cycle,
     due_date: due,
     status: "pending_payment",
