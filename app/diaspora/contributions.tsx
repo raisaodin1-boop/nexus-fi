@@ -1,23 +1,21 @@
 import { useCallback, useState } from "react";
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { ArrowLeft } from "lucide-react-native";
 
 import { api } from "@/src/api";
 import type { DiasporaRequest } from "@/src/db/diaspora";
-import { Card } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { DiasporaStatusBadge } from "@/src/diaspora-ui";
 import { useDiasporaGuard, DiasporaGuardSpinner } from "@/src/use-diaspora-guard";
 import { useAuth } from "@/src/auth-context";
 import { DiasporaAmount } from "@/src/diaspora-amount";
 import type { Currency } from "@/src/exchange-rates";
+import { DiasporaPanel, DiasporaScreenShell } from "@/src/diaspora-shell";
 
 const FILTERS = [
   { key: "all", label: "Toutes" },
   { key: "pending_payment", label: "À payer" },
-  { key: "under_review", label: "En vérification" },
+  { key: "under_review", label: "En vérif." },
   { key: "validated", label: "Validées" },
   { key: "rejected", label: "Rejetées" },
 ];
@@ -44,22 +42,27 @@ export default function DiasporaContributionsScreen() {
 
   if (checking) {
     return (
-      <SafeAreaView style={styles.safe}>
+      <DiasporaScreenShell variant="app" title="Mes cotisations" scroll={false} contentStyle={styles.center}>
         <DiasporaGuardSpinner checking={checking} />
-      </SafeAreaView>
+      </DiasporaScreenShell>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-      <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => router.back()}><ArrowLeft color={Colors.text} size={22} /></TouchableOpacity>
-        <Text style={styles.title}>Mes cotisations</Text>
-      </View>
-
+    <DiasporaScreenShell
+      variant="app"
+      title="Mes cotisations"
+      subtitle="Suivi, paiements et preuves"
+      scroll={false}
+      contentStyle={styles.body}
+    >
       <View style={styles.filters}>
         {FILTERS.map((f) => (
-          <TouchableOpacity key={f.key} style={[styles.chip, filter === f.key && styles.chipActive]} onPress={() => setFilter(f.key)}>
+          <TouchableOpacity
+            key={f.key}
+            style={[styles.chip, filter === f.key && styles.chipActive]}
+            onPress={() => setFilter(f.key)}
+          >
             <Text style={[styles.chipText, filter === f.key && styles.chipTextActive]}>{f.label}</Text>
           </TouchableOpacity>
         ))}
@@ -68,17 +71,19 @@ export default function DiasporaContributionsScreen() {
       <FlatList
         data={items}
         keyExtractor={(i) => i.id}
-        contentContainerStyle={{ padding: Spacing.lg, gap: 10, paddingBottom: 40 }}
+        contentContainerStyle={{ paddingHorizontal: Spacing.lg, gap: 10, paddingBottom: 48 }}
         ListEmptyComponent={<Text style={styles.empty}>Aucune cotisation pour ce filtre.</Text>}
         renderItem={({ item }) => (
-          <Card>
+          <DiasporaPanel style={styles.itemPanel}>
             <View style={styles.row}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{item.tontine_name ?? "Tontine"}</Text>
                 <DiasporaAmount amountXaf={item.amount_expected} currency={displayCur} size="md" />
                 <Text style={styles.meta}>{item.reference_code}</Text>
                 {item.due_date ? (
-                  <Text style={styles.meta}>Échéance {new Date(item.due_date).toLocaleDateString("fr-FR")}</Text>
+                  <Text style={styles.meta}>
+                    Échéance {new Date(item.due_date).toLocaleDateString("fr-FR")}
+                  </Text>
                 ) : null}
               </View>
               <DiasporaStatusBadge status={item.status} />
@@ -90,9 +95,12 @@ export default function DiasporaContributionsScreen() {
                 </TouchableOpacity>
               ) : null}
               {["rejected", "needs_info", "pending_payment", "proof_submitted"].includes(item.status) ? (
-                <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={() => router.push(`/diaspora/proof/${item.id}` as any)}>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnPrimary]}
+                  onPress={() => router.push(`/diaspora/proof/${item.id}` as any)}
+                >
                   <Text style={[styles.btnText, { color: "#fff" }]}>
-                    {item.status === "proof_submitted" ? "Continuer la preuve" : "Nouvelle preuve"}
+                    {item.status === "proof_submitted" ? "Continuer la preuve" : "Joindre une preuve"}
                   </Text>
                 </TouchableOpacity>
               ) : null}
@@ -105,28 +113,47 @@ export default function DiasporaContributionsScreen() {
             {item.rejection_reason ? (
               <Text style={styles.reject}>Motif : {item.rejection_reason}</Text>
             ) : null}
-          </Card>
+          </DiasporaPanel>
         )}
       />
-    </SafeAreaView>
+    </DiasporaScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.bg },
-  topBar: { flexDirection: "row", alignItems: "center", gap: 12, padding: Spacing.lg },
-  title: { fontSize: 20, fontWeight: "900", color: Colors.text },
-  filters: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: Spacing.lg, marginBottom: 8 },
-  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: Colors.surfaceAlt },
-  chipActive: { backgroundColor: Colors.primaryLight },
-  chipText: { fontSize: 12, fontWeight: "700", color: Colors.textMuted },
-  chipTextActive: { color: Colors.primary },
-  empty: { textAlign: "center", color: Colors.textMuted, marginTop: 40 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  body: { flex: 1, paddingHorizontal: 0, gap: 0 },
+  filters: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    paddingHorizontal: Spacing.lg,
+    marginBottom: 12,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: Radius.md,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+  },
+  chipActive: { backgroundColor: "#fff", borderColor: "#fff" },
+  chipText: { fontSize: 12, fontWeight: "700", color: "rgba(255,255,255,0.7)" },
+  chipTextActive: { color: Colors.brandNavy },
+  empty: { textAlign: "center", color: "rgba(255,255,255,0.55)", marginTop: 40, fontWeight: "600" },
+  itemPanel: { gap: 4 },
   row: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
   name: { fontSize: 15, fontWeight: "800", color: Colors.text },
   meta: { fontSize: 11, color: Colors.textMuted, marginTop: 2 },
   btnRow: { flexDirection: "row", gap: 8, marginTop: 12, flexWrap: "wrap" },
-  btn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border },
+  btn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
   btnPrimary: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   btnText: { fontSize: 12, fontWeight: "800", color: Colors.primary },
   reject: { fontSize: 12, color: Colors.danger, marginTop: 8 },

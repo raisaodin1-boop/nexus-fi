@@ -1,8 +1,9 @@
 import { StyleSheet, Text, TouchableOpacity, View, Clipboard } from "react-native";
-import { Copy, Globe, Info } from "lucide-react-native";
+import { Copy, Shield } from "lucide-react-native";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { useToast } from "@/src/toast";
 import { DIASPORA_MANUAL_BANNER } from "@/src/diaspora-config";
+import { DiasporaPalette } from "@/src/diaspora-shell";
 
 export type DiasporaStatus =
   | "pending_payment"
@@ -14,10 +15,10 @@ export type DiasporaStatus =
   | "suspicious";
 
 export const DIASPORA_STATUS_CONFIG: Record<DiasporaStatus, { label: string; bg: string; fg: string }> = {
-  pending_payment: { label: "En attente de paiement", bg: "#F3F4F6", fg: "#6B7280" },
-  proof_submitted: { label: "Preuve envoyée", bg: Colors.infoLight, fg: Colors.info },
-  under_review: { label: "En cours de vérification", bg: Colors.infoLight, fg: Colors.info },
-  needs_info: { label: "Informations requises", bg: Colors.warningLight, fg: Colors.warning },
+  pending_payment: { label: "À régler", bg: "#EEF2F8", fg: "#5B6B7F" },
+  proof_submitted: { label: "Preuve reçue", bg: Colors.infoLight, fg: Colors.info },
+  under_review: { label: "Vérification", bg: Colors.infoLight, fg: Colors.info },
+  needs_info: { label: "Infos requises", bg: Colors.warningLight, fg: Colors.warning },
   validated: { label: "Validée", bg: Colors.successLight, fg: Colors.success },
   rejected: { label: "Rejetée", bg: Colors.dangerLight, fg: Colors.danger },
   suspicious: { label: "En examen", bg: Colors.warningLight, fg: Colors.warning },
@@ -32,13 +33,14 @@ export function DiasporaStatusBadge({ status }: { status: string }) {
   );
 }
 
-export function DiasporaManualBanner() {
+/** Compact validation notice — not a loud banner. */
+export function DiasporaManualBanner({ compact }: { compact?: boolean }) {
   return (
-    <View style={styles.banner}>
-      <Info color={Colors.info} size={18} />
+    <View style={[styles.notice, compact && styles.noticeCompact]}>
+      <View style={styles.noticeBar} />
       <View style={{ flex: 1 }}>
-        <Text style={styles.bannerTitle}>{DIASPORA_MANUAL_BANNER.title}</Text>
-        <Text style={styles.bannerBody}>{DIASPORA_MANUAL_BANNER.body}</Text>
+        <Text style={styles.noticeTitle}>{DIASPORA_MANUAL_BANNER.title}</Text>
+        {!compact ? <Text style={styles.noticeBody}>{DIASPORA_MANUAL_BANNER.body}</Text> : null}
       </View>
     </View>
   );
@@ -47,13 +49,11 @@ export function DiasporaManualBanner() {
 export function DiasporaHeroStrip() {
   return (
     <View style={styles.heroStrip}>
-      <Globe color={Colors.primary} size={20} />
-      <View style={{ flex: 1 }}>
-        <Text style={styles.heroTitle}>HODIX Diaspora</Text>
-        <Text style={styles.heroSub}>
-          Cotisez à vos tontines et soutenez votre épargne familiale, même depuis l'étranger.
-        </Text>
-      </View>
+      <Text style={styles.heroEyeline}>HODIX Diaspora</Text>
+      <Text style={styles.heroTitle}>Cotisez depuis l'étranger</Text>
+      <Text style={styles.heroSub}>
+        Vos tontines familiales, en devise locale, avec validation HODIX.
+      </Text>
     </View>
   );
 }
@@ -77,71 +77,120 @@ export function CopyRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function SecurityNotice() {
+export function SecurityNotice({ compact }: { compact?: boolean }) {
+  if (compact) {
+    return (
+      <View style={styles.securityCompact}>
+        <Shield color={DiasporaPalette.teal} size={16} />
+        <Text style={styles.securityCompactText}>
+          HODIX ne demande jamais votre PIN Mobile Money ni vos codes OTP.
+        </Text>
+      </View>
+    );
+  }
   return (
     <View style={styles.securityBox}>
       <Text style={styles.securityTitle}>Votre sécurité</Text>
-      <Text style={styles.securityLine}>• HODIX ne demande jamais votre PIN Mobile Money ni vos codes OTP.</Text>
-      <Text style={styles.securityLine}>• Vérifiez toujours les coordonnées affichées dans l'application.</Text>
-      <Text style={styles.securityLine}>• Ne payez jamais un administrateur sur un numéro personnel non affiché par HODIX.</Text>
-      <Text style={styles.securityLine}>• Chaque cotisation doit contenir une référence unique.</Text>
+      <Text style={styles.securityLine}>HODIX ne demande jamais votre PIN Mobile Money ni vos codes OTP.</Text>
+      <Text style={styles.securityLine}>Vérifiez toujours les coordonnées affichées dans l'application.</Text>
+      <Text style={styles.securityLine}>Chaque cotisation porte une référence unique à indiquer au paiement.</Text>
     </View>
   );
 }
 
 export function ComingSoonRoadmap() {
   const items = [
-    "Paiement par carte Visa et Mastercard",
+    "Carte Visa / Mastercard",
     "Apple Pay et Google Pay",
-    "Prélèvement bancaire et paiement automatisé",
-    "Wallet multidevise et validation plus rapide",
-    "Des partenaires de paiement internationaux seront intégrés progressivement.",
+    "Prélèvement automatisé",
   ];
   return (
     <View style={styles.roadmap}>
-      <Text style={styles.roadmapTitle}>Bientôt disponible</Text>
-      {items.map((it) => (
-        <Text key={it} style={styles.roadmapItem}>· {it}</Text>
+      <Text style={styles.roadmapTitle}>Prochaines évolutions</Text>
+      <Text style={styles.roadmapBody}>
+        {items.join(" · ")}. Des partenaires internationaux seront ajoutés progressivement.
+      </Text>
+    </View>
+  );
+}
+
+export function DiasporaJourneySteps() {
+  const steps = [
+    { n: "01", title: "Inscription", body: "Identité et preuve de résidence hors Cameroun." },
+    { n: "02", title: "Validation", body: "Examen manuel par HODIX sous 24–48 h ouvrées." },
+    { n: "03", title: "Espace Diaspora", body: "Cotisations en devise locale, suivi et preuves." },
+  ];
+  return (
+    <View style={styles.journey}>
+      {steps.map((s, i) => (
+        <View key={s.n} style={[styles.journeyRow, i === steps.length - 1 && { borderBottomWidth: 0 }]}>
+          <Text style={styles.journeyN}>{s.n}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.journeyTitle}>{s.title}</Text>
+            <Text style={styles.journeyBody}>{s.body}</Text>
+          </View>
+        </View>
       ))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, alignSelf: "flex-start" },
+  badge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: Radius.sm, alignSelf: "flex-start" },
   badgeText: { fontSize: 11, fontWeight: "800" },
-  banner: {
-    flexDirection: "row", gap: 10, padding: Spacing.md,
-    backgroundColor: Colors.infoLight, borderRadius: Radius.lg,
-    borderWidth: 1, borderColor: Colors.info + "33", marginBottom: Spacing.md,
+  notice: {
+    flexDirection: "row",
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: "rgba(255,255,255,0.9)",
+    borderRadius: Radius.lg,
+    overflow: "hidden",
   },
-  bannerTitle: { fontSize: 13, fontWeight: "800", color: Colors.info },
-  bannerBody: { fontSize: 12, color: Colors.textMuted, marginTop: 2, lineHeight: 18 },
-  heroStrip: {
-    flexDirection: "row", gap: 12, alignItems: "flex-start",
-    padding: Spacing.lg, backgroundColor: Colors.primaryLight,
-    borderRadius: Radius.xl, marginBottom: Spacing.md,
-  },
-  heroTitle: { fontSize: 18, fontWeight: "900", color: Colors.primary },
-  heroSub: { fontSize: 13, color: Colors.textMuted, marginTop: 4, lineHeight: 19 },
+  noticeCompact: { paddingVertical: 10 },
+  noticeBar: { width: 3, borderRadius: 2, backgroundColor: DiasporaPalette.teal },
+  noticeTitle: { fontSize: 12, fontWeight: "800", color: DiasporaPalette.navy },
+  noticeBody: { fontSize: 12, color: Colors.textMuted, marginTop: 3, lineHeight: 17 },
+  heroStrip: { gap: 6, marginBottom: Spacing.md },
+  heroEyeline: { fontSize: 11, fontWeight: "800", color: DiasporaPalette.gold, letterSpacing: 2 },
+  heroTitle: { fontSize: 22, fontWeight: "900", color: Colors.text, letterSpacing: -0.4 },
+  heroSub: { fontSize: 14, color: Colors.textMuted, lineHeight: 20 },
   copyRow: {
     flexDirection: "row", alignItems: "center", gap: 8,
     paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
   },
   copyLabel: { fontSize: 11, color: Colors.textMuted, fontWeight: "600" },
   copyValue: { fontSize: 14, fontWeight: "800", color: Colors.text, marginTop: 2 },
-  copyBtn: { padding: 8, borderRadius: 10, backgroundColor: Colors.primaryLight },
+  copyBtn: { padding: 8, borderRadius: Radius.md, backgroundColor: Colors.primaryLight },
   securityBox: {
-    padding: Spacing.lg, backgroundColor: Colors.surfaceAlt,
-    borderRadius: Radius.lg, gap: 6,
+    padding: Spacing.lg, backgroundColor: "rgba(255,255,255,0.88)",
+    borderRadius: Radius.lg, gap: 8,
   },
-  securityTitle: { fontSize: 14, fontWeight: "900", color: Colors.text, marginBottom: 4 },
+  securityTitle: { fontSize: 14, fontWeight: "800", color: Colors.text, marginBottom: 2 },
   securityLine: { fontSize: 12, color: Colors.textMuted, lineHeight: 18 },
-  roadmap: {
-    padding: Spacing.lg, backgroundColor: Colors.surface,
-    borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border,
-    borderStyle: "dashed",
+  securityCompact: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingVertical: 10, paddingHorizontal: 4,
   },
-  roadmapTitle: { fontSize: 13, fontWeight: "900", color: Colors.textMuted, marginBottom: 8 },
-  roadmapItem: { fontSize: 12, color: Colors.textSubtle, lineHeight: 20 },
+  securityCompactText: { flex: 1, fontSize: 12, color: "rgba(255,255,255,0.7)", lineHeight: 17 },
+  roadmap: { paddingVertical: 8, gap: 4 },
+  roadmapTitle: { fontSize: 12, fontWeight: "800", color: "rgba(255,255,255,0.55)", letterSpacing: 0.3 },
+  roadmapBody: { fontSize: 12, color: "rgba(255,255,255,0.45)", lineHeight: 18 },
+  journey: { gap: 0 },
+  journeyRow: {
+    flexDirection: "row",
+    gap: 14,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
+  journeyN: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: DiasporaPalette.teal,
+    width: 28,
+    letterSpacing: -0.5,
+  },
+  journeyTitle: { fontSize: 15, fontWeight: "800", color: Colors.text },
+  journeyBody: { fontSize: 13, color: Colors.textMuted, marginTop: 3, lineHeight: 19 },
 });

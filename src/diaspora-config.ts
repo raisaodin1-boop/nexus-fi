@@ -37,11 +37,11 @@ export const DIASPORA_VALIDATION_SLA =
   "Votre cotisation est généralement validée sous 24 à 48 heures ouvrées.";
 
 export const DIASPORA_DISCLAIMER =
-  "Participez à votre tontine et à votre épargne familiale depuis l'étranger. Ce n'est pas un service de transfert d'argent international.";
+  "Espace réservé aux membres résidant hors Cameroun. HODIX Diaspora n'est pas un service de transfert d'argent international.";
 
 export const DIASPORA_MANUAL_BANNER = {
-  title: "Mode Diaspora — Validation manuelle",
-  body: `Après paiement, envoyez votre preuve. ${DIASPORA_VALIDATION_SLA}`,
+  title: "Validation manuelle HODIX",
+  body: `Après chaque paiement, joignez votre preuve. ${DIASPORA_VALIDATION_SLA}`,
 };
 
 export function buildDiasporaWhatsAppUrl(opts: {

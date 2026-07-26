@@ -95,14 +95,31 @@ export interface DiasporaAccess {
 }
 
 export const DIASPORA_GATE_COPY = {
-  title: "Mode Diaspora HODIX",
-  question: "Vous vivez à l'étranger ?",
+  title: "HODIX Diaspora",
+  question: "Cotisez à votre tontine depuis l'étranger",
   subtitle:
-    "Accédez à votre espace Diaspora pour cotiser à vos tontines familiales depuis la France, la Belgique, le Canada, les États-Unis, le Royaume-Uni ou ailleurs.",
-  cta: "Entrer dans le mode Diaspora",
-  pendingTitle: "Dossier en cours d'examen",
+    "Un espace dédié aux membres hors Cameroun : montants en devise locale, preuves de paiement, validation HODIX.",
+  cta: "Commencer l'inscription",
+  pendingTitle: "Dossier en examen",
   pendingBody:
-    "Notre équipe vérifie votre identité et votre preuve de résidence à l'étranger. Délai habituel : 24 à 48 heures ouvrées.",
-  rejectedTitle: "Inscription non validée",
-  reapply: "Soumettre un nouveau dossier",
+    "Nous vérifions votre identité et votre résidence à l'étranger. Délai habituel : 24 à 48 heures ouvrées. Vous serez notifié dès validation.",
+  rejectedTitle: "Dossier à corriger",
+  reapply: "Corriger et renvoyer mon dossier",
 };
+
+/** Enrollment / pre-access notices — hide once Diaspora mode is active.
+ *  Do not match contribution "needs info" (action_url → /diaspora/proof/…).
+ */
+export function isDiasporaEnrollmentLifecycleNotif(n: {
+  title?: string | null;
+  action_url?: string | null;
+  metadata?: Record<string, unknown> | null;
+}): boolean {
+  const title = (n.title ?? "").trim();
+  const url = n.action_url ?? (n.metadata?.action_url ? String(n.metadata.action_url) : "");
+  if (title === "Dossier Diaspora reçu" || title === "Inscription Diaspora non validée") return true;
+  if (url.includes("/diaspora/enroll")) return true;
+  // Gate landing while waiting for approval — not post-activation home or pay/proof.
+  if (url === "/diaspora" || url.endsWith("/diaspora")) return true;
+  return false;
+}

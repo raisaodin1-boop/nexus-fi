@@ -1,5 +1,6 @@
 import { getSupabase } from "@/src/supabase";
 import { uid, cached, throwSb, invalidateCache } from "./helpers";
+import { isDiasporaEnrollmentLifecycleNotif } from "@/src/diaspora-enrollment-config";
 
 export type NotifyPayload = {
   user_id: string;
@@ -52,10 +53,31 @@ export async function notifyUser(opts: NotifyPayload) {
 export async function listNotifications() {
   const me = await uid();
   return cached(`notifs-${me}`, 30_000, async () => {
-    const { data, error } = await getSupabase()
-      .from("notifications").select("*").eq("user_id", me).order("created_at", { ascending: false }).limit(50);
+    const [{ data, error }, profileRes] = await Promise.all([
+      getSupabase()
+        .from("notifications").select("*").eq("user_id", me).order("created_at", { ascending: false }).limit(80),
+      getSupabase().from("profiles").select("diaspora_status").eq("id", me).maybeSingle(),
+    ]);
     throwSb(error);
-    const items = (data ?? []).map((row) => mapNotification(row as Record<string, unknown>));
+    const diasporaActive = profileRes.data?.diaspora_status === "approved";
+    let items = (data ?? []).map((row) => mapNotification(row as Record<string, unknown>));
+
+    if (diasporaActive) {
+      // Hide enrollment / pre-access notices once mode is live.
+      const stale = items.filter((n) => isDiasporaEnrollmentLifecycleNotif(n));
+      if (stale.length) {
+        const ids = stale.map((n) => n.id);
+        await getSupabase()
+          .from("notifications")
+          .update({ is_read: true })
+          .eq("user_id", me)
+          .in("id", ids)
+          .eq("is_read", false);
+        items = items.filter((n) => !isDiasporaEnrollmentLifecycleNotif(n));
+      }
+    }
+
+    items = items.slice(0, 50);
     return {
       items,
       unread_count: items.filter((n) => !n.is_read).length,

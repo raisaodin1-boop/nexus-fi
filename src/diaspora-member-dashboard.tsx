@@ -1,20 +1,18 @@
 import { useCallback, useState } from "react";
-import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, ChevronRight, Globe, HeartHandshake, List, MapPin, PlusCircle, Shield, Upload } from "lucide-react-native";
+import {
+  ChevronRight, HeartHandshake, List, MapPin, PlusCircle, Shield, Upload, Users,
+} from "lucide-react-native";
 
 import { useAuth } from "@/src/auth-context";
 import { api } from "@/src/api";
 import type { DiasporaHome } from "@/src/db/diaspora";
-import { Button, Card, SkeletonCard } from "@/src/ui";
+import { SkeletonCard } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import {
-  ComingSoonRoadmap, DiasporaManualBanner,
   DiasporaStatusBadge, SecurityNotice,
 } from "@/src/diaspora-ui";
-import { DIASPORA_DISCLAIMER } from "@/src/diaspora-config";
 import { isDiasporaMember } from "@/src/diaspora-enrollment-config";
 import { CURRENCY_META, type Currency } from "@/src/exchange-rates";
 import { DiasporaAmount, formatDiasporaPrimary, useDiasporaRates } from "@/src/diaspora-amount";
@@ -23,11 +21,16 @@ import { TrustGauge } from "@/src/trust-gauge";
 import { trustLevelFromScore } from "@/src/identity-progression";
 import { DiasporaGuardSpinner } from "@/src/use-diaspora-guard";
 import { useLiveDashboardSync } from "@/src/hooks/use-live-dashboard";
+import {
+  DiasporaBrandMark,
+  DiasporaFadeIn,
+  DiasporaPanel,
+  DiasporaScreenShell,
+  DiasporaSection,
+} from "@/src/diaspora-shell";
 
 type Props = {
-  /** True when rendered as main tab home (no back button). */
   embeddedInTabs?: boolean;
-  /** Skip guard redirect — caller already verified access (tab home). */
   skipGuard?: boolean;
 };
 
@@ -39,6 +42,7 @@ export function DiasporaMemberDashboard({ embeddedInTabs, skipGuard }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [accessDenied, setAccessDenied] = useState(false);
+  const [showTrust, setShowTrust] = useState(false);
 
   const profileCur = (user?.diaspora_currency ?? "EUR") as Currency;
   const profileCountry = user?.diaspora_country ?? user?.country;
@@ -76,187 +80,319 @@ export function DiasporaMemberDashboard({ embeddedInTabs, skipGuard }: Props) {
   const curMeta = CURRENCY_META[cur];
   const residence = home?.country_of_residence ?? profileCountry;
   const cotisePrimary = formatDiasporaPrimary(home?.total_validated_12m ?? 0, cur, rates);
+  const firstName = (user?.full_name ?? "").split(" ")[0] || "Membre";
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-      <LinearGradient colors={[Colors.gradStart, Colors.gradMid]} style={styles.header}>
-        {!embeddedInTabs ? (
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <ArrowLeft color="#fff" size={20} />
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.backBtn} />
-        )}
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Globe color="#fff" size={18} />
-            <Text style={styles.headerTitle}>HODIX Diaspora</Text>
-            {embeddedInTabs ? (
-              <View style={styles.modeBadge}>
-                <Text style={styles.modeBadgeText}>Mode actif</Text>
-              </View>
-            ) : null}
-          </View>
-          <Text style={styles.headerSub}>{DIASPORA_DISCLAIMER}</Text>
+    <DiasporaScreenShell
+      variant="hero"
+      showBack={!embeddedInTabs}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => { setRefreshing(true); load(); }}
+          tintColor="#fff"
+        />
+      }
+      contentStyle={styles.content}
+    >
+      <DiasporaFadeIn>
+        <View style={styles.topIdentity}>
+          <DiasporaBrandMark size="sm" />
           {residence ? (
-            <View style={styles.countryPill}>
-              <MapPin color="#fff" size={12} />
-              <Text style={styles.countryText}>
-                {residence} · {curMeta?.symbol ?? cur}
+            <View style={styles.placeRow}>
+              <MapPin color="rgba(255,255,255,0.75)" size={13} />
+              <Text style={styles.placeText}>
+                {residence}
+                {curMeta ? ` · ${curMeta.symbol} ${cur}` : ""}
               </Text>
             </View>
           ) : null}
+          <Text style={styles.greeting}>Bonjour {firstName}</Text>
+          <Text style={styles.greetingSub}>Votre épargne familiale, suivie depuis l'étranger.</Text>
         </View>
-      </LinearGradient>
+      </DiasporaFadeIn>
 
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
-      >
-        <DiasporaManualBanner />
-
-        {loading ? (
-          <SkeletonCard />
-        ) : (
-          <>
-            <Text style={styles.h1}>Votre épargne africaine, où que vous soyez.</Text>
-
-            <Card style={styles.trustCard}>
-              <Text style={styles.sectionLabel}>Votre réputation financière Diaspora</Text>
-              <TrustGauge
-                score={home?.trust_score ?? 0}
-                level={level.level}
-                color={level.color}
-                size={180}
-                hideOutOf
-                percentileLine={home?.top_pct ? `Top ${home.top_pct}% des membres actifs` : undefined}
-              />
-              <Text style={styles.trustHint}>
-                Score de confiance HODIX — non un score de crédit bancaire officiel.
-              </Text>
-            </Card>
-
-            <View style={styles.statsRow}>
-              <StatBox label="Tontines actives" value={String(home?.active_tontines ?? 0)} />
-              <StatBox
-                label="Cotisé (12 mois)"
-                value={rates || cur === "XAF" ? cotisePrimary : "…"}
-                sub={cur !== "XAF" ? `≈ ${formatXAFAmount(home?.total_validated_12m ?? 0)}` : undefined}
-              />
-              <StatBox label={`Devise (${cur})`} value={curMeta?.symbol ?? cur} />
-            </View>
-
-            {next ? (
-              <Card style={{ marginBottom: Spacing.md }}>
-                <Text style={styles.sectionLabel}>Prochaine cotisation</Text>
-                <Text style={styles.tontineName}>{next.tontine_name}</Text>
-                <DiasporaAmount amountXaf={next.amount_expected} currency={cur} size="lg" />
-                {next.due_date ? (
-                  <Text style={styles.due}>
-                    Échéance : {new Date(next.due_date).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
+      {loading ? (
+        <SkeletonCard />
+      ) : (
+        <>
+          <DiasporaFadeIn delay={70}>
+            <DiasporaPanel accent style={styles.focusPanel}>
+              {next ? (
+                <>
+                  <Text style={styles.focusEyeline}>Prochaine action</Text>
+                  <Text style={styles.focusTitle}>{next.tontine_name}</Text>
+                  <DiasporaAmount amountXaf={next.amount_expected} currency={cur} size="lg" />
+                  {next.due_date ? (
+                    <Text style={styles.focusDue}>
+                      Échéance{" "}
+                      {new Date(next.due_date).toLocaleDateString("fr-FR", {
+                        day: "numeric", month: "long", year: "numeric",
+                      })}
+                    </Text>
+                  ) : null}
+                  <View style={styles.focusMeta}>
+                    <DiasporaStatusBadge status={next.status} />
+                    <Text style={styles.ref}>Réf. {next.reference_code}</Text>
+                  </View>
+                  <Text style={styles.pendingNote}>
+                    Non considérée comme payée tant que HODIX n'a pas validé la preuve.
                   </Text>
-                ) : null}
-                <DiasporaStatusBadge status={next.status} />
-                <Text style={styles.ref}>Réf. {next.reference_code}</Text>
-                <Text style={styles.pendingNote}>
-                  ⚠️ Cette cotisation n'est pas considérée comme payée avant validation par l'équipe HODIX.
-                </Text>
-              </Card>
-            ) : null}
+                  <TouchableOpacity
+                    style={styles.primaryBtn}
+                    onPress={() => router.push(`/diaspora/pay/${next.id}` as any)}
+                    activeOpacity={0.9}
+                  >
+                    <PlusCircle color="#fff" size={18} />
+                    <Text style={styles.primaryBtnText}>Payer cette cotisation</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.focusEyeline}>Espace prêt</Text>
+                  <Text style={styles.focusTitle}>Aucune cotisation en attente</Text>
+                  <Text style={styles.focusDue}>
+                    Rejoignez une tontine ou parrainez un proche pour commencer.
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.primaryBtn}
+                    onPress={() => router.push("/diaspora/join" as any)}
+                    activeOpacity={0.9}
+                  >
+                    <Users color="#fff" size={18} />
+                    <Text style={styles.primaryBtnText}>Rejoindre une tontine</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </DiasporaPanel>
+          </DiasporaFadeIn>
 
-            <View style={styles.actionsRow}>
-              <ActionBtn icon={List} label="Voir mes cotisations" onPress={() => router.push("/diaspora/contributions" as any)} />
-              <ActionBtn icon={PlusCircle} label="Payer une cotisation" onPress={() => {
-                if (next) router.push(`/diaspora/pay/${next.id}` as any);
-                else router.push("/diaspora/contributions" as any);
-              }} primary />
-              <ActionBtn icon={HeartHandshake} label="Payer pour un proche" onPress={() => router.push("/diaspora/sponsor" as any)} />
-              <ActionBtn icon={Upload} label="Ajouter une preuve" onPress={() => {
-                const r = home?.upcoming?.find((u) => ["proof_submitted", "pending_payment", "rejected", "needs_info"].includes(u.status));
-                if (r) router.push(`/diaspora/proof/${r.id}` as any);
-                else router.push("/diaspora/contributions" as any);
-              }} />
+          <DiasporaFadeIn delay={120}>
+            <View style={styles.metrics}>
+              <Metric label="Tontines" value={String(home?.active_tontines ?? 0)} />
+              <Metric
+                label="Cotisé 12 mois"
+                value={rates || cur === "XAF" ? cotisePrimary : "…"}
+                hint={cur !== "XAF" ? `≈ ${formatXAFAmount(home?.total_validated_12m ?? 0)}` : undefined}
+              />
+              <Metric label="Devise" value={curMeta?.symbol ?? cur} hint={cur} />
             </View>
+          </DiasporaFadeIn>
 
-            {home?.todo?.length ? (
-              <Card>
-                <Text style={styles.sectionLabel}>À faire</Text>
+          <DiasporaFadeIn delay={160}>
+            <View style={styles.grid}>
+              <QuickAction
+                icon={List}
+                label="Mes cotisations"
+                onPress={() => router.push("/diaspora/contributions" as any)}
+              />
+              <QuickAction
+                icon={HeartHandshake}
+                label="Payer pour un proche"
+                onPress={() => router.push("/diaspora/sponsor" as any)}
+              />
+              <QuickAction
+                icon={Upload}
+                label="Ajouter une preuve"
+                onPress={() => {
+                  const r = home?.upcoming?.find((u) =>
+                    ["proof_submitted", "pending_payment", "rejected", "needs_info"].includes(u.status),
+                  );
+                  if (r) router.push(`/diaspora/proof/${r.id}` as any);
+                  else router.push("/diaspora/contributions" as any);
+                }}
+              />
+              <QuickAction
+                icon={Users}
+                label="Rejoindre"
+                onPress={() => router.push("/diaspora/join" as any)}
+              />
+            </View>
+          </DiasporaFadeIn>
+
+          {home?.todo?.length ? (
+            <DiasporaFadeIn delay={200}>
+              <DiasporaPanel>
+                <DiasporaSection title="À traiter" body="Actions en attente sur vos dossiers." />
                 {home.todo.map((t) => (
-                  <TouchableOpacity key={t.text} style={styles.todoRow} onPress={() => t.route && router.push(t.route as any)}>
+                  <TouchableOpacity
+                    key={t.text}
+                    style={styles.todoRow}
+                    onPress={() => t.route && router.push(t.route as any)}
+                  >
                     <Text style={styles.todoText}>{t.text}</Text>
                     {t.route ? <ChevronRight color={Colors.textMuted} size={16} /> : null}
                   </TouchableOpacity>
                 ))}
-              </Card>
-            ) : null}
+              </DiasporaPanel>
+            </DiasporaFadeIn>
+          ) : null}
 
-            <SecurityNotice />
-            <TouchableOpacity style={styles.fraudBtn} onPress={() => router.push("/messages" as any)}>
-              <Shield color={Colors.danger} size={16} />
-              <Text style={styles.fraudText}>Signaler une fraude ou un problème</Text>
+          <DiasporaFadeIn delay={220}>
+            <TouchableOpacity
+              style={styles.trustToggle}
+              onPress={() => setShowTrust((v) => !v)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.trustToggleText}>
+                Réputation financière · {home?.trust_score ?? 0}
+                {home?.top_pct ? ` · Top ${home.top_pct}%` : ""}
+              </Text>
+              <ChevronRight
+                color="rgba(255,255,255,0.55)"
+                size={16}
+                style={{ transform: [{ rotate: showTrust ? "90deg" : "0deg" }] }}
+              />
             </TouchableOpacity>
-            <ComingSoonRoadmap />
-            <Button label="Rejoindre une tontine" variant="ghost" onPress={() => router.push("/diaspora/join" as any)} />
-          </>
-        )}
-      </ScrollView>
-    </SafeAreaView>
+            {showTrust ? (
+              <DiasporaPanel style={{ alignItems: "center" }}>
+                <TrustGauge
+                  score={home?.trust_score ?? 0}
+                  level={level.level}
+                  color={level.color}
+                  size={160}
+                  hideOutOf
+                  percentileLine={home?.top_pct ? `Top ${home.top_pct}% des membres actifs` : undefined}
+                />
+                <Text style={styles.trustHint}>
+                  Score de confiance HODIX — pas un score de crédit bancaire officiel.
+                </Text>
+              </DiasporaPanel>
+            ) : null}
+          </DiasporaFadeIn>
+
+          <SecurityNotice compact />
+          <TouchableOpacity style={styles.fraudBtn} onPress={() => router.push("/messages" as any)}>
+            <Shield color="#FCA5A5" size={15} />
+            <Text style={styles.fraudText}>Signaler une fraude ou un problème</Text>
+          </TouchableOpacity>
+        </>
+      )}
+    </DiasporaScreenShell>
   );
 }
 
-function StatBox({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Metric({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <View style={styles.statBox}>
-      <Text style={styles.statValue} numberOfLines={2}>{value}</Text>
-      {sub ? <Text style={styles.statSub}>{sub}</Text> : null}
-      <Text style={styles.statLabel}>{label}</Text>
+    <View style={styles.metric}>
+      <Text style={styles.metricValue} numberOfLines={2}>{value}</Text>
+      {hint ? <Text style={styles.metricHint}>{hint}</Text> : null}
+      <Text style={styles.metricLabel}>{label}</Text>
     </View>
   );
 }
 
-function ActionBtn({ icon: Icon, label, onPress, primary }: { icon: any; label: string; onPress: () => void; primary?: boolean }) {
+function QuickAction({
+  icon: Icon,
+  label,
+  onPress,
+}: {
+  icon: typeof List;
+  label: string;
+  onPress: () => void;
+}) {
   return (
-    <TouchableOpacity style={[styles.actionBtn, primary && styles.actionBtnPrimary]} onPress={onPress} activeOpacity={0.85}>
-      <Icon color={primary ? "#fff" : Colors.primary} size={18} />
-      <Text style={[styles.actionLabel, primary && { color: "#fff" }]}>{label}</Text>
+    <TouchableOpacity style={styles.quick} onPress={onPress} activeOpacity={0.88}>
+      <View style={styles.quickIcon}>
+        <Icon color={Colors.primary} size={18} />
+      </View>
+      <Text style={styles.quickLabel}>{label}</Text>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.bg },
-  header: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.lg, paddingTop: Spacing.sm, flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  backBtn: { padding: 8, marginTop: 4, width: 36 },
-  headerTitle: { color: "#fff", fontSize: 20, fontWeight: "900" },
-  headerSub: { color: "rgba(255,255,255,0.75)", fontSize: 11, marginTop: 4, lineHeight: 16 },
-  modeBadge: { backgroundColor: "rgba(255,255,255,0.2)", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
-  modeBadgeText: { color: "#fff", fontSize: 9, fontWeight: "800" },
-  countryPill: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8, backgroundColor: "rgba(255,255,255,0.15)", alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
-  countryText: { color: "#fff", fontSize: 11, fontWeight: "700" },
-  scroll: { padding: Spacing.lg, paddingBottom: 48 },
-  h1: { fontSize: 22, fontWeight: "900", color: Colors.text, marginBottom: Spacing.md, letterSpacing: -0.5 },
-  trustCard: { alignItems: "center", paddingVertical: 20, marginBottom: Spacing.md },
-  sectionLabel: { fontSize: 12, fontWeight: "800", color: Colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 },
-  trustHint: { fontSize: 11, color: Colors.textSubtle, textAlign: "center", marginTop: 8, paddingHorizontal: 16 },
-  statsRow: { flexDirection: "row", gap: 8, marginBottom: Spacing.md },
-  statBox: { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: 12, borderWidth: 1, borderColor: Colors.borderLight },
-  statValue: { fontSize: 14, fontWeight: "900", color: Colors.text },
-  statSub: { fontSize: 9, color: Colors.textMuted, fontWeight: "600", marginTop: 2 },
-  statLabel: { fontSize: 10, color: Colors.textMuted, marginTop: 4 },
-  tontineName: { fontSize: 16, fontWeight: "800", color: Colors.text },
-  due: { fontSize: 13, color: Colors.textMuted, marginBottom: 8 },
-  ref: { fontSize: 12, color: Colors.secondary, fontWeight: "700", marginTop: 8 },
-  pendingNote: { fontSize: 11, color: Colors.warning, marginTop: 10, lineHeight: 16, fontWeight: "600" },
-  actionsRow: { gap: 8, marginBottom: Spacing.md },
-  actionBtn: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    padding: 14, borderRadius: Radius.lg, backgroundColor: Colors.surface,
-    borderWidth: 1, borderColor: Colors.border,
+  content: { gap: 14 },
+  topIdentity: { gap: 8, paddingTop: Spacing.xs, paddingBottom: Spacing.sm },
+  placeRow: { flexDirection: "row", alignItems: "center", gap: 5 },
+  placeText: { color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: "700" },
+  greeting: {
+    color: "#fff",
+    fontSize: 24,
+    fontWeight: "800",
+    letterSpacing: -0.4,
+    marginTop: 4,
   },
-  actionBtnPrimary: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  actionLabel: { fontSize: 14, fontWeight: "800", color: Colors.text, flex: 1 },
-  todoRow: { flexDirection: "row", alignItems: "center", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
+  greetingSub: { color: "rgba(255,255,255,0.65)", fontSize: 14, lineHeight: 20 },
+  focusPanel: { gap: 8 },
+  focusEyeline: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: Colors.primary,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+  },
+  focusTitle: { fontSize: 20, fontWeight: "900", color: Colors.text, letterSpacing: -0.3 },
+  focusDue: { fontSize: 13, color: Colors.textMuted, marginBottom: 4 },
+  focusMeta: { flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
+  ref: { fontSize: 12, color: Colors.secondary, fontWeight: "700" },
+  pendingNote: { fontSize: 12, color: Colors.warning, lineHeight: 17, fontWeight: "600" },
+  primaryBtn: {
+    marginTop: 6,
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.lg,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  primaryBtnText: { color: "#fff", fontWeight: "900", fontSize: 15 },
+  metrics: { flexDirection: "row", gap: 8 },
+  metric: {
+    flex: 1,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderRadius: Radius.lg,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  metricValue: { fontSize: 14, fontWeight: "900", color: "#fff" },
+  metricHint: { fontSize: 9, color: "rgba(255,255,255,0.55)", marginTop: 2, fontWeight: "600" },
+  metricLabel: { fontSize: 10, color: "rgba(255,255,255,0.55)", marginTop: 6, fontWeight: "700" },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  quick: {
+    width: "48%",
+    flexGrow: 1,
+    minWidth: "46%",
+    backgroundColor: "rgba(255,255,255,0.95)",
+    borderRadius: Radius.lg,
+    padding: 14,
+    gap: 10,
+  },
+  quickIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: Colors.primaryLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  quickLabel: { fontSize: 13, fontWeight: "800", color: Colors.text },
+  todoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
   todoText: { flex: 1, fontSize: 13, color: Colors.text, fontWeight: "600" },
-  fraudBtn: { flexDirection: "row", alignItems: "center", gap: 8, justifyContent: "center", padding: 12, marginBottom: Spacing.md },
-  fraudText: { color: Colors.danger, fontWeight: "700", fontSize: 13 },
+  trustToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  trustToggleText: { color: "rgba(255,255,255,0.7)", fontSize: 13, fontWeight: "700" },
+  trustHint: { fontSize: 11, color: Colors.textSubtle, textAlign: "center", marginTop: 8 },
+  fraudBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    justifyContent: "center",
+    paddingVertical: 8,
+  },
+  fraudText: { color: "#FCA5A5", fontWeight: "700", fontSize: 13 },
 });

@@ -1,16 +1,21 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Clock, Globe, ShieldCheck, XCircle } from "lucide-react-native";
+import { Clock, MapPin, RefreshCw } from "lucide-react-native";
 
 import { api } from "@/src/api";
-import { Button, Card } from "@/src/ui";
+import { Button } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { DIASPORA_DISCLAIMER } from "@/src/diaspora-config";
 import { DIASPORA_GATE_COPY, type DiasporaAccess } from "@/src/diaspora-enrollment-config";
-import { DiasporaManualBanner } from "@/src/diaspora-ui";
+import { DiasporaJourneySteps } from "@/src/diaspora-ui";
+import {
+  DiasporaBrandMark,
+  DiasporaFadeIn,
+  DiasporaPanel,
+  DiasporaScreenShell,
+  DiasporaSection,
+} from "@/src/diaspora-shell";
 
 export default function DiasporaGateScreen() {
   const router = useRouter();
@@ -35,105 +40,153 @@ export default function DiasporaGateScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 80 }} />
-      </SafeAreaView>
+      <DiasporaScreenShell variant="hero" showBack scroll={false} contentStyle={styles.center}>
+        <ActivityIndicator size="large" color="#fff" />
+      </DiasporaScreenShell>
     );
   }
 
   const pending = access?.status === "pending_review";
-  const rejected = access?.status === "rejected" || access?.status === "needs_info";
+  const needsWork = access?.status === "rejected" || access?.status === "needs_info";
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-      <LinearGradient colors={[Colors.gradStart, Colors.gradMid]} style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <ArrowLeft color="#fff" size={22} />
-        </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Globe color="#fff" size={20} />
-            <Text style={styles.headerTitle}>{DIASPORA_GATE_COPY.title}</Text>
-          </View>
-          <Text style={styles.headerSub}>{DIASPORA_DISCLAIMER}</Text>
+    <DiasporaScreenShell variant="hero">
+      <DiasporaFadeIn>
+        <View style={styles.heroBlock}>
+          <DiasporaBrandMark size="lg" />
+          <Text style={styles.headline}>{DIASPORA_GATE_COPY.question}</Text>
+          <Text style={styles.support}>{DIASPORA_GATE_COPY.subtitle}</Text>
         </View>
-      </LinearGradient>
+      </DiasporaFadeIn>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <DiasporaManualBanner />
-
-        {pending ? (
-          <Card style={styles.statusCard}>
-            <Clock color={Colors.info} size={36} />
+      {pending ? (
+        <DiasporaFadeIn delay={80}>
+          <DiasporaPanel accent>
+            <View style={styles.statusIcon}>
+              <Clock color={Colors.info} size={28} />
+            </View>
             <Text style={styles.statusTitle}>{DIASPORA_GATE_COPY.pendingTitle}</Text>
             <Text style={styles.statusBody}>{DIASPORA_GATE_COPY.pendingBody}</Text>
             {access?.submitted_at ? (
-              <Text style={styles.meta}>Soumis le {new Date(access.submitted_at).toLocaleDateString("fr-FR")}</Text>
+              <Text style={styles.meta}>
+                Soumis le {new Date(access.submitted_at).toLocaleDateString("fr-FR", {
+                  day: "numeric", month: "long", year: "numeric",
+                })}
+              </Text>
             ) : null}
-          </Card>
-        ) : rejected ? (
-          <Card style={styles.statusCard}>
-            <XCircle color={Colors.danger} size={36} />
+            <TouchableOpacity style={styles.refreshRow} onPress={load}>
+              <RefreshCw color={Colors.primary} size={14} />
+              <Text style={styles.refreshText}>Actualiser le statut</Text>
+            </TouchableOpacity>
+          </DiasporaPanel>
+        </DiasporaFadeIn>
+      ) : needsWork ? (
+        <DiasporaFadeIn delay={80}>
+          <DiasporaPanel accent>
             <Text style={styles.statusTitle}>{DIASPORA_GATE_COPY.rejectedTitle}</Text>
             {access?.rejection_reason ? (
-              <Text style={styles.rejectReason}>{access.rejection_reason}</Text>
+              <View style={styles.reasonBox}>
+                <Text style={styles.reasonLabel}>Message de l'équipe</Text>
+                <Text style={styles.reasonText}>{access.rejection_reason}</Text>
+              </View>
             ) : null}
-            <Button label={DIASPORA_GATE_COPY.reapply} onPress={() => router.push("/diaspora/enroll" as any)} />
-          </Card>
-        ) : (
-          <>
-            <View style={styles.hero}>
-              <Globe color={Colors.primary} size={48} />
-              <Text style={styles.question}>{DIASPORA_GATE_COPY.question}</Text>
-              <Text style={styles.subtitle}>{DIASPORA_GATE_COPY.subtitle}</Text>
-            </View>
-
-            <Card>
-              <View style={styles.stepRow}>
-                <ShieldCheck color={Colors.primary} size={20} />
-                <Text style={styles.stepText}>1. Vérifiez votre identité et votre résidence à l'étranger</Text>
-              </View>
-              <View style={styles.stepRow}>
-                <Clock color={Colors.secondary} size={20} />
-                <Text style={styles.stepText}>2. Validation manuelle par l'équipe HODIX (24–48 h)</Text>
-              </View>
-              <View style={styles.stepRow}>
-                <Globe color={Colors.accent} size={20} />
-                <Text style={styles.stepText}>3. Accès à votre dashboard Diaspora (devise locale)</Text>
-              </View>
-            </Card>
-
             <Button
-              label={DIASPORA_GATE_COPY.cta}
+              label={DIASPORA_GATE_COPY.reapply}
+              onPress={() => router.push("/diaspora/enroll" as any)}
+            />
+          </DiasporaPanel>
+        </DiasporaFadeIn>
+      ) : (
+        <>
+          <DiasporaFadeIn delay={60}>
+            <TouchableOpacity
+              style={styles.cta}
+              activeOpacity={0.9}
               onPress={() => router.push("/diaspora/enroll" as any)}
               testID="diaspora-gate-enter"
-            />
-            <Text style={styles.note}>
-              Réservé aux membres résidant hors du Cameroun. Passeport, carte d'identité étrangère ou titre de séjour requis.
-            </Text>
-          </>
-        )}
-      </ScrollView>
-    </SafeAreaView>
+            >
+              <Text style={styles.ctaText}>{DIASPORA_GATE_COPY.cta}</Text>
+              <Text style={styles.ctaHint}>Passeport, ID ou titre de séjour · hors Cameroun</Text>
+            </TouchableOpacity>
+          </DiasporaFadeIn>
+
+          <DiasporaFadeIn delay={120}>
+            <DiasporaPanel>
+              <DiasporaSection
+                title="Comment ça marche"
+                body="Trois étapes nettes avant d'accéder à votre espace."
+              />
+              <DiasporaJourneySteps />
+            </DiasporaPanel>
+          </DiasporaFadeIn>
+
+          <DiasporaFadeIn delay={180}>
+            <View style={styles.footNote}>
+              <MapPin color="rgba(255,255,255,0.55)" size={14} />
+              <Text style={styles.footText}>{DIASPORA_DISCLAIMER}</Text>
+            </View>
+          </DiasporaFadeIn>
+        </>
+      )}
+    </DiasporaScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.bg },
-  header: { padding: Spacing.lg, flexDirection: "row", gap: 12, alignItems: "flex-start" },
-  backBtn: { marginTop: 4 },
-  headerTitle: { color: "#fff", fontSize: 20, fontWeight: "900" },
-  headerSub: { color: "rgba(255,255,255,0.75)", fontSize: 11, marginTop: 6, lineHeight: 16 },
-  scroll: { padding: Spacing.lg, gap: 16, paddingBottom: 48 },
-  hero: { alignItems: "center", paddingVertical: 24, gap: 12 },
-  question: { fontSize: 24, fontWeight: "900", color: Colors.text, textAlign: "center" },
-  subtitle: { fontSize: 14, color: Colors.textMuted, textAlign: "center", lineHeight: 22, paddingHorizontal: 8 },
-  stepRow: { flexDirection: "row", alignItems: "flex-start", gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
-  stepText: { flex: 1, fontSize: 13, color: Colors.text, fontWeight: "600", lineHeight: 20 },
-  note: { fontSize: 11, color: Colors.textSubtle, textAlign: "center", lineHeight: 17 },
-  statusCard: { alignItems: "center", gap: 12, paddingVertical: 28 },
-  statusTitle: { fontSize: 18, fontWeight: "900", color: Colors.text, textAlign: "center" },
-  statusBody: { fontSize: 14, color: Colors.textMuted, textAlign: "center", lineHeight: 22 },
-  meta: { fontSize: 12, color: Colors.textSubtle },
-  rejectReason: { fontSize: 13, color: Colors.danger, textAlign: "center", fontWeight: "600" },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  heroBlock: { paddingTop: Spacing.md, paddingBottom: Spacing.sm, gap: 12 },
+  headline: {
+    color: "#fff",
+    fontSize: 26,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    lineHeight: 32,
+    maxWidth: 340,
+  },
+  support: {
+    color: "rgba(255,255,255,0.72)",
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: "500",
+    maxWidth: 360,
+  },
+  cta: {
+    backgroundColor: "#fff",
+    borderRadius: Radius.xl,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    gap: 6,
+  },
+  ctaText: {
+    fontSize: 17,
+    fontWeight: "900",
+    color: Colors.brandNavy,
+    letterSpacing: -0.2,
+  },
+  ctaHint: { fontSize: 12, color: Colors.textMuted, fontWeight: "600" },
+  statusIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: Colors.infoLight,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  statusTitle: { fontSize: 20, fontWeight: "900", color: Colors.text, letterSpacing: -0.3 },
+  statusBody: { fontSize: 14, color: Colors.textMuted, lineHeight: 21, marginTop: 6, marginBottom: 8 },
+  meta: { fontSize: 12, color: Colors.textSubtle, fontWeight: "600", marginBottom: 8 },
+  refreshRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
+  refreshText: { fontSize: 13, fontWeight: "800", color: Colors.primary },
+  reasonBox: {
+    backgroundColor: Colors.dangerLight,
+    borderRadius: Radius.md,
+    padding: 12,
+    marginVertical: 10,
+    gap: 4,
+  },
+  reasonLabel: { fontSize: 11, fontWeight: "800", color: Colors.danger },
+  reasonText: { fontSize: 13, color: Colors.text, lineHeight: 19, fontWeight: "600" },
+  footNote: { flexDirection: "row", gap: 8, alignItems: "flex-start", paddingHorizontal: 4 },
+  footText: { flex: 1, fontSize: 12, color: "rgba(255,255,255,0.5)", lineHeight: 17 },
 });

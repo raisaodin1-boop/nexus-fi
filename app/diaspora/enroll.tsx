@@ -3,31 +3,35 @@ import {
   Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Camera, CheckCircle2, ChevronDown, FileUp } from "lucide-react-native";
+import { Camera, CheckCircle2, ChevronDown, FileUp } from "lucide-react-native";
 
 import { api, ApiError } from "@/src/api";
 import { useAuth } from "@/src/auth-context";
-import { Button, Card, Field } from "@/src/ui";
-import { Colors, Radius, Spacing } from "@/src/theme";
+import { Button, Field } from "@/src/ui";
+import { Colors, Radius } from "@/src/theme";
 import { useToast } from "@/src/toast";
 import {
   DIASPORA_ID_DOC_TYPES,
   DIASPORA_RESIDENCE_COUNTRIES,
   diasporaCurrencyForCountry,
 } from "@/src/diaspora-enrollment-config";
-import { DiasporaManualBanner } from "@/src/diaspora-ui";
 import { pickMedia, pickMediaErrorMessage, type PickedMedia } from "@/src/pick-media";
+import {
+  DiasporaFadeIn,
+  DiasporaPanel,
+  DiasporaScreenShell,
+  DiasporaSection,
+  DiasporaStepRail,
+} from "@/src/diaspora-shell";
 
 type DocSlot = "id_front" | "id_back" | "selfie" | "proof_abroad";
 type DocFile = PickedMedia;
 
-const DOC_LABELS: Record<DocSlot, { title: string; hint: string }> = {
-  id_front: { title: "Passeport ou carte d'identité (recto)", hint: "Document de votre pays de résidence" },
-  id_back: { title: "Verso (si applicable)", hint: "Optionnel pour passeport" },
-  selfie: { title: "Selfie de vérification", hint: "Visage visible, fond neutre" },
-  proof_abroad: { title: "Preuve de résidence à l'étranger", hint: "Titre de séjour, facture, ou visa" },
+const DOC_LABELS: Record<DocSlot, { title: string; hint: string; required: boolean }> = {
+  id_front: { title: "Pièce d'identité (recto)", hint: "Passeport ou carte du pays de résidence", required: true },
+  id_back: { title: "Verso", hint: "Optionnel pour un passeport", required: false },
+  selfie: { title: "Selfie de vérification", hint: "Visage bien visible, fond neutre", required: true },
+  proof_abroad: { title: "Preuve de résidence", hint: "Titre de séjour, facture ou visa", required: true },
 };
 
 function PickerModal({ visible, title, options, onSelect, onClose }: {
@@ -146,29 +150,25 @@ export default function DiasporaEnrollScreen() {
   };
 
   const currency = country ? diasporaCurrencyForCountry(country) : "EUR";
+  const docsReady = Boolean(docs.id_front && docs.selfie && docs.proof_abroad);
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-      <LinearGradient colors={[Colors.gradStart, Colors.gradMid]} style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}><ArrowLeft color="#fff" size={22} /></TouchableOpacity>
-        <Text style={styles.headerTitle}>Inscription Diaspora</Text>
-      </LinearGradient>
+    <DiasporaScreenShell
+      variant="app"
+      title="Inscription Diaspora"
+      subtitle={step === 1 ? "Étape 1 · Vos coordonnées" : "Étape 2 · Identité & preuves"}
+    >
+      <DiasporaFadeIn>
+        <DiasporaStepRail steps={["Coordonnées", "Identité"]} active={step} />
+      </DiasporaFadeIn>
 
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <DiasporaManualBanner />
-        <Text style={styles.intro}>
-          Identité complète obligatoire — mêmes exigences que les membres locaux (profil, documents authentiques).
-          Votre dossier sera analysé manuellement avant l&apos;accès au mode Diaspora. Les montants s&apos;affichent
-          dans la devise de votre pays, avec l&apos;équivalent FCFA.
-        </Text>
-
-        <View style={styles.steps}>
-          <Text style={[styles.stepChip, step === 1 && styles.stepActive]}>1. Coordonnées</Text>
-          <Text style={[styles.stepChip, step === 2 && styles.stepActive]}>2. Identité & preuves</Text>
-        </View>
-
-        {step === 1 ? (
-          <Card>
+      {step === 1 ? (
+        <DiasporaFadeIn delay={60}>
+          <DiasporaPanel>
+            <DiasporaSection
+              title="Où vivez-vous ?"
+              body="Adresse complète hors Cameroun. La devise de votre espace sera définie selon le pays."
+            />
             <Field label="Nom complet (identique à votre pièce)" value={fullName} onChangeText={setFullName} />
             <Field label="Adresse ligne 1" value={address1} onChangeText={setAddress1} placeholder="12 rue de la République" />
             <Field label="Adresse ligne 2 (facultatif)" value={address2} onChangeText={setAddress2} />
@@ -185,7 +185,7 @@ export default function DiasporaEnrollScreen() {
               </View>
             </TouchableOpacity>
             {country ? (
-              <Text style={styles.currencyHint}>Devise dashboard : {currency}</Text>
+              <Text style={styles.currencyHint}>Devise de votre espace : {currency}</Text>
             ) : null}
             <Field label="Téléphone (international)" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
             <Field label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
@@ -200,9 +200,15 @@ export default function DiasporaEnrollScreen() {
               }
               setStep(2);
             }} />
-          </Card>
-        ) : (
-          <Card>
+          </DiasporaPanel>
+        </DiasporaFadeIn>
+      ) : (
+        <DiasporaFadeIn delay={60}>
+          <DiasporaPanel>
+            <DiasporaSection
+              title="Vos documents"
+              body="Photos nettes, documents authentiques. Examen manuel avant activation."
+            />
             <TouchableOpacity style={styles.select} onPress={() => setDocTypeModal(true)}>
               <Text style={styles.selectLabel}>Type de document</Text>
               <View style={styles.selectRow}>
@@ -213,35 +219,51 @@ export default function DiasporaEnrollScreen() {
               </View>
             </TouchableOpacity>
 
-            {(Object.keys(DOC_LABELS) as DocSlot[]).map((slot) => (
-              <TouchableOpacity key={slot} style={styles.docRow} onPress={() => pickDoc(slot)}>
-                <View style={[styles.docIcon, docs[slot] ? styles.docDone : null]}>
-                  {docs[slot] ? <CheckCircle2 color={Colors.success} size={20} /> : <Camera color={Colors.primary} size={20} />}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.docTitle}>{DOC_LABELS[slot].title}</Text>
-                  <Text style={styles.docHint}>{DOC_LABELS[slot].hint}</Text>
-                </View>
-                {slot === "id_back" ? <FileUp color={Colors.textMuted} size={18} /> : null}
-              </TouchableOpacity>
-            ))}
+            {(Object.keys(DOC_LABELS) as DocSlot[]).map((slot) => {
+              const meta = DOC_LABELS[slot];
+              const done = !!docs[slot];
+              return (
+                <TouchableOpacity key={slot} style={styles.docRow} onPress={() => pickDoc(slot)}>
+                  <View style={[styles.docIcon, done && styles.docDone]}>
+                    {done ? <CheckCircle2 color={Colors.success} size={20} /> : <Camera color={Colors.primary} size={20} />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.docTitle}>
+                      {meta.title}
+                      {meta.required ? " *" : ""}
+                    </Text>
+                    <Text style={styles.docHint}>{done ? "Fichier prêt — toucher pour remplacer" : meta.hint}</Text>
+                  </View>
+                  {slot === "id_back" || slot === "proof_abroad" ? (
+                    <FileUp color={Colors.textMuted} size={18} />
+                  ) : null}
+                </TouchableOpacity>
+              );
+            })}
+
+            <View style={styles.progressHint}>
+              <Text style={styles.progressText}>
+                {docsReady ? "Documents requis complets" : "3 documents obligatoires · verso facultatif"}
+              </Text>
+            </View>
 
             <TouchableOpacity style={styles.checkRow} onPress={() => setDeclaredAbroad(!declaredAbroad)}>
               <View style={[styles.checkbox, declaredAbroad && styles.checkboxOn]}>
                 {declaredAbroad ? <CheckCircle2 color="#fff" size={14} /> : null}
               </View>
               <Text style={styles.checkText}>
-                Je confirme résider hors du Cameroun et que les documents fournis sont authentiques. Toute fausse déclaration entraîne la suspension du compte.
+                Je confirme résider hors du Cameroun et que les documents fournis sont authentiques.
+                Toute fausse déclaration entraîne la suspension du compte.
               </Text>
             </TouchableOpacity>
 
             <View style={styles.btnRow}>
               <Button label="Retour" variant="ghost" onPress={() => setStep(1)} fullWidth={false} style={{ flex: 1 }} />
-              <Button label="Envoyer pour validation" onPress={submit} loading={busy} fullWidth={false} style={{ flex: 2 }} />
+              <Button label="Envoyer le dossier" onPress={submit} loading={busy} fullWidth={false} style={{ flex: 2 }} />
             </View>
-          </Card>
-        )}
-      </ScrollView>
+          </DiasporaPanel>
+        </DiasporaFadeIn>
+      )}
 
       <PickerModal visible={countryModal} title="Pays de résidence" options={DIASPORA_RESIDENCE_COUNTRIES} onSelect={setCountry} onClose={() => setCountryModal(false)} />
       <PickerModal
@@ -254,7 +276,7 @@ export default function DiasporaEnrollScreen() {
         }}
         onClose={() => setDocTypeModal(false)}
       />
-    </SafeAreaView>
+    </DiasporaScreenShell>
   );
 }
 
@@ -267,26 +289,57 @@ const pickerStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.bg },
-  header: { padding: Spacing.lg, flexDirection: "row", alignItems: "center", gap: 12 },
-  headerTitle: { color: "#fff", fontSize: 18, fontWeight: "900", flex: 1 },
-  scroll: { padding: Spacing.lg, gap: 12, paddingBottom: 48 },
-  intro: { fontSize: 13, color: Colors.textMuted, lineHeight: 20 },
-  steps: { flexDirection: "row", gap: 8 },
-  stepChip: { flex: 1, textAlign: "center", paddingVertical: 8, borderRadius: Radius.md, backgroundColor: Colors.surfaceAlt, fontSize: 11, fontWeight: "800", color: Colors.textMuted },
-  stepActive: { backgroundColor: Colors.primaryLight, color: Colors.primary },
-  select: { marginBottom: 12 },
+  select: { marginBottom: 12, marginTop: 4 },
   selectLabel: { fontSize: 12, fontWeight: "700", color: Colors.textMuted, marginBottom: 6 },
-  selectRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: Colors.surfaceAlt, borderRadius: Radius.md, padding: 14, borderWidth: 1, borderColor: Colors.border },
+  selectRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.md,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
   selectValue: { fontSize: 15, fontWeight: "600", color: Colors.text },
   currencyHint: { fontSize: 12, color: Colors.secondary, fontWeight: "700", marginBottom: 12 },
-  docRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
-  docIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: Colors.primaryLight, alignItems: "center", justifyContent: "center" },
+  docRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
+  docIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: Colors.primaryLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   docDone: { backgroundColor: Colors.successLight },
   docTitle: { fontSize: 13, fontWeight: "800", color: Colors.text },
   docHint: { fontSize: 11, color: Colors.textMuted, marginTop: 2 },
+  progressHint: {
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    backgroundColor: Colors.primaryLight,
+    borderRadius: Radius.md,
+  },
+  progressText: { fontSize: 12, fontWeight: "700", color: Colors.primary },
   checkRow: { flexDirection: "row", gap: 10, alignItems: "flex-start", marginVertical: 16 },
-  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: Colors.primary, alignItems: "center", justifyContent: "center" },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   checkboxOn: { backgroundColor: Colors.primary },
   checkText: { flex: 1, fontSize: 12, color: Colors.text, lineHeight: 18 },
   btnRow: { flexDirection: "row", gap: 10 },
