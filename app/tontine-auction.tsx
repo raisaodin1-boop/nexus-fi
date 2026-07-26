@@ -12,6 +12,7 @@ import {
   getAuctionState, placeBid, closeAuction, openAuction, listMyAuctionTontines,
   type AuctionState, type AuctionTontineOption,
 } from "@/src/db/tontine-auction";
+import { openPaymentScreen } from "@/src/payment-nav";
 import { Colors, Radius, Spacing, Shadow } from "@/src/theme";
 import { Button, Field } from "@/src/ui";
 import { VerifiedName } from "@/src/verified-name";
@@ -20,7 +21,8 @@ import { formatXAFAmount } from "@/src/exchange-rates";
 
 export default function TontineAuctionScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id: idParam } = useLocalSearchParams<{ id: string }>();
+  const id = Array.isArray(idParam) ? idParam[0] : idParam;
   const { show } = useToast();
 
   const [picker, setPicker] = useState<AuctionTontineOption[] | null>(null);
@@ -82,14 +84,14 @@ export default function TontineAuctionScreen() {
   const handleClose = () => {
     Alert.alert(
       "Clôturer les enchères",
-      "Le plus offrant avance son tour (position 1). La prime est enregistrée. Confirmer ?",
+      "Le gagnant devra payer la prime MTN pour avancer son tour. Confirmer ?",
       [
         { text: "Annuler", style: "cancel" },
         { text: "Clôturer", style: "destructive", onPress: async () => {
           setClosing(true);
           try {
             const result = await closeAuction(id!);
-            show(`Tour anticipé attribué — prime ${formatXAFAmount(result.premium)}`, "success");
+            show(`Clôturé — le gagnant doit payer ${formatXAFAmount(result.premium)}`, "success");
             await load();
           } catch (e: any) { show(e?.message ?? "Erreur", "error"); }
           setClosing(false);
@@ -98,7 +100,17 @@ export default function TontineAuctionScreen() {
     );
   };
 
-  const timeLeft = state ? Math.max(0, new Date(state.ends_at).getTime() - Date.now()) : 0;
+  const payPremium = () => {
+    if (!state?.pending_premium || !id) return;
+    openPaymentScreen(router, {
+      amount: state.pending_premium,
+      kind: "auction_premium",
+      tontine_id: id,
+      label: "Prime tour anticipé",
+    });
+  };
+
+  const timeLeft = state?.ends_at ? Math.max(0, new Date(state.ends_at).getTime() - Date.now()) : 0;
   const hoursLeft = Math.floor(timeLeft / 3600000);
   const minLeft = Math.floor((timeLeft % 3600000) / 60000);
 
@@ -160,7 +172,7 @@ export default function TontineAuctionScreen() {
         <LinearGradient colors={[Colors.primary, Colors.secondary]} style={[s.hero, Shadow.cardDark]}>
           <Text style={s.heroLabel}>Cagnotte du cycle</Text>
           <Text style={s.heroPot}>{formatXAFAmount(state?.pot_amount ?? 0)}</Text>
-          {!state?.is_closed && (
+          {!state?.is_closed && state?.ends_at && (
             <View style={s.timerRow}>
               <Clock size={14} color="#fff" />
               <Text style={s.timer}>{hoursLeft}h {minLeft}min restant</Text>
@@ -168,10 +180,26 @@ export default function TontineAuctionScreen() {
           )}
           {state?.is_closed && (
             <View style={[s.timerRow, { backgroundColor: "#EF444430" }]}>
-              <Text style={s.timer}>Enchères fermées</Text>
+              <Text style={s.timer}>
+                {state.premium_paid
+                  ? "Tour anticipé confirmé"
+                  : state.pending_premium
+                    ? "En attente du paiement de la prime"
+                    : "Enchères fermées"}
+              </Text>
             </View>
           )}
         </LinearGradient>
+
+        {state?.i_am_winner && state.pending_premium ? (
+          <View style={[s.card, { borderColor: Colors.accent, borderWidth: 2, gap: 10 }]}>
+            <Text style={s.cardTitle}>Vous avez gagné — payez la prime</Text>
+            <Text style={s.formHint}>
+              {formatXAFAmount(state.pending_premium)} via MTN. Après débit confirmé, vous passez en position 1 et les parts sont redistribuées.
+            </Text>
+            <Button label={`Payer ${formatXAFAmount(state.pending_premium)}`} onPress={payPremium} />
+          </View>
+        ) : null}
 
         {state?.top_bid && (
           <View style={[s.card, { borderColor: Colors.accent, borderWidth: 2 }]}>
@@ -237,7 +265,7 @@ export default function TontineAuctionScreen() {
           </View>
         )}
 
-        {state?.is_closed && (
+        {state?.is_closed && state.is_admin && !state.pending_premium && !state.premium_paid && (
           <Button
             label={opening ? "Ouverture…" : "Ouvrir les enchères (Admin)"}
             onPress={handleOpen}
@@ -245,9 +273,9 @@ export default function TontineAuctionScreen() {
           />
         )}
 
-        {!state?.is_closed && (
+        {!state?.is_closed && state?.is_admin && (
           <Button
-            label={closing ? "Clôture..." : "Clôturer — attribuer le tour (Admin)"}
+            label={closing ? "Clôture..." : "Clôturer — le gagnant paiera la prime"}
             variant="danger"
             onPress={handleClose}
             loading={closing}

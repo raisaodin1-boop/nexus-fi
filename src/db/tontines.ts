@@ -356,6 +356,33 @@ export async function requestTontineJoinInfo(request_id: string, message: string
   return data;
 }
 
+export async function getMyTontineJoinRequest(tontineId: string) {
+  if (!tontineId) throw { status: 400, detail: "tontine_id requis." };
+  const me = await uid();
+  const { data, error } = await getSupabase()
+    .from("tontine_join_requests")
+    .select("id, tontine_id, status, message, owner_note, created_at")
+    .eq("tontine_id", tontineId)
+    .eq("requester_id", me)
+    .in("status", ["pending", "needs_info"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  throwSb(error);
+  return data;
+}
+
+export async function replyTontineJoinInfo(request_id: string, message: string) {
+  const note = String(message ?? "").trim();
+  if (!note) throw { status: 400, detail: "Réponse requise." };
+  const { data, error } = await getSupabase().rpc("reply_tontine_join_info", {
+    p_request_id: request_id,
+    p_message: note,
+  });
+  if (error) throwSb(error);
+  return data;
+}
+
 export async function getPublicTontineProfile(id: string) {
   const sb = getSupabase();
   const [tontineRes, membersRes, contribsRes] = await Promise.all([

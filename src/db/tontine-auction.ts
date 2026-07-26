@@ -16,12 +16,16 @@ export interface AuctionBid {
 export interface AuctionState {
   tontine_id: string;
   cycle: number;
-  ends_at: string;
+  ends_at: string | null;
   pot_amount: number;
   top_bid: AuctionBid | null;
   my_bid: AuctionBid | null;
   bids: AuctionBid[];
   is_closed: boolean;
+  is_admin: boolean;
+  pending_premium: number | null;
+  i_am_winner: boolean;
+  premium_paid: boolean;
 }
 
 export interface AuctionTontineOption {
@@ -63,11 +67,19 @@ export async function getAuctionState(tontineId: string): Promise<AuctionState> 
 
   const { data: tontine, error: te } = await sb
     .from("tontines")
-    .select("current_cycle, contribution_amount, amount_per_cycle, auction_ends_at, auction_closed, tontine_members(count)")
+    .select("current_cycle, contribution_amount, amount_per_cycle, auction_ends_at, auction_closed, owner_id, tontine_members(count)")
     .eq("id", tontineId)
     .maybeSingle();
   throwSb(te);
   if (!tontine) throw new Error("Tontine introuvable.");
+
+  const { data: myMem } = await sb
+    .from("tontine_members")
+    .select("role")
+    .eq("tontine_id", tontineId)
+    .eq("user_id", me)
+    .maybeSingle();
+  const isAdmin = myMem?.role === "admin" || (tontine as any).owner_id === me;
 
   const membersCount = Number((tontine as any).tontine_members?.[0]?.count ?? 0);
   const contrib = Number((tontine as any).contribution_amount ?? (tontine as any).amount_per_cycle ?? 0);
@@ -96,15 +108,29 @@ export async function getAuctionState(tontineId: string): Promise<AuctionState> 
     };
   });
 
+  const { data: result } = await sb
+    .from("tontine_auction_results")
+    .select("winner_id, premium_paid, premium_status, cycle")
+    .eq("tontine_id", tontineId)
+    .eq("cycle", tontine.current_cycle ?? 1)
+    .maybeSingle();
+
+  const pendingPremium =
+    result?.premium_status === "pending" ? Number(result.premium_paid ?? 0) : null;
+
   return {
     tontine_id: tontineId,
     cycle: tontine.current_cycle ?? 1,
-    ends_at: tontine.auction_ends_at ?? new Date(Date.now() + 24 * 3600000).toISOString(),
+    ends_at: tontine.auction_ends_at ?? null,
     pot_amount: pot,
     top_bid: mapped[0] ?? null,
     my_bid: mapped.find((b) => b.user_id === me) ?? null,
     bids: mapped,
     is_closed: tontine.auction_closed !== false,
+    is_admin: !!isAdmin,
+    pending_premium: pendingPremium,
+    i_am_winner: !!result && result.winner_id === me,
+    premium_paid: result?.premium_status === "paid",
   };
 }
 
@@ -155,12 +181,16 @@ export async function openAuction(tontineId: string, hours = 24): Promise<{ auct
   };
 }
 
-export async function closeAuction(tontineId: string): Promise<{ winner_id: string; premium: number }> {
+export async function closeAuction(tontineId: string): Promise<{ winner_id: string; premium: number; premium_status?: string }> {
   const { data, error } = await getSupabase().rpc("close_tontine_auction", {
     p_tontine_id: tontineId,
   });
   throwSb(error);
-  const row = data as { winner_id?: string; premium?: number } | null;
+  const row = data as { winner_id?: string; premium?: number; premium_status?: string } | null;
   if (!row?.winner_id) throw new Error("Clôture impossible.");
-  return { winner_id: row.winner_id, premium: Number(row.premium ?? 0) };
+  return {
+    winner_id: row.winner_id,
+    premium: Number(row.premium ?? 0),
+    premium_status: row.premium_status,
+  };
 }

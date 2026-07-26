@@ -12,6 +12,7 @@ const paymentKindSchema = z.enum([
   "manager_pro_subscription",
   "subscription",
   "diaspora_sponsor",
+  "auction_premium",
 ]);
 
 export const paymentMetaSchema = z.object({

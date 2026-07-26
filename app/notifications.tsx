@@ -241,17 +241,20 @@ export default function Notifications() {
               onPress={() => {
                 markRead(item.id);
                 let url = item.action_url;
-                const isJoin =
+                const isOwnerJoin =
                   item.type === "join_request"
                   || item.type === "association_join_request"
-                  || /adhésion|adhesion/i.test(item.title);
-                if (!url && isJoin) url = "/manage";
+                  || (/adhésion|adhesion/i.test(item.title) && item.type !== "join_request_needs_info");
+                if (item.type === "join_request_needs_info" && !url) {
+                  url = "/(tabs)/groups";
+                }
+                if (!url && isOwnerJoin) url = "/manage";
                 if (url && (url.includes("tab=manage") || url.startsWith("/admin"))) {
                   url = "/manage";
                 }
                 if (url) {
                   try { router.push(url as any); } catch {}
-                } else if (isJoin) {
+                } else if (isOwnerJoin) {
                   try { router.push("/manage" as any); } catch {}
                 }
               }}

@@ -203,108 +203,36 @@ export async function createDiasporaSponsorRequest(payload: {
 }): Promise<DiasporaRequest & { beneficiary_name?: string }> {
   await requireDiasporaAccess();
   const me = await uid();
-  const sb = getSupabase();
-
-  const code = String(payload.invite_code ?? "").trim().toUpperCase();
-  const phoneDigits = String(payload.beneficiary_phone ?? "").replace(/\D/g, "");
-  const last9 = phoneDigits.slice(-9);
-  if (!code) throw { status: 400, detail: "Code d'invitation requis." };
-  if (last9.length < 9) throw { status: 400, detail: "Numéro du proche au Cameroun invalide." };
-
-  const { data: tontine } = await sb
-    .from("tontines")
-    .select("id, name, amount_per_cycle, contribution_amount, current_cycle, cycle_deadline, currency")
-    .eq("invite_code", code)
-    .maybeSingle();
-  if (!tontine) throw { status: 404, detail: "Tontine introuvable pour ce code." };
-
-  const { data: profiles } = await sb
-    .from("profiles")
-    .select("id, full_name, phone")
-    .ilike("phone", `%${last9}%`)
-    .limit(8);
-  const beneficiary = (profiles ?? []).find((p) => {
-    const d = String(p.phone ?? "").replace(/\D/g, "");
-    return d.endsWith(last9) || d.includes(last9);
+  const { data, error } = await getSupabase().rpc("create_diaspora_sponsor_request", {
+    p_invite_code: String(payload.invite_code ?? "").trim(),
+    p_beneficiary_phone: String(payload.beneficiary_phone ?? "").trim(),
+    p_relation: payload.relation?.trim() || null,
   });
-  if (!beneficiary) {
-    throw { status: 404, detail: "Aucun membre HODIX trouvé avec ce numéro. Le proche doit avoir un compte." };
+  if (error) {
+    const msg = error.message ?? "";
+    if (/introuvable|numéro|membre|déjà|Accès Diaspora|vous-même|invalide/i.test(msg)) {
+      throw { status: 400, detail: msg };
+    }
+    throwSb(error);
   }
-  if (beneficiary.id === me) {
-    throw { status: 400, detail: "Pour vous-même, utilisez « Payer une cotisation »." };
-  }
-
-  const { count: memberCount } = await sb
-    .from("tontine_members")
-    .select("*", { count: "exact", head: true })
-    .eq("tontine_id", tontine.id)
-    .eq("user_id", beneficiary.id)
-    .neq("status", "exclu");
-  if (!memberCount) {
-    throw { status: 400, detail: "Ce proche n'est pas membre de cette tontine." };
-  }
-
-  const cycle = tontine.current_cycle ?? 1;
-  const { data: paid } = await sb.from("tontine_contributions")
-    .select("id")
-    .eq("tontine_id", tontine.id)
-    .eq("user_id", beneficiary.id)
-    .eq("cycle", cycle)
-    .maybeSingle();
-  if (paid) throw { status: 400, detail: "Cotisation déjà validée pour ce cycle." };
-
-  const { data: existing } = await sb.from("diaspora_contribution_requests")
-    .select("*")
-    .eq("sponsor_user_id", me)
-    .eq("beneficiary_user_id", beneficiary.id)
-    .eq("tontine_id", tontine.id)
-    .eq("cycle", cycle)
-    .not("status", "in", '("validated")')
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (existing) {
-    return {
-      ...mapRequest(existing, tontine.name),
-      beneficiary_name: beneficiary.full_name ?? "Proche",
-    };
-  }
-
-  const amount = Number(tontine.amount_per_cycle ?? tontine.contribution_amount ?? 0);
-  if (!amount || amount <= 0) throw { status: 400, detail: "Montant de cotisation invalide." };
-  const ref = generateReference(tontine.name);
-  const due = tontine.cycle_deadline ?? new Date(Date.now() + 30 * 86400000).toISOString();
-
-  const { data, error } = await sb.from("diaspora_contribution_requests").insert({
-    user_id: me,
-    tontine_id: tontine.id,
-    reference_code: ref,
-    amount_expected: amount,
-    currency: tontine.currency ?? "XAF",
-    cycle,
-    due_date: due,
-    status: "pending_payment",
-    payer_type: "relative",
-    payer_relation: payload.relation?.trim() || "proche",
-    payer_phone: last9,
-    beneficiary_user_id: beneficiary.id,
-    sponsor_user_id: me,
-  }).select("*").single();
-  throwSb(error);
-
-  await notifyUser({
-    user_id: beneficiary.id,
-    title: "Un proche va payer votre cotisation",
-    body: `Un membre diaspora prépare le paiement de votre cotisation « ${tontine.name} ».`,
-    type: "info",
-    metadata: { action_url: `/tontines/${tontine.id}` },
-  }).catch(() => {});
-
+  const row = data as Record<string, unknown>;
   invalidateCache(`diaspora-${me}`);
   invalidateCache(`diaspora-home-${me}`);
   return {
-    ...mapRequest(data!, tontine.name),
-    beneficiary_name: beneficiary.full_name ?? "Proche",
+    id: String(row.id),
+    user_id: me,
+    tontine_id: String(row.tontine_id),
+    tontine_name: String(row.tontine_name ?? ""),
+    reference_code: String(row.reference_code ?? ""),
+    amount_expected: Number(row.amount_expected ?? 0),
+    currency: String(row.currency ?? "XAF"),
+    cycle: Number(row.cycle ?? 1),
+    status: (row.status as DiasporaStatus) ?? "pending_payment",
+    beneficiary_user_id: String(row.beneficiary_user_id ?? ""),
+    sponsor_user_id: me,
+    beneficiary_name: String(row.beneficiary_name ?? "Proche"),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   };
 }
 

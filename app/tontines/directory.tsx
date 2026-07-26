@@ -68,7 +68,8 @@ const placeLabel = (country: string | null) => {
 };
 
 function matchesCity(tCountry: string | null, city: string) {
-  if (!tCountry) return false;
+  // Untagged groups stay visible (new creates often omit country)
+  if (!tCountry) return true;
   if (city === "CM") return tCountry === "CM" || tCountry === "Cameroun";
   return tCountry === city;
 }

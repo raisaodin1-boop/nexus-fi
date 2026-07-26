@@ -61,7 +61,17 @@ function samePaymentTarget(meta: PaymentMeta, payload: InitiatePayload): boolean
   return keys.every((k) => String(meta[k] ?? "") === String(payload[k] ?? ""));
 }
 
+async function expireStalePendingPaynote() {
+  try {
+    await getSupabase().rpc("expire_stale_pending_paynote", { p_older_than_minutes: 20 });
+  } catch {
+    /* best-effort — guard still runs on fresh pendings */
+  }
+}
+
 async function assertNoDuplicatePendingPaynote(me: string, payload: InitiatePayload) {
+  await expireStalePendingPaynote();
+
   const since = new Date(Date.now() - PENDING_PAYNOTE_TTL_MS).toISOString();
   const { data: rows, error } = await getSupabase()
     .from("payments")
@@ -74,7 +84,13 @@ async function assertNoDuplicatePendingPaynote(me: string, payload: InitiatePayl
   throwSb(error);
 
   for (const row of rows ?? []) {
-    const meta = parsePaymentMeta(row.description);
+    let meta = parsePaymentMeta(row.description);
+    if (!meta) {
+      try {
+        const raw = JSON.parse((row.description ?? "").split(" · ref:")[0] ?? "");
+        if (raw?.kind) meta = raw as PaymentMeta;
+      } catch { /* ignore */ }
+    }
     if (!meta || !samePaymentTarget(meta, payload)) continue;
     throw {
       status: 409,
@@ -229,6 +245,25 @@ async function validatePaymentTarget(me: string, payload: InitiatePayload): Prom
       }
       amount = Number(req.amount_expected ?? amount);
       if (!amount || amount <= 0) throw { status: 400, detail: "Montant invalide." };
+      break;
+    }
+    case "auction_premium": {
+      if (!payload.tontine_id) throw { status: 400, detail: "tontine_id requis." };
+      await assertTontineMember(payload.tontine_id, me);
+      const { data: result } = await getSupabase()
+        .from("tontine_auction_results")
+        .select("winner_id, premium_paid, premium_status, cycle")
+        .eq("tontine_id", payload.tontine_id)
+        .eq("premium_status", "pending")
+        .order("cycle", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!result) throw { status: 404, detail: "Aucune prime d'enchère en attente." };
+      if (result.winner_id !== me) {
+        throw { status: 403, detail: "Seul le gagnant de l'enchère paie la prime." };
+      }
+      amount = Number(result.premium_paid ?? amount);
+      if (!amount || amount <= 0) throw { status: 400, detail: "Montant de prime invalide." };
       break;
     }
     default:

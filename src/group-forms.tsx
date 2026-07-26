@@ -41,6 +41,7 @@ export function GroupCreateForm({ title, subtitle, endpoint, showContribution, s
   const [maxMembers, setMaxMembers] = useState("10");
   const [rotationMode, setRotationMode] = useState("rotation");
   const [isPublic, setIsPublic] = useState(endpoint === "/associations" || endpoint === "/tontines");
+  const [country, setCountry] = useState("CM");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   // Consent gate — only shown for tontine creation
@@ -59,6 +60,7 @@ export function GroupCreateForm({ title, subtitle, endpoint, showContribution, s
       body.max_members = parseInt(maxMembers) || 10;
       body.is_public = isPublic;
       body.is_personal = !isPublic;
+      body.country = country.trim() || "CM";
       if (showRotationMode) body.rotation_mode = rotationMode;
     } else if (endpoint === "/associations") {
       body.contribution_amount = parseFloat(fee) || 0;
@@ -152,6 +154,13 @@ export function GroupCreateForm({ title, subtitle, endpoint, showContribution, s
                   </View>
                 </>
               ) : null}
+              <Field
+                testID={`${testIDPrefix}-country`}
+                label="Ville / pays (Découvrir)"
+                placeholder="CM, Douala, Yaoundé…"
+                value={country}
+                onChangeText={setCountry}
+              />
               <Text style={styles.label}>Type de tontine</Text>
               <Text style={{ color: Colors.textMuted, fontSize: 12, marginBottom: 8 }}>
                 Les tontines de groupe apparaissent automatiquement sur Découvrir. Réservez « Personnelle » aux cercles privés.

@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -129,15 +130,26 @@ function maskName(name: string): string {
 
 /* ── Screen ────────────────────────────────────────────────── */
 
+type MyJoinReq = {
+  id: string;
+  status: string;
+  message?: string | null;
+  owner_note?: string | null;
+};
+
 export default function TontineProfile() {
   const router = useRouter();
-  const { id: idParam } = useLocalSearchParams<{ id: string }>();
+  const { id: idParam, reply: replyParam } = useLocalSearchParams<{ id: string; reply?: string }>();
   const id = Array.isArray(idParam) ? idParam[0] : idParam;
+  const wantReply = String(Array.isArray(replyParam) ? replyParam[0] : replyParam ?? "") === "1";
   const { show } = useToast();
   const [data, setData] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
   const [joinMsg, setJoinMsg] = useState<string | null>(null);
+  const [myReq, setMyReq] = useState<MyJoinReq | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [replying, setReplying] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -145,6 +157,8 @@ export default function TontineProfile() {
     try {
       const res = await api.get<ProfileData>(`/tontines/${id}/profile`);
       setData(res);
+      const jr = await api.get<MyJoinReq | null>(`/tontines/my-join-request?tontine_id=${id}`).catch(() => null);
+      setMyReq(jr ?? null);
     } catch (e: any) {
       const detail = e instanceof ApiError ? e.detail : (e?.detail ?? "Impossible de charger ce profil.");
       show(detail, "error");
@@ -165,6 +179,7 @@ export default function TontineProfile() {
       setJoinMsg(ok);
       show(ok, "success");
       Alert.alert("Demande envoyée", "Votre demande d'adhésion a été transmise à l'administrateur.");
+      await load();
     } catch (e: any) {
       const detail = e instanceof ApiError ? e.detail : (e?.detail ?? "Impossible d'envoyer la demande.");
       setJoinMsg(detail);
@@ -175,6 +190,25 @@ export default function TontineProfile() {
       }
     }
     setJoining(false);
+  };
+
+  const handleReplyInfo = async () => {
+    if (!myReq?.id) return;
+    const msg = replyText.trim();
+    if (!msg) {
+      show("Écrivez votre réponse", "error");
+      return;
+    }
+    setReplying(true);
+    try {
+      await api.post("/tontines/reply-join-info", { request_id: myReq.id, message: msg });
+      show("Réponse envoyée — le manager peut maintenant décider", "success");
+      setReplyText("");
+      await load();
+    } catch (e: any) {
+      show(e instanceof ApiError ? e.detail : "Envoi impossible", "error");
+    }
+    setReplying(false);
   };
 
   if (loading) {
@@ -333,13 +367,40 @@ export default function TontineProfile() {
           </View>
         </Card>
 
-        {/* CTA */}
+        {/* CTA / needs_info reply */}
         <View style={styles.ctaWrap}>
-          <Button
-            label="Demander à rejoindre"
-            loading={joining}
-            onPress={handleJoin}
-          />
+          {myReq?.status === "needs_info" || (wantReply && myReq) ? (
+            <Card style={{ gap: 10, padding: 14 }}>
+              <Text style={{ fontWeight: "800", color: Colors.text, fontSize: 15 }}>
+                Le manager demande plus d'informations
+              </Text>
+              {myReq?.owner_note ? (
+                <Text style={{ color: Colors.secondary, fontSize: 13, lineHeight: 19 }}>
+                  {myReq.owner_note}
+                </Text>
+              ) : null}
+              <TextInput
+                style={styles.replyInput}
+                placeholder="Votre réponse…"
+                placeholderTextColor={Colors.textSubtle}
+                value={replyText}
+                onChangeText={setReplyText}
+                multiline
+              />
+              <Button label="Envoyer ma réponse" loading={replying} onPress={handleReplyInfo} />
+            </Card>
+          ) : myReq?.status === "pending" ? (
+            <Text style={{ textAlign: "center", color: Colors.textMuted, fontSize: 13, lineHeight: 19 }}>
+              Demande en attente chez le manager
+              {myReq.message ? ` — « ${myReq.message} »` : ""}.
+            </Text>
+          ) : (
+            <Button
+              label="Demander à rejoindre"
+              loading={joining}
+              onPress={handleJoin}
+            />
+          )}
           {joinMsg ? (
             <Text style={{ marginTop: 10, textAlign: "center", color: Colors.textMuted, fontSize: 13 }}>
               {joinMsg}
@@ -375,6 +436,11 @@ const styles = StyleSheet.create({
   headerTitle: { flex: 1, fontSize: 17, fontWeight: "700", color: Colors.text },
   scroll: { paddingHorizontal: Spacing.xl, gap: 16, paddingTop: 4 },
   errorText: { textAlign: "center", color: Colors.textMuted, marginTop: 60, fontSize: 15 },
+  replyInput: {
+    borderWidth: 1, borderColor: Colors.border, borderRadius: 12,
+    padding: 12, minHeight: 80, color: Colors.text, backgroundColor: Colors.bg,
+    textAlignVertical: "top",
+  },
 
   heroCard: { gap: 12, padding: Spacing.xl },
   heroTop: { flexDirection: "row", gap: 12, alignItems: "flex-start" },

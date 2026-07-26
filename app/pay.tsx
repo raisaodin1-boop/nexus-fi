@@ -40,6 +40,10 @@ const MTN = {
 
 function inferKind(params: Record<string, string | undefined>): PaymentKind {
   if (params.kind) return params.kind as PaymentKind;
+  if (params.diaspora_request_id) return "diaspora_sponsor";
+  if (params.tontine_id && /prime|enchère|enchere|anticip/i.test(params.label ?? "")) {
+    return "auction_premium";
+  }
   if (params.tontine_id) return "tontine_contribution";
   if (params.goal_id) return "savings_deposit";
   if (params.association_id) return "association_contribution";
@@ -57,6 +61,7 @@ function paymentTitle(kind: PaymentKind) {
     case "wallet_topup": return "RECHARGE WALLET";
     case "certified_report": return "CERTIFICAT AUTHENTIFIÉ";
     case "diaspora_sponsor": return "COTISATION D'UN PROCHE";
+    case "auction_premium": return "PRIME TOUR ANTICIPÉ";
     default: return "DÉPÔT ÉPARGNE";
   }
 }
@@ -213,8 +218,8 @@ export default function PayContribution() {
     } catch (e) {
       if (e instanceof ApiError && e.status === 409 && e.pending_payment && e.payment_id) {
         setPaymentId(e.payment_id);
-        setError(e.detail);
-        setHint("Paiement déjà en cours — validez le PIN MTN. Ne relancez pas.");
+        setError(null);
+        setHint("Paiement déjà en cours — validez le PIN MTN. Ne relancez pas (anti double débit).");
         setStage("processing");
       } else {
         setError(e instanceof ApiError ? e.detail : "Erreur de paiement MTN");
