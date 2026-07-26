@@ -28,6 +28,7 @@ import {
 import { api, ApiError, formatXAF } from "@/src/api";
 import { useAuth } from "@/src/auth-context";
 import { openPaymentScreen } from "@/src/payment-nav";
+import type { VerifiedEligibility } from "@/src/db/tontines";
 import { supabase } from "@/src/supabase";
 import { Button, Card, Field, SkeletonBox, SkeletonCard } from "@/src/ui";
 import { VerifiedName } from "@/src/verified-name";
@@ -132,6 +133,7 @@ interface TontineData {
     moderation_status?: string;
     moderation_reason?: string | null;
     owner_id?: string;
+    verified_source?: string | null;
   };
   is_admin: boolean;
   members: Member[];
@@ -552,6 +554,7 @@ export function TontineDetailView({ id }: { id: string }) {
   }[]>([]);
   const [joinBusyId, setJoinBusyId] = useState<string | null>(null);
   const [verifiedReq, setVerifiedReq] = useState<{ id: string; status: string } | null>(null);
+  const [verifiedElig, setVerifiedElig] = useState<VerifiedEligibility | null>(null);
   const [verifiedBusy, setVerifiedBusy] = useState(false);
   const [msgContacts, setMsgContacts] = useState<{
     manager: { id: string; full_name: string } | null;
@@ -579,9 +582,12 @@ export function TontineDetailView({ id }: { id: string }) {
         setJoinReqs(jr ?? []);
         const vr = await api.get<{ id: string; status: string } | null>(`/tontines/${id}/verified-request`).catch(() => null);
         setVerifiedReq(vr ?? null);
+        const elig = await api.get<VerifiedEligibility>(`/tontines/${id}/verified-eligibility`).catch(() => null);
+        setVerifiedElig(elig);
       } else {
         setJoinReqs([]);
         setVerifiedReq(null);
+        setVerifiedElig(null);
       }
     } catch (e) {
       setData(null);
@@ -1027,7 +1033,14 @@ export function TontineDetailView({ id }: { id: string }) {
             {tontine.is_hodix_verified ? (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 4, marginBottom: 8 }}>
                 <Award size={16} color="#1D4ED8" />
-                <Text style={{ color: "#1D4ED8", fontWeight: "800", fontSize: 13 }}>Badge Vérifié HODIX</Text>
+                <Text style={{ color: "#1D4ED8", fontWeight: "800", fontSize: 13 }}>
+                  Badge Vérifié HODIX
+                  {tontine.verified_source === "auto"
+                    ? " · gagné"
+                    : tontine.verified_source === "paid"
+                      ? " · accéléré"
+                      : ""}
+                </Text>
               </View>
             ) : null}
 
@@ -1054,37 +1067,101 @@ export function TontineDetailView({ id }: { id: string }) {
               && tontine.is_public
               && (tontine.moderation_status ?? "approved") === "approved"
               && !tontine.is_personal ? (
-              <TouchableOpacity
-                disabled={verifiedBusy || verifiedReq?.status === "pending"}
-                onPress={async () => {
-                  setVerifiedBusy(true);
-                  try {
-                    await api.post(`/tontines/${id}/request-verified`, {});
-                    Alert.alert("Demande envoyée", "Un admin HODIX examinera votre demande de badge Vérifié.");
-                    await load();
-                  } catch (e) {
-                    Alert.alert("Erreur", e instanceof ApiError ? e.detail : "Demande impossible.");
-                  } finally {
-                    setVerifiedBusy(false);
-                  }
-                }}
-                style={{ marginBottom: 12, opacity: verifiedBusy || verifiedReq?.status === "pending" ? 0.6 : 1 }}
-                activeOpacity={0.85}
-                testID="tontine-request-verified"
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14,
-                  backgroundColor: "#EFF6FF", borderRadius: 14, borderWidth: 1, borderColor: "#BFDBFE" }}>
+              <Card style={{ padding: 14, marginBottom: 12, gap: 10, backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                   <Award size={20} color="#1D4ED8" />
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: "#1E40AF", fontWeight: "800", fontSize: 13 }}>
-                      {verifiedReq?.status === "pending" ? "Badge Vérifié — en attente" : "Demander le badge Vérifié HODIX"}
-                    </Text>
-                    <Text style={{ color: "#3B82F6", fontSize: 11, marginTop: 1 }}>
-                      Crédibilité publique sur Découvrir (pas la création)
+                    <Text style={{ color: "#1E40AF", fontWeight: "800", fontSize: 13 }}>Badge Vérifié HODIX</Text>
+                    <Text style={{ color: "#3B82F6", fontSize: 11, marginTop: 2 }}>
+                      Gratuit après 10 cycles propres (≥90 %) — ou accélération payante
                     </Text>
                   </View>
                 </View>
-              </TouchableOpacity>
+                {verifiedElig ? (
+                  <View style={{ gap: 4 }}>
+                    <Text style={{ fontSize: 12, color: "#1E3A8A", fontWeight: "700" }}>
+                      Progression : {verifiedElig.completed_cycles}/{verifiedElig.target_cycles ?? 10} cycles
+                      {" · "}conformité {verifiedElig.compliance_pct}%
+                    </Text>
+                    {(verifiedElig.blockers ?? []).length > 0 ? (
+                      <Text style={{ fontSize: 11, color: "#B45309" }}>
+                        {(verifiedElig.blockers ?? []).join(" · ")}
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : null}
+
+                {verifiedElig?.can_claim_auto ? (
+                  <TouchableOpacity
+                    disabled={verifiedBusy}
+                    onPress={async () => {
+                      setVerifiedBusy(true);
+                      try {
+                        await api.post(`/tontines/${id}/claim-verified`, {});
+                        Alert.alert("Badge obtenu", "Votre tontine porte maintenant le badge Vérifié HODIX.");
+                        await load();
+                      } catch (e) {
+                        Alert.alert("Erreur", e instanceof ApiError ? e.detail : "Réclamation impossible.");
+                      } finally {
+                        setVerifiedBusy(false);
+                      }
+                    }}
+                    style={{ backgroundColor: "#059669", borderRadius: 12, paddingVertical: 12, alignItems: "center", opacity: verifiedBusy ? 0.6 : 1 }}
+                    testID="tontine-claim-verified"
+                  >
+                    <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>
+                      {verifiedBusy ? "…" : "Obtenir le badge (gratuit)"}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+
+                {verifiedElig?.paid_eligible && !verifiedElig.can_claim_auto ? (
+                  <TouchableOpacity
+                    disabled={verifiedBusy}
+                    onPress={() => {
+                      const price = Number(verifiedElig.price_xaf ?? 0);
+                      if (!price) {
+                        Alert.alert("Erreur", "Montant indisponible.");
+                        return;
+                      }
+                      openPaymentScreen(router, {
+                        amount: price,
+                        kind: "verified_badge",
+                        tontine_id: id,
+                        label: `Badge Vérifié — ${tontine.name}`,
+                      });
+                    }}
+                    style={{ backgroundColor: "#1D4ED8", borderRadius: 12, paddingVertical: 12, alignItems: "center" }}
+                    testID="tontine-pay-verified"
+                  >
+                    <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>
+                      Accélérer — {formatXAF(Number(verifiedElig.price_xaf ?? 0), "XAF")}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+
+                <TouchableOpacity
+                  disabled={verifiedBusy || verifiedReq?.status === "pending"}
+                  onPress={async () => {
+                    setVerifiedBusy(true);
+                    try {
+                      await api.post(`/tontines/${id}/request-verified`, {});
+                      Alert.alert("Demande envoyée", "Un admin HODIX examinera votre demande.");
+                      await load();
+                    } catch (e) {
+                      Alert.alert("Erreur", e instanceof ApiError ? e.detail : "Demande impossible.");
+                    } finally {
+                      setVerifiedBusy(false);
+                    }
+                  }}
+                  style={{ opacity: verifiedBusy || verifiedReq?.status === "pending" ? 0.6 : 1, alignItems: "center", paddingVertical: 4 }}
+                  testID="tontine-request-verified"
+                >
+                  <Text style={{ color: "#1D4ED8", fontWeight: "700", fontSize: 12 }}>
+                    {verifiedReq?.status === "pending" ? "Revue admin — en attente" : "Ou demander une revue admin"}
+                  </Text>
+                </TouchableOpacity>
+              </Card>
             ) : null}
 
             {/* Admin: Record disbursement */}

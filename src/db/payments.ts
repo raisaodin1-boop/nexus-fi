@@ -266,6 +266,36 @@ async function validatePaymentTarget(me: string, payload: InitiatePayload): Prom
       if (!amount || amount <= 0) throw { status: 400, detail: "Montant de prime invalide." };
       break;
     }
+    case "verified_badge": {
+      if (!payload.tontine_id) throw { status: 400, detail: "tontine_id requis." };
+      const { data: t } = await getSupabase()
+        .from("tontines")
+        .select("id, owner_id, is_hodix_verified, is_public, is_personal, moderation_status, amount_per_cycle, contribution_amount")
+        .eq("id", payload.tontine_id)
+        .maybeSingle();
+      if (!t) throw { status: 404, detail: "Tontine introuvable." };
+      if (t.is_hodix_verified) throw { status: 400, detail: "Cette tontine est déjà vérifiée." };
+      const { data: mem } = await getSupabase()
+        .from("tontine_members")
+        .select("role")
+        .eq("tontine_id", payload.tontine_id)
+        .eq("user_id", me)
+        .maybeSingle();
+      if (t.owner_id !== me && mem?.role !== "admin") {
+        throw { status: 403, detail: "Seul le gestionnaire peut payer le badge Vérifié." };
+      }
+      const { data: elig, error: eligErr } = await getSupabase().rpc("get_tontine_verified_eligibility", {
+        p_tontine_id: payload.tontine_id,
+      });
+      if (eligErr) throw { status: 400, detail: eligErr.message };
+      if (elig && elig.paid_eligible === false) {
+        const blockers = Array.isArray(elig.blockers) ? elig.blockers.join(" · ") : "Non éligible";
+        throw { status: 403, detail: `Badge payant indisponible : ${blockers}` };
+      }
+      amount = Number(elig?.price_xaf ?? 0);
+      if (!amount || amount <= 0) throw { status: 400, detail: "Montant badge invalide." };
+      break;
+    }
     default:
       throw { status: 400, detail: "Type de paiement inconnu." };
   }

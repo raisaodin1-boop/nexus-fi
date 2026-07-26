@@ -49,6 +49,7 @@ export function paymentKindLabel(kind?: PaymentKind | string | null): string {
     case "certified_report": return "Certificat authentifié";
     case "diaspora_sponsor": return "Cotisation proche (diaspora)";
     case "auction_premium": return "Prime tour anticipé";
+    case "verified_badge": return "Badge Vérifié HODIX";
     default: return "Paiement";
   }
 }

@@ -11,7 +11,8 @@ export type PaymentKind =
   | "manager_pro_subscription"
   | "subscription"
   | "diaspora_sponsor"
-  | "auction_premium";
+  | "auction_premium"
+  | "verified_badge";
 
 export interface PaymentNavParams {
   amount: number;
@@ -59,6 +60,7 @@ export function paymentReturnRoute(params: PaymentNavParams): string {
   if (params.kind === "subscription") return "/subscription";
   if (params.kind === "diaspora_sponsor") return "/diaspora/home";
   if (params.kind === "auction_premium" && params.tontine_id) return `/tontines/${params.tontine_id}`;
+  if (params.kind === "verified_badge" && params.tontine_id) return `/tontines/${params.tontine_id}`;
   if (params.goal_id) return `/savings/${params.goal_id}`;
   if (params.tontine_id) return `/tontines/${params.tontine_id}`;
   if (params.association_id) return `/associations/${params.association_id}`;

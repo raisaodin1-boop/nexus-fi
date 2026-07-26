@@ -13,6 +13,7 @@ const paymentKindSchema = z.enum([
   "subscription",
   "diaspora_sponsor",
   "auction_premium",
+  "verified_badge",
 ]);
 
 export const paymentMetaSchema = z.object({

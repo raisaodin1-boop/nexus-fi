@@ -605,6 +605,46 @@ export async function getMyTontineVerifiedRequest(tontineId: string) {
   return data;
 }
 
+export type VerifiedEligibility = {
+  tontine_id: string;
+  already_verified: boolean;
+  verified_source?: string | null;
+  verified_at?: string | null;
+  completed_cycles: number;
+  target_cycles?: number;
+  compliance_pct: number;
+  members_count?: number;
+  open_fraud_alerts?: number;
+  price_xaf: number;
+  auto_eligible: boolean;
+  auto_path?: string | null;
+  paid_eligible: boolean;
+  can_claim_auto: boolean;
+  blockers: string[];
+  rules?: { auto_standard?: string; auto_fast?: string; paid?: string };
+};
+
+export async function getTontineVerifiedEligibility(tontineId: string): Promise<VerifiedEligibility> {
+  const { data, error } = await getSupabase().rpc("get_tontine_verified_eligibility", {
+    p_tontine_id: tontineId,
+  });
+  if (error) throw { status: 400, detail: error.message };
+  const row = data as VerifiedEligibility;
+  return {
+    ...row,
+    blockers: Array.isArray(row?.blockers) ? row.blockers : [],
+  };
+}
+
+export async function claimTontineVerifiedBadgeAuto(tontineId: string) {
+  const { data, error } = await getSupabase().rpc("claim_tontine_verified_badge_auto", {
+    p_tontine_id: tontineId,
+  });
+  if (error) throw { status: 400, detail: error.message };
+  invalidateCache("tontines");
+  return data;
+}
+
 export async function joinTontineSecure(invite_code: string) {
   const me = await uid();
   const sb = getSupabase();

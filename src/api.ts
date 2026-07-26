@@ -95,6 +95,10 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
       return (await db.requestTontineVerifiedBadge(s[1], body?.message)) as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "verified-request")
       return (await db.getMyTontineVerifiedRequest(s[1])) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "verified-eligibility")
+      return (await db.getTontineVerifiedEligibility(s[1])) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "claim-verified")
+      return (await db.claimTontineVerifiedBadgeAuto(s[1])) as T;
     if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "report-proof" && s[3] === "upload")
       return ({ path: await db.uploadTontineReportProof(body?.base64, body?.mime) }) as T;
     if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "report")
