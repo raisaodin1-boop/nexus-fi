@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +16,7 @@ import {
   Check,
   ChevronRight,
   Landmark,
+  MessageCircle,
   Network,
   Settings2,
   ShieldAlert,
@@ -45,6 +47,8 @@ type JoinReq = {
   tontine_name?: string;
   requester_name: string;
   message?: string | null;
+  status?: string;
+  owner_note?: string | null;
   created_at: string;
 };
 
@@ -125,6 +129,48 @@ export function CreatorManageDashboard({ embed = false }: { embed?: boolean }) {
       Alert.alert("Erreur", e?.detail ?? "Action impossible");
     }
     setBusyId(null);
+  };
+
+  const sendJoinInfo = async (id: string, note: string) => {
+    const msg = note.trim();
+    if (!msg) {
+      Alert.alert("Message requis", "Indiquez ce que vous voulez savoir.");
+      return;
+    }
+    setBusyId(id);
+    try {
+      await api.post("/tontines/request-join-info", { request_id: id, message: msg });
+      await load();
+    } catch (e: any) {
+      Alert.alert("Erreur", e?.detail ?? "Action impossible");
+    }
+    setBusyId(null);
+  };
+
+  const askJoinInfo = (id: string) => {
+    const defaultMsg =
+      "Merci de préciser votre identité / quartier / contact WhatsApp pour valider votre adhésion.";
+    if (Platform.OS === "ios" && typeof Alert.prompt === "function") {
+      Alert.prompt(
+        "Demander plus d'informations",
+        "Le membre restera en attente jusqu'à votre décision.",
+        [
+          { text: "Annuler", style: "cancel" },
+          { text: "Envoyer", onPress: (msg?: string) => { void sendJoinInfo(id, msg ?? ""); } },
+        ],
+        "plain-text",
+        defaultMsg,
+      );
+      return;
+    }
+    Alert.alert(
+      "Demander plus d'informations",
+      "Envoyer une demande d'infos au membre (message type) ?",
+      [
+        { text: "Annuler", style: "cancel" },
+        { text: "Envoyer", onPress: () => { void sendJoinInfo(id, defaultMsg); } },
+      ],
+    );
   };
 
   const respondRemoval = async (id: string, approve: boolean) => {
@@ -209,6 +255,9 @@ export function CreatorManageDashboard({ embed = false }: { embed?: boolean }) {
                     {" · "}{r.group_type === "tontine" ? "Tontine" : "Association"}
                   </Text>
                   {r.message ? <Text style={styles.reqMsg}>{r.message}</Text> : null}
+                  {r.status === "needs_info" ? (
+                    <Text style={styles.reqMsg}>En attente d'infos{r.owner_note ? ` — ${r.owner_note}` : ""}</Text>
+                  ) : null}
                   <View style={styles.reqActions}>
                     <TouchableOpacity
                       style={[styles.actBtn, styles.actOk]}
@@ -226,6 +275,16 @@ export function CreatorManageDashboard({ embed = false }: { embed?: boolean }) {
                       <X size={14} color="#fff" />
                       <Text style={styles.actText}>Refuser</Text>
                     </TouchableOpacity>
+                    {r.group_type === "tontine" ? (
+                      <TouchableOpacity
+                        style={[styles.actBtn, { backgroundColor: Colors.secondary }]}
+                        disabled={busyId === r.id}
+                        onPress={() => askJoinInfo(r.id)}
+                      >
+                        <MessageCircle size={14} color="#fff" />
+                        <Text style={styles.actText}>Infos</Text>
+                      </TouchableOpacity>
+                    ) : null}
                   </View>
                 </Card>
               ))

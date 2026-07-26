@@ -24,6 +24,39 @@ export interface AuctionState {
   is_closed: boolean;
 }
 
+export interface AuctionTontineOption {
+  id: string;
+  name: string;
+  auction_closed: boolean;
+  auction_ends_at: string | null;
+  current_cycle: number;
+}
+
+export async function listMyAuctionTontines(): Promise<AuctionTontineOption[]> {
+  const me = await uid();
+  const sb = getSupabase();
+  const { data: memberships, error } = await sb
+    .from("tontine_members")
+    .select("tontine_id, tontines(id, name, auction_closed, auction_ends_at, current_cycle)")
+    .eq("user_id", me)
+    .neq("status", "exclu");
+  throwSb(error);
+
+  return (memberships ?? [])
+    .map((m: any) => {
+      const t = m.tontines;
+      if (!t?.id) return null;
+      return {
+        id: String(t.id),
+        name: String(t.name ?? "Tontine"),
+        auction_closed: t.auction_closed !== false,
+        auction_ends_at: t.auction_ends_at ?? null,
+        current_cycle: Number(t.current_cycle ?? 1),
+      } as AuctionTontineOption;
+    })
+    .filter(Boolean) as AuctionTontineOption[];
+}
+
 export async function getAuctionState(tontineId: string): Promise<AuctionState> {
   const me = await uid();
   const sb = getSupabase();
@@ -71,7 +104,7 @@ export async function getAuctionState(tontineId: string): Promise<AuctionState> 
     top_bid: mapped[0] ?? null,
     my_bid: mapped.find((b) => b.user_id === me) ?? null,
     bids: mapped,
-    is_closed: !!tontine.auction_closed,
+    is_closed: tontine.auction_closed !== false,
   };
 }
 
@@ -81,14 +114,22 @@ export async function placeBid(tontineId: string, bidAmount: number): Promise<vo
 
   const { data: tontine } = await sb
     .from("tontines")
-    .select("current_cycle, contribution_amount, auction_closed")
+    .select("current_cycle, contribution_amount, amount_per_cycle, auction_closed, auction_ends_at")
     .eq("id", tontineId)
     .maybeSingle();
 
-  if (tontine?.auction_closed) throw new Error("Les enchères sont terminées pour ce cycle.");
+  if (tontine?.auction_closed !== false) {
+    throw new Error("Les enchères sont fermées. L'admin doit ouvrir le tour anticipé.");
+  }
+  if (tontine?.auction_ends_at && new Date(tontine.auction_ends_at).getTime() < Date.now()) {
+    throw new Error("La fenêtre d'enchères est terminée.");
+  }
 
-  const minBid = (tontine?.contribution_amount ?? 0) * 0.05;
-  if (bidAmount < minBid) throw new Error(`L'enchère minimum est de ${Math.round(minBid).toLocaleString("fr-FR")} XAF.`);
+  const contrib = Number(tontine?.contribution_amount ?? tontine?.amount_per_cycle ?? 0);
+  const minBid = contrib * 0.05;
+  if (bidAmount < minBid) {
+    throw new Error(`L'enchère minimum est de ${Math.round(minBid).toLocaleString("fr-FR")} XAF.`);
+  }
 
   const { error } = await sb.from("tontine_auction_bids").upsert(
     {
@@ -96,34 +137,30 @@ export async function placeBid(tontineId: string, bidAmount: number): Promise<vo
       user_id: me,
       bid_amount: bidAmount,
       cycle: tontine?.current_cycle ?? 1,
+      updated_at: new Date().toISOString(),
     },
     { onConflict: "tontine_id,user_id,cycle" },
   );
   throwSb(error);
 }
 
-export async function closeAuction(tontineId: string): Promise<{ winner_id: string; premium: number }> {
-  const me = await uid();
-  const sb = getSupabase();
-
-  const { data: caller } = await sb.from("tontine_members").select("role").eq("tontine_id", tontineId).eq("user_id", me).single();
-  if (caller?.role !== "admin") throw new Error("Seul l'admin peut clôturer les enchères.");
-
-  const state = await getAuctionState(tontineId);
-  if (!state.top_bid) throw new Error("Aucune enchère soumise.");
-
-  await sb.from("tontines").update({ auction_closed: true }).eq("id", tontineId);
-
-  const premium = state.top_bid.bid_amount;
-  const share = Math.floor(premium / (state.bids.length || 1));
-
-  await sb.from("tontine_auction_results").insert({
-    tontine_id: tontineId,
-    cycle: state.cycle,
-    winner_id: state.top_bid.user_id,
-    premium_paid: premium,
-    share_per_member: share,
+export async function openAuction(tontineId: string, hours = 24): Promise<{ auction_ends_at: string }> {
+  const { data, error } = await getSupabase().rpc("open_tontine_auction", {
+    p_tontine_id: tontineId,
+    p_hours: hours,
   });
+  throwSb(error);
+  return {
+    auction_ends_at: String((data as any)?.auction_ends_at ?? new Date(Date.now() + hours * 3600000).toISOString()),
+  };
+}
 
-  return { winner_id: state.top_bid.user_id, premium };
+export async function closeAuction(tontineId: string): Promise<{ winner_id: string; premium: number }> {
+  const { data, error } = await getSupabase().rpc("close_tontine_auction", {
+    p_tontine_id: tontineId,
+  });
+  throwSb(error);
+  const row = data as { winner_id?: string; premium?: number } | null;
+  if (!row?.winner_id) throw new Error("Clôture impossible.");
+  return { winner_id: row.winner_id, premium: Number(row.premium ?? 0) };
 }

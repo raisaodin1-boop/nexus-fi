@@ -33,6 +33,7 @@ const ROOTS_WITH_LOCAL_BACK = new Set([
   "messages",
   "notifications",
   "pay",
+  "payment-status",
   "payments",
   "privacy",
   "promotion-request",

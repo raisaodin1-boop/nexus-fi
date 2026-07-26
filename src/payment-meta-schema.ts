@@ -11,6 +11,7 @@ const paymentKindSchema = z.enum([
   "certified_report",
   "manager_pro_subscription",
   "subscription",
+  "diaspora_sponsor",
 ]);
 
 export const paymentMetaSchema = z.object({
@@ -23,6 +24,7 @@ export const paymentMetaSchema = z.object({
   cooperative_id: z.string().nullable().optional(),
   fund_id: z.string().nullable().optional(),
   plan_id: z.string().nullable().optional(),
+  diaspora_request_id: z.string().nullable().optional(),
   provider: z.string().optional(),
   phone: z.string().optional(),
   cinetpay_transaction_id: z.string().nullable().optional(),

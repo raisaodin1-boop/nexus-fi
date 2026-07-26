@@ -9,7 +9,8 @@ export type PaymentKind =
   | "wallet_topup"
   | "certified_report"
   | "manager_pro_subscription"
-  | "subscription";
+  | "subscription"
+  | "diaspora_sponsor";
 
 export interface PaymentNavParams {
   amount: number;
@@ -22,6 +23,7 @@ export interface PaymentNavParams {
   cooperative_id?: string;
   fund_id?: string;
   plan_id?: string;
+  diaspora_request_id?: string;
   provider?: "mtn" | "orange" | "moov";
   phone?: string;
 }
@@ -42,6 +44,7 @@ export function openPaymentScreen(router: Router, params: PaymentNavParams) {
       ...(params.cooperative_id ? { cooperative_id: params.cooperative_id } : {}),
       ...(params.fund_id ? { fund_id: params.fund_id } : {}),
       ...(params.plan_id ? { plan_id: params.plan_id } : {}),
+      ...(params.diaspora_request_id ? { diaspora_request_id: params.diaspora_request_id } : {}),
       ...(params.provider ? { provider: params.provider } : {}),
       ...(params.phone ? { phone: params.phone } : {}),
     },
@@ -53,6 +56,7 @@ export function paymentReturnRoute(params: PaymentNavParams): string {
   if (params.kind === "certified_report") return "/(tabs)/identity";
   if (params.kind === "manager_pro_subscription") return "/(tabs)";
   if (params.kind === "subscription") return "/subscription";
+  if (params.kind === "diaspora_sponsor") return "/diaspora/home";
   if (params.goal_id) return `/savings/${params.goal_id}`;
   if (params.tontine_id) return `/tontines/${params.tontine_id}`;
   if (params.association_id) return `/associations/${params.association_id}`;

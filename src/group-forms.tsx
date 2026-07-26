@@ -58,6 +58,7 @@ export function GroupCreateForm({ title, subtitle, endpoint, showContribution, s
       body.frequency = frequency;
       body.max_members = parseInt(maxMembers) || 10;
       body.is_public = isPublic;
+      body.is_personal = !isPublic;
       if (showRotationMode) body.rotation_mode = rotationMode;
     } else if (endpoint === "/associations") {
       body.contribution_amount = parseFloat(fee) || 0;
@@ -151,9 +152,9 @@ export function GroupCreateForm({ title, subtitle, endpoint, showContribution, s
                   </View>
                 </>
               ) : null}
-              <Text style={styles.label}>Visibilité — publique ou privée ?</Text>
+              <Text style={styles.label}>Type de tontine</Text>
               <Text style={{ color: Colors.textMuted, fontSize: 12, marginBottom: 8 }}>
-                Par défaut publique. Choisissez privée seulement si vous voulez un accès par code uniquement.
+                Les tontines de groupe apparaissent automatiquement sur Découvrir. Réservez « Personnelle » aux cercles privés.
               </Text>
               <View style={styles.visibilityRow}>
                 <TouchableOpacity
@@ -161,16 +162,16 @@ export function GroupCreateForm({ title, subtitle, endpoint, showContribution, s
                   onPress={() => setIsPublic(true)}
                   style={[styles.visBtn, isPublic ? styles.visBtnActive : null]}
                 >
-                  <Text style={[styles.visBtnLabel, isPublic ? styles.visBtnLabelActive : null]}>Publique</Text>
-                  <Text style={[styles.visBtnDesc, isPublic ? { color: Colors.secondary } : null]}>Visible dans l'annuaire · demandes d'adhésion</Text>
+                  <Text style={[styles.visBtnLabel, isPublic ? styles.visBtnLabelActive : null]}>Groupe</Text>
+                  <Text style={[styles.visBtnDesc, isPublic ? { color: Colors.secondary } : null]}>Visible sur Découvrir · demandes d'adhésion</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   testID={`${testIDPrefix}-visibility-private`}
                   onPress={() => setIsPublic(false)}
                   style={[styles.visBtn, !isPublic ? styles.visBtnActive : null]}
                 >
-                  <Text style={[styles.visBtnLabel, !isPublic ? styles.visBtnLabelActive : null]}>Privée</Text>
-                  <Text style={[styles.visBtnDesc, !isPublic ? { color: Colors.secondary } : null]}>Code d'invitation uniquement</Text>
+                  <Text style={[styles.visBtnLabel, !isPublic ? styles.visBtnLabelActive : null]}>Personnelle</Text>
+                  <Text style={[styles.visBtnDesc, !isPublic ? { color: Colors.secondary } : null]}>Privée · code d'invitation uniquement</Text>
                 </TouchableOpacity>
               </View>
             </>

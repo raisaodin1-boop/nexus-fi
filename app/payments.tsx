@@ -6,6 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { ArrowLeft, ArrowDownLeft, ArrowUpRight, CreditCard } from "lucide-react-native";
 
 import { api, formatXAF } from "@/src/api";
+import { resolvePaymentDisplayStatus } from "@/src/payment-status";
 import { Card, EmptyState, SkeletonCard } from "@/src/ui";
 import { Colors, Spacing } from "@/src/theme";
 
@@ -15,17 +16,14 @@ interface Payment {
 }
 
 function formatDate(d: string) {
-  return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+  return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-function statusLabel(status: string) {
-  switch (status) {
-    case "succeeded": return "Confirmé";
-    case "pending_paynote":
-    case "pending_cinetpay": return "En attente";
-    case "failed": return "Échoué";
-    default: return status;
-  }
+function statusColor(colorKey: string) {
+  if (colorKey === "success") return Colors.success;
+  if (colorKey === "warning") return Colors.warning;
+  if (colorKey === "danger") return Colors.danger;
+  return Colors.textMuted;
 }
 
 export default function PaymentsScreen() {
@@ -56,6 +54,14 @@ export default function PaymentsScreen() {
     }
   };
 
+  const openPayment = (p: Payment) => {
+    if (p.status === "succeeded") {
+      router.push({ pathname: "/receipt", params: { paymentId: p.id } } as any);
+      return;
+    }
+    router.push({ pathname: "/payment-status", params: { paymentId: p.id } } as any);
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <LinearGradient colors={[Colors.primary, Colors.gradMid]} style={styles.header}>
@@ -65,6 +71,16 @@ export default function PaymentsScreen() {
         <Text style={styles.headerTitle}>Historique des paiements</Text>
         <View style={{ width: 40 }} />
       </LinearGradient>
+
+      <View style={styles.legend}>
+        <Text style={styles.legendItem}>En attente PIN</Text>
+        <Text style={styles.legendDot}>·</Text>
+        <Text style={styles.legendItem}>Débité</Text>
+        <Text style={styles.legendDot}>·</Text>
+        <Text style={styles.legendItem}>Échoué</Text>
+        <Text style={styles.legendDot}>·</Text>
+        <Text style={styles.legendItem}>Expiré</Text>
+      </View>
 
       {loading ? (
         <View style={{ padding: Spacing.xl, gap: 12 }}>
@@ -77,7 +93,12 @@ export default function PaymentsScreen() {
           contentContainerStyle={{ padding: Spacing.xl, gap: 10, paddingBottom: 100 }}
           renderItem={({ item: p }) => {
             const isIn = p.type === "credit" || p.type === "deposit";
-            const pending = p.status === "pending_paynote" || p.status === "pending_cinetpay";
+            const view = resolvePaymentDisplayStatus({
+              status: p.status,
+              description: p.description,
+              created_at: p.created_at,
+            });
+            const pending = view.key === "pending_pin";
             const metaLabel = (() => {
               try {
                 const raw = (p.description ?? "").split(" · ref:")[0];
@@ -91,9 +112,9 @@ export default function PaymentsScreen() {
               <Card style={{ padding: 14, gap: 8 }}>
                 <TouchableOpacity
                   activeOpacity={0.85}
-                  disabled={p.status !== "succeeded"}
-                  onPress={() => router.push({ pathname: "/receipt", params: { paymentId: p.id } } as any)}
+                  onPress={() => openPayment(p)}
                   style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
+                  testID={`payment-row-${p.id}`}
                 >
                   <View style={[styles.iconBox, { backgroundColor: isIn ? `${Colors.accent}20` : `${Colors.danger}20` }]}>
                     {isIn
@@ -108,8 +129,8 @@ export default function PaymentsScreen() {
                     <Text style={[styles.amount, { color: isIn ? Colors.accent : Colors.danger }]}>
                       {isIn ? "+" : "-"}{formatXAF(p.amount, p.currency)}
                     </Text>
-                    <Text style={[styles.status, pending ? { color: Colors.warning } : null]}>
-                      {statusLabel(p.status)}
+                    <Text style={[styles.status, { color: statusColor(view.colorKey) }]}>
+                      {view.short}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -130,7 +151,7 @@ export default function PaymentsScreen() {
             <Card style={{ marginTop: 20 }}>
               <EmptyState
                 title="Aucun paiement"
-                description="Vos transactions apparaîtront ici."
+                description="Vos transactions apparaîtront ici avec un statut clair."
                 icon={<CreditCard color={Colors.textMuted} size={40} />}
               />
             </Card>
@@ -149,9 +170,15 @@ const styles = StyleSheet.create({
   },
   backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" },
   headerTitle: { color: "#fff", fontSize: 18, fontWeight: "900" },
+  legend: {
+    flexDirection: "row", flexWrap: "wrap", gap: 6, paddingHorizontal: Spacing.xl,
+    paddingBottom: 4, alignItems: "center",
+  },
+  legendItem: { color: Colors.textMuted, fontSize: 11, fontWeight: "700" },
+  legendDot: { color: Colors.textMuted, fontSize: 11 },
   iconBox: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   desc: { fontSize: 14, fontWeight: "700", color: Colors.text },
   date: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
   amount: { fontSize: 15, fontWeight: "900" },
-  status: { fontSize: 11, color: Colors.textMuted, fontWeight: "600", marginTop: 2 },
+  status: { fontSize: 11, fontWeight: "800", marginTop: 2 },
 });

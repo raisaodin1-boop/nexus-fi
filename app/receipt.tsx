@@ -16,7 +16,12 @@ import { LinearGradient } from "expo-linear-gradient";
 import { CheckCircle2, AlertCircle, Share2, Home, Mail } from "lucide-react-native";
 
 import { api, ApiError, formatXAF } from "@/src/api";
-import { paymentKindLabel } from "@/src/payment-receipt";
+import {
+  buildPaymentProofHtml,
+  buildPaymentProofShareText,
+  paymentKindLabel,
+} from "@/src/payment-receipt";
+import { downloadOrSharePdf } from "@/src/pdf-download";
 import { useToast } from "@/src/toast";
 import { Button, Card } from "@/src/ui";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
@@ -87,6 +92,7 @@ export default function ReceiptScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [emailSending, setEmailSending] = useState(false);
+  const [proofBusy, setProofBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -132,26 +138,35 @@ export default function ReceiptScreen() {
 
   const shareReceipt = async () => {
     if (!receipt) return;
-    const txType = typeLabel(type || receipt.type, receipt.kind, receipt.label);
-    const st = statusBadge(receipt.status);
-    const method = receipt.payment_method ?? receipt.method ?? "—";
-    const ref = receipt.reference ?? receipt.id;
-    const lines = [
-      "— REÇU HODIX —",
-      `Réf : ${buildReceiptId(receipt)}`,
-      `Type : ${txType}`,
-      `Montant : ${formatXAF(receipt.amount_xaf)}`,
-      `Méthode : ${method}`,
-      `Date : ${formatDateTime(receipt.created_at)}`,
-      `Référence : ${ref}`,
-      `Statut : ${st.text}`,
-      receipt.commission_xaf && receipt.commission_xaf > 0
-        ? `Commission Hodix : ${formatXAF(receipt.commission_xaf)}`
-        : null,
-    ].filter(Boolean).join("\n");
     try {
-      await Share.share({ message: lines, title: "Reçu HODIX" });
-    } catch {}
+      await Share.share({
+        message: buildPaymentProofShareText(receipt),
+        title: "Preuve de paiement HODIX",
+      });
+    } catch { /* user cancelled */ }
+  };
+
+  const shareProofPdf = async () => {
+    if (!receipt) return;
+    setProofBusy(true);
+    try {
+      const html = buildPaymentProofHtml(receipt);
+      const name = `hodix-preuve-${(receipt.receipt_id ?? receipt.id).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 16)}`;
+      await downloadOrSharePdf(html, name, "Partager la preuve HODIX");
+      show("Preuve prête à partager (WhatsApp, PDF…)", "success");
+    } catch (e) {
+      // Fallback text if PDF share unavailable
+      try {
+        await Share.share({
+          message: buildPaymentProofShareText(receipt),
+          title: "Preuve de paiement HODIX",
+        });
+      } catch {
+        show(e instanceof Error ? e.message : "Partage impossible", "error");
+      }
+    } finally {
+      setProofBusy(false);
+    }
   };
 
   // ---- Loading ----
@@ -270,9 +285,17 @@ export default function ReceiptScreen() {
               icon={<Mail color={Colors.secondary} size={16} />}
               testID="receipt-email"
             />
+            <Button
+              label={proofBusy ? "Préparation…" : "Preuve PDF / WhatsApp"}
+              variant="secondary"
+              onPress={shareProofPdf}
+              loading={proofBusy}
+              icon={<Share2 color={Colors.secondary} size={16} />}
+              testID="receipt-proof-pdf"
+            />
             <TouchableOpacity onPress={shareReceipt} style={styles.shareBtn} testID="receipt-share">
               <Share2 color={Colors.secondary} size={16} />
-              <Text style={styles.shareBtnText}>Partager ce reçu</Text>
+              <Text style={styles.shareBtnText}>Partager en texte</Text>
             </TouchableOpacity>
             {/* Primary CTA */}
             <Button

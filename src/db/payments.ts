@@ -20,6 +20,7 @@ export interface PaymentMeta {
   cooperative_id?: string | null;
   fund_id?: string | null;
   plan_id?: string | null;
+  diaspora_request_id?: string | null;
   provider?: string;
   phone?: string;
   cinetpay_transaction_id?: string | null;
@@ -40,8 +41,50 @@ type InitiatePayload = {
   cooperative_id?: string;
   fund_id?: string;
   plan_id?: string;
+  diaspora_request_id?: string;
   cert_kind?: "identity" | "trust-score" | "savings";
 };
+
+const PENDING_PAYNOTE_TTL_MS = 20 * 60 * 1000;
+
+function samePaymentTarget(meta: PaymentMeta, payload: InitiatePayload): boolean {
+  if (meta.kind !== payload.kind) return false;
+  const keys = [
+    "tontine_id",
+    "goal_id",
+    "association_id",
+    "cooperative_id",
+    "fund_id",
+    "plan_id",
+    "diaspora_request_id",
+  ] as const;
+  return keys.every((k) => String(meta[k] ?? "") === String(payload[k] ?? ""));
+}
+
+async function assertNoDuplicatePendingPaynote(me: string, payload: InitiatePayload) {
+  const since = new Date(Date.now() - PENDING_PAYNOTE_TTL_MS).toISOString();
+  const { data: rows, error } = await getSupabase()
+    .from("payments")
+    .select("id, description, created_at, status")
+    .eq("user_id", me)
+    .eq("status", "pending_paynote")
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(25);
+  throwSb(error);
+
+  for (const row of rows ?? []) {
+    const meta = parsePaymentMeta(row.description);
+    if (!meta || !samePaymentTarget(meta, payload)) continue;
+    throw {
+      status: 409,
+      detail:
+        "Un paiement MTN est déjà en cours pour cette opération. Validez le PIN sur votre téléphone ou attendez la réponse — ne relancez pas (risque de double débit / fraude).",
+      payment_id: row.id,
+      pending_payment: true,
+    };
+  }
+}
 
 type ConfirmPayload = {
   payment_id: string;
@@ -169,6 +212,25 @@ async function validatePaymentTarget(me: string, payload: InitiatePayload): Prom
       }
       amount = payload.amount_xaf;
       break;
+    case "diaspora_sponsor": {
+      if (!payload.diaspora_request_id) {
+        throw { status: 400, detail: "diaspora_request_id requis." };
+      }
+      const { data: req } = await getSupabase()
+        .from("diaspora_contribution_requests")
+        .select("id, user_id, sponsor_user_id, amount_expected, status")
+        .eq("id", payload.diaspora_request_id)
+        .maybeSingle();
+      if (!req) throw { status: 404, detail: "Demande diaspora introuvable." };
+      const owner = req.sponsor_user_id ?? req.user_id;
+      if (owner !== me) throw { status: 403, detail: "Cette demande ne vous appartient pas." };
+      if (req.status === "validated") {
+        throw { status: 400, detail: "Cette cotisation est déjà validée." };
+      }
+      amount = Number(req.amount_expected ?? amount);
+      if (!amount || amount <= 0) throw { status: 400, detail: "Montant invalide." };
+      break;
+    }
     default:
       throw { status: 400, detail: "Type de paiement inconnu." };
   }
@@ -176,6 +238,8 @@ async function validatePaymentTarget(me: string, payload: InitiatePayload): Prom
 }
 
 async function initiatePaynoteMtnPayment(payload: InitiatePayload, amount: number, me: string) {
+  await assertNoDuplicatePendingPaynote(me, payload);
+
   const paymentId = crypto.randomUUID();
   const meta: PaymentMeta = {
     kind: payload.kind,
@@ -187,6 +251,7 @@ async function initiatePaynoteMtnPayment(payload: InitiatePayload, amount: numbe
     cooperative_id: payload.cooperative_id ?? null,
     fund_id: payload.fund_id ?? null,
     plan_id: payload.plan_id ?? null,
+    diaspora_request_id: payload.diaspora_request_id ?? null,
     provider: "mtn",
     phone: payload.phone?.trim(),
     gateway: "paynote",

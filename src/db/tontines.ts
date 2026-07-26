@@ -293,7 +293,7 @@ export async function listTontineJoinRequests(tontineId?: string) {
   let q = sb
     .from("tontine_join_requests")
     .select("*, tontines(id, name, owner_id)")
-    .eq("status", "pending")
+    .in("status", ["pending", "needs_info"])
     .order("created_at", { ascending: false });
   if (tontineId) q = q.eq("tontine_id", tontineId);
   const { data, error } = await q;
@@ -322,6 +322,8 @@ export async function listTontineJoinRequests(tontineId?: string) {
     tontine_name: r.tontines?.name ?? "Tontine",
     group_type: "tontine" as const,
     message: r.message,
+    status: r.status as "pending" | "needs_info",
+    owner_note: r.owner_note ?? null,
     created_at: r.created_at,
   }));
 }
@@ -340,6 +342,17 @@ export async function respondTontineJoin(request_id: string, approve: boolean) {
     if (requesterId) invalidateUserStatsCaches(String(requesterId));
     invalidateCache("tontines");
   } catch { /* best-effort */ }
+  return data;
+}
+
+export async function requestTontineJoinInfo(request_id: string, message: string) {
+  const note = String(message ?? "").trim();
+  if (!note) throw { status: 400, detail: "Indiquez les informations demandées." };
+  const { data, error } = await getSupabase().rpc("request_tontine_join_info", {
+    p_request_id: request_id,
+    p_message: note,
+  });
+  if (error) throwSb(error);
   return data;
 }
 
@@ -418,13 +431,17 @@ export async function createTontineSecure(body: Record<string, any>) {
   const isAdmin = profileData?.role === "admin" || profileData?.role === "super_admin";
   const amountPerCycle = Number(body.amount_per_cycle ?? 0);
 
+  // Group tontines are public on Découvrir; only personal stays private.
+  const isPersonal = body.is_personal === true || body.is_public === false;
+  const isPublic = !isPersonal;
+
   if (!isAdmin) {
-    if (body.is_public) {
+    if (isPublic) {
       const tsRes = await sb.from("identity_scores").select("score").eq("user_id", me).maybeSingle();
       const score = tsRes?.data?.score ?? 0;
       const required = amountPerCycle >= HIGH_VALUE_THRESHOLD ? TRUST_SCORE_HIGH_VALUE : TRUST_SCORE_PUBLIC_TONTINE;
       if (score < required)
-        throw { status: 403, detail: `Trust Score insuffisant pour une tontine publique (requis: ${required}, votre score: ${score}).` };
+        throw { status: 403, detail: `Trust Score insuffisant pour une tontine de groupe (requis: ${required}, votre score: ${score}). Choisissez « Personnelle » pour rester privée, ou augmentez votre score.` };
     }
     if (amountPerCycle >= KYC_REQUIRED_THRESHOLD) {
       if ((profile?.kyc_status ?? null) !== "approved")
@@ -437,7 +454,9 @@ export async function createTontineSecure(body: Record<string, any>) {
     amount_per_cycle: amountPerCycle,
     contribution_amount: amountPerCycle,
     frequency: body.frequency ?? "monthly",
-    max_members: Number(body.max_members ?? 12), is_public: body.is_public !== false,
+    max_members: Number(body.max_members ?? 12),
+    is_public: isPublic,
+    is_personal: isPersonal,
     rotation_mode: body.rotation_mode ?? "rotation",
     owner_id: me,
     current_cycle: 1,

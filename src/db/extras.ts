@@ -306,14 +306,22 @@ export async function sendTontineReminders(tontineId: string) {
   let skipped = 0;
   let failed = 0;
 
+  const payPath = `/pay?kind=tontine_contribution&tontine_id=${encodeURIComponent(tontineId)}&amount=${Math.round(amount)}&label=${encodeURIComponent(t.name ?? "Tontine")}`;
+
   for (const m of members ?? []) {
     if ((m.last_paid_cycle ?? 0) >= cycle) { skipped++; continue; }
     try {
       await notifyUser({
         user_id: m.user_id,
         title: `Rappel cotisation — ${t.name}`,
-        body: `Votre contribution de ${amount.toLocaleString("fr-FR")} XAF (cycle ${cycle}) est attendue.`,
+        body: `Votre contribution de ${amount.toLocaleString("fr-FR")} XAF (cycle ${cycle}) est attendue. Ouvrez l’app pour payer via MTN MoMo.`,
         type: "tontine_reminder",
+        metadata: {
+          action_url: payPath,
+          tontine_id: tontineId,
+          amount_xaf: amount,
+          cycle,
+        },
       });
       sent++;
     } catch {

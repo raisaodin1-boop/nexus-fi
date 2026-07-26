@@ -3,7 +3,7 @@ import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } 
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, ChevronRight, Globe, List, MapPin, PlusCircle, Shield, Upload } from "lucide-react-native";
+import { ArrowLeft, ChevronRight, Globe, HeartHandshake, List, MapPin, PlusCircle, Shield, Upload } from "lucide-react-native";
 
 import { useAuth } from "@/src/auth-context";
 import { api, formatXAF } from "@/src/api";
@@ -162,6 +162,7 @@ export function DiasporaMemberDashboard({ embeddedInTabs, skipGuard }: Props) {
                 if (next) router.push(`/diaspora/pay/${next.id}` as any);
                 else router.push("/diaspora/contributions" as any);
               }} primary />
+              <ActionBtn icon={HeartHandshake} label="Payer pour un proche" onPress={() => router.push("/diaspora/sponsor" as any)} />
               <ActionBtn icon={Upload} label="Ajouter une preuve" onPress={() => {
                 const r = home?.upcoming?.find((u) => ["proof_submitted", "pending_payment", "rejected", "needs_info"].includes(u.status));
                 if (r) router.push(`/diaspora/proof/${r.id}` as any);

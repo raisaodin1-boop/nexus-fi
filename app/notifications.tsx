@@ -15,6 +15,7 @@ import { SkeletonList } from "@/src/ui";
 
 interface Notif {
   id: string; title: string; body: string; kind: string;
+  type?: string;
   is_read: boolean; created_at: string; action_url?: string;
 }
 
@@ -239,8 +240,19 @@ export default function Notifications() {
               activeOpacity={0.85}
               onPress={() => {
                 markRead(item.id);
-                if (item.action_url) {
-                  try { router.push(item.action_url as any); } catch {}
+                let url = item.action_url;
+                const isJoin =
+                  item.type === "join_request"
+                  || item.type === "association_join_request"
+                  || /adhésion|adhesion/i.test(item.title);
+                if (!url && isJoin) url = "/manage";
+                if (url && (url.includes("tab=manage") || url.startsWith("/admin"))) {
+                  url = "/manage";
+                }
+                if (url) {
+                  try { router.push(url as any); } catch {}
+                } else if (isJoin) {
+                  try { router.push("/manage" as any); } catch {}
                 }
               }}
             >

@@ -5,10 +5,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { ArrowLeft, Gavel, Trophy, Clock, TrendingUp, Users } from "lucide-react-native";
+import { ArrowLeft, Gavel, Trophy, Clock, TrendingUp } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 
-import { getAuctionState, placeBid, closeAuction, type AuctionState } from "@/src/db/tontine-auction";
+import {
+  getAuctionState, placeBid, closeAuction, openAuction, listMyAuctionTontines,
+  type AuctionState, type AuctionTontineOption,
+} from "@/src/db/tontine-auction";
 import { Colors, Radius, Spacing, Shadow } from "@/src/theme";
 import { Button, Field } from "@/src/ui";
 import { VerifiedName } from "@/src/verified-name";
@@ -20,15 +23,25 @@ export default function TontineAuctionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { show } = useToast();
 
+  const [picker, setPicker] = useState<AuctionTontineOption[] | null>(null);
   const [state, setState] = useState<AuctionState | null>(null);
   const [loading, setLoading] = useState(true);
   const [bidAmount, setBidAmount] = useState("");
   const [placing, setPlacing] = useState(false);
   const [closing, setClosing] = useState(false);
-  const [showNumber, setShowNumber] = useState(false);
+  const [opening, setOpening] = useState(false);
 
   const load = async () => {
-    if (!id) return;
+    if (!id) {
+      try {
+        const list = await listMyAuctionTontines();
+        setPicker(list);
+      } catch (e: any) {
+        show(e?.message ?? "Erreur", "error");
+      }
+      setLoading(false);
+      return;
+    }
     try {
       const s = await getAuctionState(id);
       setState(s);
@@ -36,7 +49,7 @@ export default function TontineAuctionScreen() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { setLoading(true); load(); }, [id]);
 
   const handleBid = async () => {
     const amt = Number(bidAmount);
@@ -51,19 +64,38 @@ export default function TontineAuctionScreen() {
     setPlacing(false);
   };
 
-  const handleClose = () => {
-    Alert.alert("Clôturer les enchères", "Le plus offrant remporte la cagnotte. Confirmer ?", [
+  const handleOpen = () => {
+    Alert.alert("Ouvrir le tour anticipé", "Les membres pourront enchérir pendant 24 h. Confirmer ?", [
       { text: "Annuler", style: "cancel" },
-      { text: "Clôturer", style: "destructive", onPress: async () => {
-        setClosing(true);
+      { text: "Ouvrir", onPress: async () => {
+        setOpening(true);
         try {
-          const result = await closeAuction(id!);
-          show(`Enchères clôturées ! Prime: ${formatXAFAmount(result.premium)}`, "success");
+          await openAuction(id!, 24);
+          show("Enchères ouvertes — tour anticipé", "success");
           await load();
         } catch (e: any) { show(e?.message ?? "Erreur", "error"); }
-        setClosing(false);
+        setOpening(false);
       }},
     ]);
+  };
+
+  const handleClose = () => {
+    Alert.alert(
+      "Clôturer les enchères",
+      "Le plus offrant avance son tour (position 1). La prime est enregistrée. Confirmer ?",
+      [
+        { text: "Annuler", style: "cancel" },
+        { text: "Clôturer", style: "destructive", onPress: async () => {
+          setClosing(true);
+          try {
+            const result = await closeAuction(id!);
+            show(`Tour anticipé attribué — prime ${formatXAFAmount(result.premium)}`, "success");
+            await load();
+          } catch (e: any) { show(e?.message ?? "Erreur", "error"); }
+          setClosing(false);
+        }},
+      ],
+    );
   };
 
   const timeLeft = state ? Math.max(0, new Date(state.ends_at).getTime() - Date.now()) : 0;
@@ -74,6 +106,44 @@ export default function TontineAuctionScreen() {
     <SafeAreaView style={s.safe}><ActivityIndicator color={Colors.primary} style={{ marginTop: 60 }} /></SafeAreaView>
   );
 
+  if (!id) {
+    return (
+      <SafeAreaView style={s.safe}>
+        <ScrollView contentContainerStyle={s.scroll}>
+          <View style={s.header}>
+            <TouchableOpacity onPress={() => router.back()} style={s.back}>
+              <ArrowLeft size={20} color={Colors.text} />
+            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <Text style={s.title}>Tour anticipé / Enchères</Text>
+              <Text style={s.subtitle}>Choisissez une tontine</Text>
+            </View>
+          </View>
+          {(picker ?? []).length === 0 ? (
+            <Text style={s.formHint}>Vous n’êtes membre d’aucune tontine pour l’instant.</Text>
+          ) : (
+            (picker ?? []).map((t) => (
+              <TouchableOpacity
+                key={t.id}
+                style={s.card}
+                onPress={() => router.push(`/tontine-auction?id=${t.id}` as any)}
+                activeOpacity={0.85}
+              >
+                <View style={s.cardRow}>
+                  <Gavel size={18} color={Colors.primary} />
+                  <Text style={s.cardTitle}>{t.name}</Text>
+                </View>
+                <Text style={s.formHint}>
+                  Cycle {t.current_cycle} · {t.auction_closed ? "Fermées" : "Ouvertes"}
+                </Text>
+              </TouchableOpacity>
+            ))
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={s.safe}>
       <ScrollView contentContainerStyle={s.scroll}>
@@ -82,12 +152,11 @@ export default function TontineAuctionScreen() {
             <ArrowLeft size={20} color={Colors.text} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={s.title}>Enchères Tontine</Text>
-            <Text style={s.subtitle}>Cycle {state?.cycle} — Qui remporte la cagnotte ?</Text>
+            <Text style={s.title}>Tour anticipé</Text>
+            <Text style={s.subtitle}>Cycle {state?.cycle} — avancez votre tour contre une prime</Text>
           </View>
         </View>
 
-        {/* Hero pot */}
         <LinearGradient colors={[Colors.primary, Colors.secondary]} style={[s.hero, Shadow.cardDark]}>
           <Text style={s.heroLabel}>Cagnotte du cycle</Text>
           <Text style={s.heroPot}>{formatXAFAmount(state?.pot_amount ?? 0)}</Text>
@@ -98,13 +167,12 @@ export default function TontineAuctionScreen() {
             </View>
           )}
           {state?.is_closed && (
-            <View style={[s.timerRow, { backgroundColor: "#EF4444" + "30" }]}>
-              <Text style={s.timer}>Enchères terminées</Text>
+            <View style={[s.timerRow, { backgroundColor: "#EF444430" }]}>
+              <Text style={s.timer}>Enchères fermées</Text>
             </View>
           )}
         </LinearGradient>
 
-        {/* Top bidder */}
         {state?.top_bid && (
           <View style={[s.card, { borderColor: Colors.accent, borderWidth: 2 }]}>
             <View style={s.cardRow}>
@@ -117,27 +185,25 @@ export default function TontineAuctionScreen() {
               style={s.topBidder}
             />
             <Text style={s.topBidAmt}>{formatXAFAmount(state.top_bid.bid_amount)}</Text>
-            <Text style={s.topBidDesc}>Prime supplémentaire à payer</Text>
+            <Text style={s.topBidDesc}>Prime — le gagnant reçoit en priorité</Text>
           </View>
         )}
 
-        {/* My bid */}
         {state?.my_bid && (
           <View style={s.myBidCard}>
             <TrendingUp size={16} color={Colors.primary} />
             <Text style={s.myBidText}>Mon offre : {formatXAFAmount(state.my_bid.bid_amount)}</Text>
             {state.my_bid.user_id === state.top_bid?.user_id && (
-              <Text style={s.myBidLeading}>🏆 En tête !</Text>
+              <Text style={s.myBidLeading}>En tête</Text>
             )}
           </View>
         )}
 
-        {/* Bid form */}
         {!state?.is_closed && (
           <View style={s.form}>
             <Text style={s.formTitle}>Placer une offre</Text>
             <Text style={s.formHint}>
-              L'offre minimum est 5% de la contribution. La prime est redistribuée aux autres membres.
+              Minimum 5 % de la cotisation. La prime est redistribuée aux autres membres.
             </Text>
             <Field
               label="Votre offre (FCFA)"
@@ -154,7 +220,6 @@ export default function TontineAuctionScreen() {
           </View>
         )}
 
-        {/* All bids */}
         {(state?.bids ?? []).length > 0 && (
           <View style={s.section}>
             <Text style={s.sectionTitle}>Toutes les offres ({state!.bids.length})</Text>
@@ -172,10 +237,17 @@ export default function TontineAuctionScreen() {
           </View>
         )}
 
-        {/* Close auction (admin) */}
+        {state?.is_closed && (
+          <Button
+            label={opening ? "Ouverture…" : "Ouvrir les enchères (Admin)"}
+            onPress={handleOpen}
+            loading={opening}
+          />
+        )}
+
         {!state?.is_closed && (
           <Button
-            label={closing ? "Clôture..." : "Clôturer les enchères (Admin)"}
+            label={closing ? "Clôture..." : "Clôturer — attribuer le tour (Admin)"}
             variant="danger"
             onPress={handleClose}
             loading={closing}

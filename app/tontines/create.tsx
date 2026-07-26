@@ -6,7 +6,7 @@ export default function TontineCreate() {
   return (
     <GroupCreateForm
       title="Nouvelle tontine"
-      subtitle="Publique par défaut. Choisissez privée seulement si vous le souhaitez expressément."
+      subtitle="Groupe par défaut (visible sur Découvrir). Choisissez Personnelle seulement pour un cercle privé."
       endpoint="/tontines"
       showContribution
       showRotationMode

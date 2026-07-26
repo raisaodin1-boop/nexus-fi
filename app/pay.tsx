@@ -56,6 +56,7 @@ function paymentTitle(kind: PaymentKind) {
     case "fund_contribution": return "CONTRIBUTION FONDS";
     case "wallet_topup": return "RECHARGE WALLET";
     case "certified_report": return "CERTIFICAT AUTHENTIFIÉ";
+    case "diaspora_sponsor": return "COTISATION D'UN PROCHE";
     default: return "DÉPÔT ÉPARGNE";
   }
 }
@@ -64,11 +65,16 @@ export default function PayContribution() {
   const router = useRouter();
   const params = useLocalSearchParams<{
     tontine_id?: string; goal_id?: string; association_id?: string;
-    cooperative_id?: string; fund_id?: string; plan_id?: string; amount: string; label?: string; kind?: PaymentKind;
+    cooperative_id?: string; fund_id?: string; plan_id?: string;
+    diaspora_request_id?: string;
+    amount: string; label?: string; kind?: PaymentKind;
     cert_kind?: "identity" | "trust-score" | "savings";
     phone?: string;
   }>();
-  const { tontine_id, goal_id, association_id, cooperative_id, fund_id, plan_id, amount, label, cert_kind, phone: paramPhone } = params;
+  const {
+    tontine_id, goal_id, association_id, cooperative_id, fund_id, plan_id,
+    diaspora_request_id, amount, label, cert_kind, phone: paramPhone,
+  } = params;
   const paymentKind = inferKind(params);
   const amt = parseFloat(amount || "0");
 
@@ -107,6 +113,7 @@ export default function PayContribution() {
     ...(cooperative_id ? { cooperative_id } : {}),
     ...(fund_id ? { fund_id } : {}),
     ...(plan_id ? { plan_id } : {}),
+    ...(diaspora_request_id ? { diaspora_request_id } : {}),
     ...(cert_kind ? { cert_kind } : {}),
   });
 
@@ -204,7 +211,14 @@ export default function PayContribution() {
       setHint("Demande envoyée à Paynote. MTN doit d’abord débiter — HODIX attend la réponse positive ou la raison d’échec.");
       setStage("processing");
     } catch (e) {
-      setError(e instanceof ApiError ? e.detail : "Erreur de paiement MTN");
+      if (e instanceof ApiError && e.status === 409 && e.pending_payment && e.payment_id) {
+        setPaymentId(e.payment_id);
+        setError(e.detail);
+        setHint("Paiement déjà en cours — validez le PIN MTN. Ne relancez pas.");
+        setStage("processing");
+      } else {
+        setError(e instanceof ApiError ? e.detail : "Erreur de paiement MTN");
+      }
     } finally { setBusy(false); }
   };
 
@@ -232,7 +246,10 @@ export default function PayContribution() {
       if (ticks === 8) setHint("Dès validation, Paynote notifie HODIX — crédit immédiat");
       if (ticks === 20) setHint("Toujours en attente — sans PIN, aucun paiement. Solde insuffisant ? Rechargez MTN.");
       if (ticks >= maxTicks) {
-        setError("Délai dépassé. Aucun débit confirmé — vous pouvez réessayer sans double paiement.");
+        markFailed(
+          "Délai dépassé (Expiré). Aucun débit confirmé par MTN — vous pouvez réessayer sans double paiement.",
+          "EXPIRED / TIMEOUT — PIN non validé à temps",
+        );
         cancelled = true;
         return;
       }

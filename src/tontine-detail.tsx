@@ -21,7 +21,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowLeft, ArrowDown, ArrowUp, Award, CheckCircle, ChevronRight,
-  Copy, Crown, MessageSquare, RefreshCw, Settings2, Shield, Shuffle, Smartphone, Trophy, Users as UsersIcon,
+  Copy, Crown, Gavel, MessageSquare, RefreshCw, Settings2, Shield, Shuffle, Smartphone, Trophy, Users as UsersIcon,
   Wallet, X,
 } from "lucide-react-native";
 
@@ -540,6 +540,10 @@ export function TontineDetailView({ id }: { id: string }) {
   const [proofBusy, setProofBusy] = useState(false);
   const [modulesOpen, setModulesOpen] = useState(false);
   const [modules, setModules] = useState<CommunityModulesState>({ ...DEFAULT_COMMUNITY_MODULES });
+  const [joinReqs, setJoinReqs] = useState<{
+    id: string; requester_name: string; message?: string | null; status?: string; owner_note?: string | null;
+  }[]>([]);
+  const [joinBusyId, setJoinBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -552,6 +556,12 @@ export function TontineDetailView({ id }: { id: string }) {
       setData(d);
       setDisbursements(Array.isArray(disbs) ? disbs : []);
       setModules(mods);
+      if (d?.is_admin) {
+        const jr = await api.get<typeof joinReqs>(`/tontines/join-requests?tontine_id=${id}`).catch(() => []);
+        setJoinReqs(jr ?? []);
+      } else {
+        setJoinReqs([]);
+      }
     } catch (e) {
       setData(null);
       setLoadError(e instanceof ApiError ? e.detail : "Impossible de charger la tontine.");
@@ -871,6 +881,79 @@ export function TontineDetailView({ id }: { id: string }) {
               <Text style={styles.codeCta}>Partager</Text>
             </TouchableOpacity>
 
+            {is_admin && joinReqs.length > 0 ? (
+              <View style={{ marginTop: 16, gap: 8 }}>
+                <Text style={{ fontSize: 14, fontWeight: "800", color: Colors.text }}>
+                  Demandes d'adhésion ({joinReqs.length})
+                </Text>
+                {joinReqs.map((r) => (
+                  <Card key={r.id} style={{ padding: 12, gap: 8 }}>
+                    <Text style={{ fontWeight: "800", color: Colors.text }}>{r.requester_name}</Text>
+                    {r.message ? <Text style={{ color: Colors.textMuted, fontSize: 12 }}>{r.message}</Text> : null}
+                    {r.status === "needs_info" && r.owner_note ? (
+                      <Text style={{ color: Colors.secondary, fontSize: 12 }}>Infos demandées : {r.owner_note}</Text>
+                    ) : null}
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                      <Button
+                        label="Accepter"
+                        fullWidth={false}
+                        style={{ paddingHorizontal: 12, paddingVertical: 8 }}
+                        loading={joinBusyId === r.id}
+                        onPress={async () => {
+                          setJoinBusyId(r.id);
+                          try {
+                            await api.post("/tontines/respond-join", { request_id: r.id, approve: true });
+                            await load();
+                          } catch (e: any) {
+                            Alert.alert("Erreur", e?.detail ?? "Impossible");
+                          }
+                          setJoinBusyId(null);
+                        }}
+                      />
+                      <Button
+                        label="Refuser"
+                        variant="danger"
+                        fullWidth={false}
+                        style={{ paddingHorizontal: 12, paddingVertical: 8 }}
+                        loading={joinBusyId === r.id}
+                        onPress={async () => {
+                          setJoinBusyId(r.id);
+                          try {
+                            await api.post("/tontines/respond-join", { request_id: r.id, approve: false });
+                            await load();
+                          } catch (e: any) {
+                            Alert.alert("Erreur", e?.detail ?? "Impossible");
+                          }
+                          setJoinBusyId(null);
+                        }}
+                      />
+                      <Button
+                        label="Plus d'infos"
+                        variant="secondary"
+                        fullWidth={false}
+                        style={{ paddingHorizontal: 12, paddingVertical: 8 }}
+                        loading={joinBusyId === r.id}
+                        onPress={async () => {
+                          setJoinBusyId(r.id);
+                          try {
+                            await api.post("/tontines/request-join-info", {
+                              request_id: r.id,
+                              message: "Merci de préciser votre identité / quartier / contact WhatsApp pour valider votre adhésion.",
+                            });
+                            Alert.alert("Envoyé", "Le membre a été informé. La demande reste en attente.");
+                            await load();
+                          } catch (e: any) {
+                            Alert.alert("Erreur", e?.detail ?? "Impossible");
+                          }
+                          setJoinBusyId(null);
+                        }}
+                      />
+                    </View>
+                  </Card>
+                ))}
+              </View>
+            ) : null}
+
             {modules.treasury ? <ContributePanel /> : null}
 
             {modules.tontine ? (
@@ -887,6 +970,19 @@ export function TontineDetailView({ id }: { id: string }) {
             <View style={{ marginTop: 16 }}>
               <DocumentButton kind="tontine_certificate" refId={id} compact />
             </View>
+
+            {/* Tour anticipé / enchères */}
+            <TouchableOpacity
+              onPress={() => router.push(`/tontine-auction?id=${id}` as any)}
+              style={[styles.disbBtn, Shadow.card]}
+              testID="tontine-auction-btn"
+            >
+              <LinearGradient colors={["#4C1D95", "#7C3AED"]} style={styles.disbBtnGrad}>
+                <Gavel color="#fff" size={18} />
+                <Text style={styles.disbBtnText}>Tour anticipé / Enchères</Text>
+                <ChevronRight color="#fff" size={16} />
+              </LinearGradient>
+            </TouchableOpacity>
 
             {/* Leaderboard CTA */}
             <TouchableOpacity onPress={() => router.push(`/tontines/leaderboard?id=${id}`)} style={[styles.disbBtn, Shadow.card]} testID="tontine-leaderboard-btn">

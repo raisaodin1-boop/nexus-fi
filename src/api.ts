@@ -32,12 +32,21 @@ export class ApiError extends Error {
   detail: string;
   redirect_to?: string;
   payment_required?: boolean;
-  constructor(status: number, detail: string, extra?: { redirect_to?: string; payment_required?: boolean }) {
+  payment_id?: string;
+  pending_payment?: boolean;
+  constructor(status: number, detail: string, extra?: {
+    redirect_to?: string;
+    payment_required?: boolean;
+    payment_id?: string;
+    pending_payment?: boolean;
+  }) {
     super(detail);
     this.status = status;
     this.detail = detail;
     this.redirect_to = extra?.redirect_to;
     this.payment_required = extra?.payment_required;
+    this.payment_id = extra?.payment_id;
+    this.pending_payment = extra?.pending_payment;
   }
 }
 
@@ -79,6 +88,7 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "POST" && s[0] === "tontines" && s[1] === "request-join")                  return (await db.requestJoinTontine(body?.tontine_id, body?.message)) as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] === "join-requests")                 return (await db.listTontineJoinRequests(query.get("tontine_id") ?? undefined)) as T;
     if (method === "POST" && s[0] === "tontines" && s[1] === "respond-join")                  return (await db.respondTontineJoin(body?.request_id, !!body?.approve)) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] === "request-join-info")             return (await db.requestTontineJoinInfo(body?.request_id, body?.message ?? "")) as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] && !s[2])                            return (await db.getTontine(s[1])) as T;
     if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "contribute")
       return db.rejectDirectPaymentRedirect("tontine_contribution", { tontine_id: s[1] }) as T;
@@ -306,6 +316,11 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"  && s[0] === "diaspora" && s[1] === "home")                      return (await db.getDiasporaHome()) as T;
     if (method === "GET"  && s[0] === "diaspora" && s[1] === "contributions")              return (await db.listDiasporaContributions({ status: query.get("status") ?? undefined, tontine_id: query.get("tontine_id") ?? undefined })) as T;
     if (method === "POST" && s[0] === "diaspora" && s[1] === "requests")                   return (await db.ensureDiasporaRequest(body?.tontine_id)) as T;
+    if (method === "POST" && s[0] === "diaspora" && s[1] === "sponsor")                    return (await db.createDiasporaSponsorRequest({
+      invite_code: body?.invite_code,
+      beneficiary_phone: body?.beneficiary_phone,
+      relation: body?.relation,
+    })) as T;
     if (method === "GET"  && s[0] === "diaspora" && s[1] === "join-preview")               return (await db.getDiasporaJoinPreview(query.get("code") ?? undefined, query.get("tontine_id") ?? undefined)) as T;
     if (method === "POST" && s[0] === "diaspora" && s[1] === "join")                      return (await db.joinTontineDiaspora(body?.invite_code, !!body?.diaspora_consent)) as T;
     if (method === "POST" && s[0] === "diaspora" && s[1] === "proof-upload")             return (await db.uploadDiasporaProof(body?.base64, body?.mime)) as T;
@@ -431,6 +446,8 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     throw new ApiError(e?.status ?? 500, e?.detail ?? e?.message ?? "Erreur inattendue", {
       redirect_to: e?.redirect_to,
       payment_required: e?.payment_required,
+      payment_id: e?.payment_id,
+      pending_payment: e?.pending_payment,
     });
   }
 }

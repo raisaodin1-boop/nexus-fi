@@ -1,34 +1,50 @@
 /**
- * HODIX — tâches planifiées tontines (rappels J-7/J-3/J-1/J/retard, en_retard, avancement, escrow).
+ * HODIX — tâches planifiées tontines
+ * Rappels J-7 / J-3 / J-2 / J-1 / J-0 / retard → push + SMS + lien /pay
  */
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const FREQ_DAYS: Record<string, number> = { weekly: 7, biweekly: 14, monthly: 30, quarterly: 90 };
+const APP_ORIGIN = (Deno.env.get("PUBLIC_APP_URL") ?? "https://www.hodix.app").replace(/\/$/, "");
 
-type ReminderKind = "j7" | "j3" | "j1" | "j0" | "late";
+type ReminderKind = "j7" | "j3" | "j2" | "j1" | "j0" | "late";
 
 function reminderKindForHours(hoursLeft: number): ReminderKind | null {
   if (hoursLeft <= -24 && hoursLeft >= -168) return "late";
   if (hoursLeft <= 0 && hoursLeft > -24) return "j0";
   if (hoursLeft <= 24 && hoursLeft > 0) return "j1";
+  if (hoursLeft <= 48 && hoursLeft > 24) return "j2";
   if (hoursLeft <= 72 && hoursLeft > 48) return "j3";
   if (hoursLeft <= 168 && hoursLeft > 144) return "j7";
   return null;
 }
 
-function reminderCopy(kind: ReminderKind, name: string, cycle: number): { title: string; body: string } {
+function reminderCopy(kind: ReminderKind, name: string, cycle: number, amount: number): { title: string; body: string } {
+  const amt = amount > 0 ? ` (${amount.toLocaleString("fr-FR")} XAF)` : "";
   switch (kind) {
     case "j7":
-      return { title: "Rappel cotisation J-7", body: `${name} — cycle ${cycle}. Échéance dans 7 jours.` };
+      return { title: "Rappel cotisation J-7", body: `${name} — cycle ${cycle}${amt}. Échéance dans 7 jours.` };
     case "j3":
-      return { title: "Rappel cotisation J-3", body: `${name} — cycle ${cycle}. Échéance dans 3 jours.` };
+      return { title: "Rappel cotisation J-3", body: `${name} — cycle ${cycle}${amt}. Échéance dans 3 jours.` };
+    case "j2":
+      return { title: "Rappel cotisation J-2", body: `${name} — cycle ${cycle}${amt}. Échéance dans 2 jours.` };
     case "j1":
-      return { title: "Rappel cotisation J-1", body: `${name} — cycle ${cycle}. Échéance demain.` };
+      return { title: "Rappel cotisation J-1", body: `${name} — cycle ${cycle}${amt}. Échéance demain.` };
     case "j0":
-      return { title: "Échéance aujourd'hui", body: `${name} — cycle ${cycle}. Cotisez aujourd'hui.` };
+      return { title: "Échéance aujourd'hui", body: `${name} — cycle ${cycle}${amt}. Cotisez aujourd'hui.` };
     case "late":
-      return { title: "Cotisation en retard", body: `${name} — cycle ${cycle}. Vous êtes en retard.` };
+      return { title: "Cotisation en retard", body: `${name} — cycle ${cycle}${amt}. Vous êtes en retard.` };
   }
+}
+
+function payUrl(tontineId: string, amount: number, label: string): string {
+  const params = new URLSearchParams({
+    kind: "tontine_contribution",
+    tontine_id: tontineId,
+    amount: String(Math.max(0, Math.round(amount))),
+    label,
+  });
+  return `${APP_ORIGIN}/pay?${params.toString()}`;
 }
 
 async function sendSms(phone: string, body: string): Promise<boolean> {
@@ -72,10 +88,11 @@ Deno.serve(async (req) => {
   let escrowReleased = 0;
 
   const { data: tontines } = await admin.from("tontines")
-    .select("id, name, current_cycle, cycle_deadline, max_members, frequency, auto_advance, owner_id");
+    .select("id, name, current_cycle, cycle_deadline, max_members, frequency, auto_advance, owner_id, amount_per_cycle, contribution_amount");
 
   for (const t of tontines ?? []) {
     const cycle = t.current_cycle ?? 1;
+    const amount = Number(t.amount_per_cycle ?? t.contribution_amount ?? 0);
     let deadline = t.cycle_deadline ? new Date(t.cycle_deadline) : null;
 
     // Heal missing deadlines so reminders can run
@@ -109,6 +126,9 @@ Deno.serve(async (req) => {
     }
 
     if (kind) {
+      const link = payUrl(t.id, amount, t.name ?? "Tontine");
+      const actionPath = `/pay?kind=tontine_contribution&tontine_id=${encodeURIComponent(t.id)}&amount=${Math.round(amount)}&label=${encodeURIComponent(t.name ?? "Tontine")}`;
+
       for (const m of members ?? []) {
         if ((m.last_paid_cycle ?? 0) >= cycle) continue;
 
@@ -120,17 +140,28 @@ Deno.serve(async (req) => {
         });
         if (logErr) continue; // already sent this kind for this cycle
 
-        const copy = reminderCopy(kind, t.name, cycle);
+        const copy = reminderCopy(kind, t.name, cycle, amount);
         await admin.from("notifications").insert({
           user_id: m.user_id,
           title: copy.title,
-          body: copy.body,
+          body: `${copy.body} Payez ici : ${link}`,
           type: "tontine_reminder",
           is_read: false,
-          metadata: { action_url: `/tontines/${t.id}`, kind, cycle },
+          metadata: {
+            action_url: actionPath,
+            kind,
+            cycle,
+            tontine_id: t.id,
+            amount_xaf: amount,
+          },
         });
         const phone = String((m as any).profiles?.phone ?? "").replace(/[\s\-]/g, "");
-        if (phone) await sendSms(phone, `HODIX : ${copy.body}`);
+        if (phone) {
+          await sendSms(
+            phone,
+            `HODIX : ${copy.body}\nPayer via MTN MoMo : ${link}`,
+          );
+        }
         reminders++;
       }
     }
