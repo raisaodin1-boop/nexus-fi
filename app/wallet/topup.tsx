@@ -55,7 +55,7 @@ export default function TopupScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <LinearGradient colors={["#0B1F3A", "#10B981"]} style={styles.header}>
+      <LinearGradient colors={[Colors.gradStart, Colors.gradMid]} style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.back}>
           <ChevronLeft color="#fff" size={24} />
         </TouchableOpacity>

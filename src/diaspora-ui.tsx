@@ -1,4 +1,5 @@
-import { StyleSheet, Text, TouchableOpacity, View, Clipboard } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { Copy, Shield } from "lucide-react-native";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { useToast } from "@/src/toast";
@@ -61,7 +62,7 @@ export function DiasporaHeroStrip() {
 export function CopyRow({ label, value }: { label: string; value: string }) {
   const { show } = useToast();
   const copy = async () => {
-    Clipboard.setString(value);
+    Clipboard.setStringAsync(value).catch(() => {});
     show(`${label} copié`, "success");
   };
   return (

@@ -52,19 +52,3 @@ export function openPaymentScreen(router: Router, params: PaymentNavParams) {
     },
   } as any);
 }
-
-export function paymentReturnRoute(params: PaymentNavParams): string {
-  if (params.kind === "wallet_topup") return "/wallet";
-  if (params.kind === "certified_report") return "/(tabs)/identity";
-  if (params.kind === "manager_pro_subscription") return "/(tabs)";
-  if (params.kind === "subscription") return "/subscription";
-  if (params.kind === "diaspora_sponsor") return "/diaspora/home";
-  if (params.kind === "auction_premium" && params.tontine_id) return `/tontines/${params.tontine_id}`;
-  if (params.kind === "verified_badge" && params.tontine_id) return `/tontines/${params.tontine_id}`;
-  if (params.goal_id) return `/savings/${params.goal_id}`;
-  if (params.tontine_id) return `/tontines/${params.tontine_id}`;
-  if (params.association_id) return `/associations/${params.association_id}`;
-  if (params.cooperative_id) return `/cooperatives/${params.cooperative_id}`;
-  if (params.fund_id) return `/funds/${params.fund_id}`;
-  return "/(tabs)/groups";
-}

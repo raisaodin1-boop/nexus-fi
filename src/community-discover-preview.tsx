@@ -94,7 +94,7 @@ export function CommunityDiscoverPreview() {
             </View>
             {t.is_hodix_verified ? (
               <View style={styles.verifiedPill}>
-                <Sparkles color="#10B981" size={12} />
+                <Sparkles color=Colors.success size={12} />
                 <Text style={styles.verifiedText}>OK</Text>
               </View>
             ) : t.reliability_score != null ? (
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
   },
   rowTitle: { flex: 1, fontSize: 14, fontWeight: "700", color: Colors.text },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#10B981" },
+  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: Colors.success },
   rowMeta: { fontSize: 11, color: Colors.textMuted, marginTop: 2 },
   scorePill: {
     flexDirection: "row", alignItems: "center", gap: 4,
@@ -138,9 +138,9 @@ const styles = StyleSheet.create({
   scoreText: { fontSize: 11, fontWeight: "800", color: Colors.warning },
   verifiedPill: {
     flexDirection: "row", alignItems: "center", gap: 4,
-    backgroundColor: "#10B98118", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999,
+    backgroundColor: Colors.success + "18", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999,
   },
-  verifiedText: { fontSize: 11, fontWeight: "800", color: "#10B981" },
+  verifiedText: { fontSize: 11, fontWeight: "800", color: Colors.success },
   emptyTitle: { fontSize: 15, fontWeight: "800", color: Colors.text },
   emptySub: { fontSize: 12, color: Colors.textMuted, marginTop: 4, lineHeight: 18 },
   cta: {

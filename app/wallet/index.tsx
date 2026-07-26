@@ -162,7 +162,7 @@ export default function WalletScreen() {
         contentContainerStyle={{ paddingBottom: 100 }}
         ListHeaderComponent={
           <Animated.View style={{ opacity: fadeAnim }}>
-            <LinearGradient colors={["#0B1F3A", "#1D4ED8"]} style={[styles.balanceCard, { marginHorizontal: horizontalPad }]}>
+            <LinearGradient colors={[Colors.gradStart, Colors.secondary]} style={[styles.balanceCard, { marginHorizontal: horizontalPad }]}>
               <View style={styles.balanceHeader}>
                 <WalletIcon color="rgba(255,255,255,0.7)" size={18} />
                 <Text style={styles.balanceHeaderText}>Solde disponible</Text>
@@ -204,11 +204,11 @@ export default function WalletScreen() {
 
             <View style={[styles.actions, { marginHorizontal: horizontalPad }]}>
               {[
-                { label: "Recharger",  icon: ArrowDownLeft,  route: "/wallet/topup",    color: "#10B981" },
-                { label: "Retirer",    icon: ArrowUpRight,   route: "/wallet/withdraw",  color: "#EF4444" },
-                { label: "Transférer", icon: ArrowLeftRight, route: "/wallet/transfer",  color: "#1D4ED8" },
-                { label: "Diaspora",  icon: Globe,         route: isDiasporaMember(user) ? "/(tabs)" : "/diaspora", color: "#0F766E" },
-                { label: "Sécurité",  icon: Shield,        route: "/wallet/security", color: "#8B5CF6" },
+                { label: "Recharger",  icon: ArrowDownLeft,  route: "/wallet/topup",    color: Colors.success },
+                { label: "Retirer",    icon: ArrowUpRight,   route: "/wallet/withdraw",  color: Colors.danger },
+                { label: "Transférer", icon: ArrowLeftRight, route: "/wallet/transfer",  color: Colors.secondary },
+                { label: "Diaspora",  icon: Globe,         route: isDiasporaMember(user) ? "/(tabs)" : "/diaspora", color: Colors.primary },
+                { label: "Sécurité",  icon: Shield,        route: "/wallet/security", color: Colors.brandNavy },
               ].map(({ label, icon: Icon, route, color }) => (
                 <TouchableOpacity
                   key={label}
@@ -233,9 +233,10 @@ export default function WalletScreen() {
                   </Text>
                 ) : null}
                 <View style={[styles.ratesRow, isCompact && styles.ratesRowWrap]}>
-                  <RateChip label="1 EUR" value={`${(rates.rates?.XAF ?? 655.957).toFixed(0)} XAF`} fixed />
-                  <RateChip label="1 USD" value={`${((rates.rates?.XAF ?? 655.957) / (rates.rates?.EUR ?? 1)).toFixed(0)} XAF`} />
-                  <RateChip label="1 EUR" value={`${(1 / (rates.rates?.EUR ?? 1)).toFixed(4)} USD`} />
+                  {/* rates are per-USD: XAF = XAF/USD, EUR = EUR/USD */}
+                  <RateChip label="1 EUR" value={`${((rates.rates?.XAF ?? 603.5) / (rates.rates?.EUR ?? 0.92)).toFixed(0)} XAF`} fixed />
+                  <RateChip label="1 USD" value={`${(rates.rates?.XAF ?? 603.5).toFixed(0)} XAF`} />
+                  <RateChip label="1 EUR" value={`${(1 / (rates.rates?.EUR ?? 0.92)).toFixed(4)} USD`} />
                 </View>
                 <Text style={styles.ratesNote}>
                   XAF indexé à l'EUR · mis à jour le {new Date(rates.fetched_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
@@ -285,7 +286,7 @@ const styles = StyleSheet.create({
   },
   currencyChipActive: { backgroundColor: "#fff" },
   currencyChipText: { fontSize: 12, fontWeight: "700", color: "rgba(255,255,255,0.7)" },
-  currencyChipTextActive: { color: "#0B1F3A" },
+  currencyChipTextActive: { color: Colors.brandNavy },
   allBalances: { flexDirection: "row", gap: 8, marginTop: 2, flexWrap: "wrap" },
   balSub: { fontSize: 11, color: "rgba(255,255,255,0.45)" },
   feeStrip: {

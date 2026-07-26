@@ -258,9 +258,9 @@ export default function Identity() {
                 <View style={styles.tierLegend}>
                   {[
                     { k: "bronze", lbl: "Bronze", c: "#CD7F32", r: "0-24" },
-                    { k: "silver", lbl: "Argent", c: "#8B9EB0", r: "25-74" },
-                    { k: "gold", lbl: "Or", c: "#D4AF37", r: "75-199" },
-                    { k: "platinum", lbl: "Platinum", c: "#8B5CF6", r: "200+ & 3 ans" },
+                    { k: "silver", lbl: "Argent", c: Colors.textSubtle, r: "25-74" },
+                    { k: "gold", lbl: "Or", c: Colors.gold, r: "75-199" },
+                    { k: "platinum", lbl: "Platinum", c: Colors.brandNavy, r: "200+ & 3 ans" },
                   ].map((t) => (
                     <View key={t.k} style={styles.tierLegendCol}>
                       <View style={[styles.tierLegendDot, { backgroundColor: t.c, opacity: tier.level_key === t.k ? 1 : 0.4 }]} />
@@ -311,9 +311,9 @@ export default function Identity() {
             activeOpacity={0.85}
             style={creditStyles.cta}
           >
-            <LinearGradient colors={["#0B1F3A", "#1D4ED8"]} style={creditStyles.ctaGrad}>
+            <LinearGradient colors={[Colors.gradStart, Colors.secondary]} style={creditStyles.ctaGrad}>
               <View style={creditStyles.ctaLeft}>
-                <Award color="#D4AF37" size={22} />
+                <Award color={Colors.gold} size={22} />
                 <View>
                   <Text style={creditStyles.ctaTitle}>Score de crédit détaillé</Text>
                   <Text style={creditStyles.ctaSub}>Régularité · Épargne · Réseau · KYC · Ancienneté</Text>
@@ -528,11 +528,11 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   header: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg, paddingBottom: Spacing.md },
-  h1: { color: Colors.primary, fontSize: 28, fontWeight: "900", letterSpacing: -0.5 },
+  h1: { color: Colors.brandNavy, fontSize: 24, fontWeight: "900", letterSpacing: -0.4 },
   subtitle: { color: Colors.textMuted, fontSize: 13, marginTop: 2 },
   certCard: { borderRadius: Radius.xxl, padding: 24, overflow: "hidden" },
   certHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 8 },
-  certBadge: { width: 44, height: 44, borderRadius: 12, backgroundColor: "rgba(16,185,129,0.15)", alignItems: "center", justifyContent: "center" },
+  certBadge: { width: 44, height: 44, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" },
   certBrand: { color: "#fff", fontSize: 22, fontWeight: "900", letterSpacing: 4 },
   certTagline: { color: "rgba(255,255,255,0.7)", fontSize: 11, fontWeight: "600", letterSpacing: 1 },
   certDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.15)", marginVertical: 16 },

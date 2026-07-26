@@ -155,6 +155,48 @@ export function Card({ children, style, dark, testID }: CardProps) {
   );
 }
 
+/** Flat screen header — one consistent H1 across tabs (navy 24/900, optional right slot). */
+export function ScreenHeader({
+  title,
+  subtitle,
+  right,
+}: {
+  title: string;
+  subtitle?: string;
+  right?: React.ReactNode;
+}) {
+  return (
+    <View style={styles.screenHeader}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={styles.screenHeaderTitle} numberOfLines={1}>{title}</Text>
+        {subtitle ? <Text style={styles.screenHeaderSub} numberOfLines={2}>{subtitle}</Text> : null}
+      </View>
+      {right}
+    </View>
+  );
+}
+
+type BadgeTone = "success" | "warning" | "danger" | "info" | "neutral" | "gold";
+
+const BADGE_TONES: Record<BadgeTone, { bg: string; fg: string }> = {
+  success: { bg: Colors.successLight, fg: Colors.success },
+  warning: { bg: Colors.warningLight, fg: Colors.warning },
+  danger: { bg: Colors.dangerLight, fg: Colors.danger },
+  info: { bg: Colors.infoLight, fg: Colors.info },
+  neutral: { bg: Colors.surfaceAlt, fg: Colors.textMuted },
+  gold: { bg: Colors.goldLight, fg: Colors.goldDark },
+};
+
+/** Soft status badge on brand tokens — replaces ad-hoc Tailwind hex pills. */
+export function StatusBadge({ label, tone = "neutral" }: { label: string; tone?: BadgeTone }) {
+  const { bg, fg } = BADGE_TONES[tone];
+  return (
+    <View style={[styles.statusBadge, { backgroundColor: bg }]}>
+      <Text style={[styles.statusBadgeText, { color: fg }]}>{label}</Text>
+    </View>
+  );
+}
+
 export function SectionTitle({ children, action, style }: { children: React.ReactNode; action?: React.ReactNode; style?: StyleProp<ViewStyle> }) {
   return (
     <View style={[styles.sectionRow, style]}>
@@ -365,6 +407,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
+  screenHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.md,
+    minWidth: 0,
+  },
+  screenHeaderTitle: { fontSize: 24, fontWeight: "900", color: Colors.brandNavy, letterSpacing: -0.5 },
+  screenHeaderSub: { fontSize: 13, color: Colors.textMuted, marginTop: 2, fontWeight: "500" },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+    alignSelf: "flex-start",
+  },
+  statusBadgeText: { fontSize: 11, fontWeight: "800", letterSpacing: 0.3 },
   sectionRow: {
     flexDirection: "row",
     alignItems: "center",

@@ -20,10 +20,11 @@ import { DASHBOARD_HERO_I18N } from "@/src/welcome-content";
 import { useI18n } from "@/src/i18n";
 import { formatXAF } from "@/src/api";
 import { useResponsive } from "@/src/hooks/use-responsive";
+import { Colors } from "@/src/theme";
 
-const NAVY = "#0B1F3A";
-const EMERALD = "#10B981";
-const GOLD = "#C9A227";
+const NAVY = Colors.brandNavy;
+const EMERALD = Colors.success;
+const GOLD = Colors.gold;
 
 /** Prevent RN-web from breaking amounts/labels letter-by-letter in narrow flex children. */
 const webNoBreak = Platform.select({

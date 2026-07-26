@@ -348,7 +348,7 @@ export default function MessagesScreen() {
                     {item.content && item.content !== "[Pièce jointe]" ? (
                       <Text style={[styles.bubbleText, (mine || isBroadcast) && styles.bubbleTextMe]}>{item.content}</Text>
                     ) : null}
-                    {(item.attachment_urls ?? []).map((url, i) => (
+                    {(item.attachment_urls ?? []).map((url: string, i: number) => (
                       <TouchableOpacity key={`${item.id}-att-${i}`} onPress={() => Linking.openURL(url)} activeOpacity={0.85}>
                         <Image source={{ uri: url }} style={styles.attachImg} resizeMode="cover" />
                       </TouchableOpacity>

@@ -45,9 +45,9 @@ const DEFAULT_ANALYTICS = EMPTY_ADMIN_ANALYTICS as Analytics;
 function TrendBadge({ value, suffix = "" }: { value: number; suffix?: string }) {
   const up = value >= 0;
   return (
-    <View style={[trendStyles.badge, { backgroundColor: up ? "#D1FAE5" : "#FEE2E2" }]}>
-      {up ? <TrendingUp color="#059669" size={10} /> : <TrendingDown color="#DC2626" size={10} />}
-      <Text style={[trendStyles.text, { color: up ? "#059669" : "#DC2626" }]}>
+    <View style={[trendStyles.badge, { backgroundColor: up ? Colors.successLight : Colors.dangerLight }]}>
+      {up ? <TrendingUp color={Colors.success} size={10} /> : <TrendingDown color={Colors.danger} size={10} />}
+      <Text style={[trendStyles.text, { color: up ? Colors.success : Colors.danger }]}>
         {up ? "+" : ""}{value}{suffix}
       </Text>
     </View>
@@ -93,8 +93,8 @@ const kpiStyles = StyleSheet.create({
 function SectionHeader({ children, accent }: { children: string; accent?: string }) {
   return (
     <View style={{ paddingHorizontal: Spacing.xl, marginTop: Spacing.xl, marginBottom: 8, flexDirection: "row", alignItems: "center", gap: 8 }}>
-      <View style={{ width: 3, height: 16, borderRadius: 2, backgroundColor: accent ?? Colors.accent }} />
-      <Text style={{ color: Colors.primary, fontSize: 13, fontWeight: "900", letterSpacing: 0.3 }}>{children}</Text>
+      <View style={{ width: 3, height: 18, borderRadius: 2, backgroundColor: accent ?? Colors.accent }} />
+      <Text style={{ color: Colors.text, fontSize: 18, fontWeight: "800", letterSpacing: -0.3 }}>{children}</Text>
     </View>
   );
 }
@@ -235,7 +235,7 @@ export function AdminDashboard() {
         <View style={styles.header}>
           <View>
             <View style={styles.rolePill}>
-              <ShieldAlert color="#fff" size={11} />
+              <ShieldAlert color={Colors.onPrimary} size={11} />
               <Text style={styles.rolePillText}>SUPER ADMIN · INVESTOR DASHBOARD</Text>
             </View>
             <Text style={styles.hello}>Console Hodix</Text>
@@ -255,7 +255,7 @@ export function AdminDashboard() {
             style={[styles.alertCard, Shadow.card]}
             testID="admin-join-banner"
           >
-            <View style={[styles.alertIcon, { backgroundColor: Colors.secondary }]}><Users color="#fff" size={18} /></View>
+            <View style={[styles.alertIcon, { backgroundColor: Colors.secondary }]}><Users color={Colors.onPrimary} size={18} /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.alertTitle}>{pendingJoins} demande{pendingJoins > 1 ? "s" : ""} d&apos;adhésion tontine</Text>
               <Text style={styles.alertDesc}>Accepter ou refuser dans Gestion des communautés.</Text>
@@ -270,7 +270,7 @@ export function AdminDashboard() {
             style={[styles.alertCard, Shadow.card]}
             testID="admin-pending-banner"
           >
-            <View style={[styles.alertIcon, { backgroundColor: Colors.warning }]}><Users color="#fff" size={18} /></View>
+            <View style={[styles.alertIcon, { backgroundColor: Colors.warning }]}><Users color={Colors.onPrimary} size={18} /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.alertTitle}>{pendingReqs} demande{pendingReqs > 1 ? "s" : ""} de promotion en attente</Text>
               <Text style={styles.alertDesc}>Membres souhaitant devenir Tontine Managers.</Text>
@@ -285,7 +285,7 @@ export function AdminDashboard() {
             style={[styles.alertCard, Shadow.card]}
             testID="admin-diaspora-enroll-banner"
           >
-            <View style={[styles.alertIcon, { backgroundColor: "#0F766E" }]}><Globe color="#fff" size={18} /></View>
+            <View style={[styles.alertIcon, { backgroundColor: Colors.primary }]}><Globe color={Colors.onPrimary} size={18} /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.alertTitle}>
                 {pendingDiasporaEnrollments} inscription{pendingDiasporaEnrollments > 1 ? "s" : ""} Diaspora à traiter
@@ -315,15 +315,15 @@ export function AdminDashboard() {
             style={[styles.alertCard, styles.fraudAlertCard, Shadow.card]}
             testID="admin-fraud-banner"
           >
-            <View style={[styles.alertIcon, { backgroundColor: "#DC2626" }]}>
-              <AlertTriangle color="#fff" size={18} />
+            <View style={[styles.alertIcon, { backgroundColor: Colors.danger }]}>
+              <AlertTriangle color={Colors.onPrimary} size={18} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.alertTitle, { color: "#991B1B" }]}>
+              <Text style={[styles.alertTitle, { color: Colors.danger }]}>
                 {openFraudAlerts} alerte{openFraudAlerts > 1 ? "s" : ""} fraude
                 {criticalFraudAlerts > 0 ? ` · ${criticalFraudAlerts} critique${criticalFraudAlerts > 1 ? "s" : ""}` : ""}
               </Text>
-              <Text style={[styles.alertDesc, { color: "#B45309" }]}>COBAC/CEMAC — examen requis immédiatement.</Text>
+              <Text style={[styles.alertDesc, { color: Colors.danger }]}>COBAC/CEMAC — examen requis immédiatement.</Text>
             </View>
             <View style={styles.severityBadge}><Text style={styles.severityText}>URGENT</Text></View>
           </TouchableOpacity>
@@ -331,7 +331,7 @@ export function AdminDashboard() {
 
         {/* Hero gradient card */}
         <View style={{ paddingHorizontal: Spacing.xl }}>
-          <LinearGradient colors={["#0B1F3A", "#1a3a5c", "#0B1F3A"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.hero, Shadow.cardDark]}>
+          <LinearGradient colors={[Colors.brandNavy, Colors.brandNavyLight, Colors.brandNavy]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.hero, Shadow.cardDark]}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
               <View>
                 <Text style={styles.heroLbl}>VOLUME TOTAL D'ÉPARGNE</Text>
@@ -349,8 +349,8 @@ export function AdminDashboard() {
               <View style={styles.heroStat}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                   <Text style={styles.heroStVal}>{users.active}</Text>
-                  <View style={{ backgroundColor: "#059669", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-                    <Text style={{ color: "#fff", fontSize: 9, fontWeight: "800" }}>{activeRate}%</Text>
+                  <View style={{ backgroundColor: Colors.success, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                    <Text style={{ color: Colors.onPrimary, fontSize: 9, fontWeight: "800" }}>{activeRate}%</Text>
                   </View>
                 </View>
                 <Text style={styles.heroStLbl}>Actifs</Text>
@@ -362,7 +362,7 @@ export function AdminDashboard() {
               </View>
               <View style={styles.heroStatDivider} />
               <View style={styles.heroStat}>
-                <Text style={[styles.heroStVal, { color: "#10B981" }]}>+{users.new_30d}</Text>
+                <Text style={[styles.heroStVal, { color: Colors.success }]}>+{users.new_30d}</Text>
                 <Text style={styles.heroStLbl}>Nouveaux (30j)</Text>
               </View>
             </View>
@@ -376,7 +376,7 @@ export function AdminDashboard() {
           <KpiCard label="Taux d'activité" value={`${activeRate}%`} icon={Zap} color={Colors.accent} sub={`${users.active} actifs`} />
         </View>
         <View style={styles.statsRow}>
-          <KpiCard label="KYC niveau 2" value={`${kyc.level2_approved}`} icon={CheckCircle} color="#059669" sub={`${kyc.pending_review} en attente`} />
+          <KpiCard label="KYC niveau 2" value={`${kyc.level2_approved}`} icon={CheckCircle} color={Colors.success} sub={`${kyc.pending_review} en attente`} />
           <KpiCard label="Trust Score moy." value={`${avgTrustScore.toFixed(1)}`} icon={Crown} color={Colors.warning} sub="/ 100" />
         </View>
 
@@ -395,24 +395,24 @@ export function AdminDashboard() {
         <SectionHeader accent={Colors.accent}>Finances</SectionHeader>
         <View style={styles.statsRow}>
           <KpiCard label="Contributions" value={formatXAF(analytics.tontine_contributions_volume)} icon={TrendingUp} color={Colors.accent} sub={`${analytics.tontine_contributions_count ?? 0} ops`} />
-          <KpiCard label="Commission HODIX" value={`${commission.toFixed(0)} ${payments.currency}`} icon={DollarSign} color="#7C3AED" sub="Taux 1%" />
+          <KpiCard label="Commission HODIX" value={`${commission.toFixed(0)} ${payments.currency}`} icon={DollarSign} color={Colors.secondary} sub="Taux 1%" />
         </View>
 
         {/* Investor KPIs */}
         {investorKpis ? (
           <>
-            <SectionHeader accent="#7C3AED">Data Room investisseur</SectionHeader>
+            <SectionHeader accent={Colors.secondary}>Data Room investisseur</SectionHeader>
             <View style={styles.statsRow}>
-              <KpiCard label="GMV plateforme" value={formatXAF(investorKpis.gmv_xaf)} icon={TrendingUp} color="#7C3AED" sub="Cotisations + épargne" />
+              <KpiCard label="GMV plateforme" value={formatXAF(investorKpis.gmv_xaf)} icon={TrendingUp} color={Colors.secondary} sub="Cotisations + épargne" />
               <KpiCard label="Managers Pro actifs" value={`${investorKpis.manager_pro_active}`} icon={Crown} color={Colors.warning} sub={`MRR ~${formatXAF(investorKpis.manager_pro_mrr_xaf)}`} />
             </View>
             <View style={styles.statsRow}>
               <KpiCard label="Tontine Managers" value={`${investorKpis.total_managers}`} icon={Users} color={Colors.secondary} />
-              <KpiCard label="KYC approuvés" value={`${investorKpis.kyc_approved}`} icon={CheckCircle} color="#059669" sub={`${investorKpis.users_new_30d} nouveaux (30j)`} />
+              <KpiCard label="KYC approuvés" value={`${investorKpis.kyc_approved}`} icon={CheckCircle} color={Colors.success} sub={`${investorKpis.users_new_30d} nouveaux (30j)`} />
             </View>
             <View style={{ paddingHorizontal: Spacing.xl, marginBottom: 8 }}>
               <TouchableOpacity onPress={exportDataRoom} disabled={exportBusy} style={[styles.exportBtn, Shadow.card]} testID="admin-export-csv">
-                <FileText color="#fff" size={18} />
+                <FileText color={Colors.onPrimary} size={18} />
                 <Text style={styles.exportBtnText}>{exportBusy ? "Export en cours…" : "Exporter métriques CSV (90 jours)"}</Text>
               </TouchableOpacity>
             </View>
@@ -420,14 +420,14 @@ export function AdminDashboard() {
         ) : null}
 
         {/* Tier distribution — premium card */}
-        <SectionHeader accent="#8B5CF6">Identité financière</SectionHeader>
+        <SectionHeader accent={Colors.gold}>Identité financière</SectionHeader>
         <View style={{ paddingHorizontal: Spacing.xl }}>
           <Card>
             <Text style={styles.distTitle}>Niveaux d'identité</Text>
             {[
-              { l: "Platinum (81+)", v: tier.platinum, c: "#8B5CF6", Icon: Crown },
-              { l: "Gold (61-80)", v: tier.gold, c: "#D4AF37", Icon: Crown },
-              { l: "Silver (31-60)", v: tier.silver, c: "#9CA3AF", Icon: Sparkles },
+              { l: "Platinum (81+)", v: tier.platinum, c: Colors.secondary, Icon: Crown },
+              { l: "Gold (61-80)", v: tier.gold, c: Colors.gold, Icon: Crown },
+              { l: "Silver (31-60)", v: tier.silver, c: Colors.textSubtle, Icon: Sparkles },
               { l: "Bronze (0-30)", v: tier.bronze, c: "#CD7F32", Icon: Sparkles },
             ].map((r) => (
               <View key={r.l} style={{ marginTop: 12 }}>
@@ -455,7 +455,7 @@ export function AdminDashboard() {
               { l: "Excellent (80+)", v: dist.excellent, c: Colors.accent },
               { l: "Très bon (60-79)", v: dist.very_good, c: Colors.secondary },
               { l: "Bon (40-59)", v: dist.good, c: Colors.warning },
-              { l: "Émergent (20-39)", v: dist.emerging, c: "#F97316" },
+              { l: "Émergent (20-39)", v: dist.emerging, c: Colors.primary },
               { l: "Nouveau (0-19)", v: dist.new, c: Colors.textSubtle },
             ].map((r) => (
               <View key={r.l} style={{ marginTop: 10 }}>
@@ -480,10 +480,10 @@ export function AdminDashboard() {
           </Card>
         </View>
 
-        <SectionHeader accent="#7C3AED">Data Room — 90 jours</SectionHeader>
+        <SectionHeader accent={Colors.secondary}>Data Room — 90 jours</SectionHeader>
         <View style={{ paddingHorizontal: Spacing.xl, gap: 12 }}>
           <Card>
-            <LineChart title="Contributions tontines (90j)" data={contribSeries90?.series ?? []} color="#7C3AED" format={(v) => formatXAF(v)} />
+            <LineChart title="Contributions tontines (90j)" data={contribSeries90?.series ?? []} color={Colors.primary} format={(v) => formatXAF(v)} />
           </Card>
           <Card>
             <LineChart title="Dépôts épargne (90j)" data={savingsSeries90?.series ?? []} color={Colors.accent} format={(v) => formatXAF(v)} />
@@ -501,7 +501,7 @@ export function AdminDashboard() {
             testID="admin-open-compliance"
           >
             <Card style={styles.linkCard}>
-              <View style={[styles.linkIcon, { backgroundColor: "#0B1F3A" }]}><FileText color="#fff" size={18} /></View>
+              <View style={[styles.linkIcon, { backgroundColor: Colors.brandNavy }]}><FileText color={Colors.onPrimary} size={18} /></View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.linkTitle}>Compliance & LCB-FT</Text>
                 <Text style={styles.linkDesc}>Journal audit immuable · alertes fraude
@@ -517,7 +517,7 @@ export function AdminDashboard() {
 
           <TouchableOpacity onPress={() => router.push("/admin")} testID="admin-open-console">
             <Card style={styles.linkCard}>
-              <View style={[styles.linkIcon, { backgroundColor: Colors.primary }]}><ShieldAlert color="#fff" size={18} /></View>
+              <View style={[styles.linkIcon, { backgroundColor: Colors.primary }]}><ShieldAlert color={Colors.onPrimary} size={18} /></View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.linkTitle}>Console Admin complète</Text>
                 <Text style={styles.linkDesc}>Utilisateurs, audit logs, promotions, KYC, modération</Text>
@@ -536,27 +536,27 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bg },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: Spacing.xl },
   rolePill: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: Colors.primary, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, alignSelf: "flex-start", marginBottom: 6 },
-  rolePillText: { color: "#fff", fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
+  rolePillText: { color: Colors.onPrimary, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
   hello: { color: Colors.textMuted, fontSize: 12, fontWeight: "600" },
   name: { color: Colors.primary, fontSize: 24, fontWeight: "900", letterSpacing: -0.5 },
   bellWrap: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border },
-  alertCard: { backgroundColor: "#FEF3C7", marginHorizontal: Spacing.xl, padding: 14, borderRadius: Radius.xl, flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderColor: "#FCD34D", marginBottom: 10 },
+  alertCard: { backgroundColor: Colors.warningLight, marginHorizontal: Spacing.xl, padding: 14, borderRadius: Radius.xl, flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderColor: Colors.gradGold3, marginBottom: 10 },
   alertIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  alertTitle: { color: "#92400E", fontSize: 13, fontWeight: "800" },
-  alertDesc: { color: "#92400E", fontSize: 11, marginTop: 2 },
-  fraudAlertCard: { backgroundColor: "#FEE2E2", borderColor: "#FECACA" },
-  severityBadge: { backgroundColor: "#DC2626", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  severityText: { color: "#fff", fontSize: 9, fontWeight: "900", letterSpacing: 0.5 },
+  alertTitle: { color: Colors.warning, fontSize: 13, fontWeight: "800" },
+  alertDesc: { color: Colors.warning, fontSize: 11, marginTop: 2 },
+  fraudAlertCard: { backgroundColor: Colors.dangerLight, borderColor: Colors.danger + "40" },
+  severityBadge: { backgroundColor: Colors.danger, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  severityText: { color: Colors.onPrimary, fontSize: 9, fontWeight: "900", letterSpacing: 0.5 },
   hero: { borderRadius: Radius.xxl, padding: 22 },
   heroLbl: { color: "rgba(255,255,255,0.55)", fontSize: 10, fontWeight: "700", letterSpacing: 1.2, marginBottom: 4 },
-  heroVal: { color: "#fff", fontSize: 32, fontWeight: "900", letterSpacing: -1 },
+  heroVal: { color: Colors.onPrimary, fontSize: 32, fontWeight: "900", letterSpacing: -1 },
   heroIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: "rgba(201,162,39,0.15)", alignItems: "center", justifyContent: "center" },
   heroSep: { height: 1, backgroundColor: "rgba(255,255,255,0.1)", marginVertical: 16 },
   heroRow: { flexDirection: "row", justifyContent: "space-between" },
   heroStat: { alignItems: "center" },
   heroStatDivider: { width: 1, backgroundColor: "rgba(255,255,255,0.1)" },
   heroStLbl: { color: "rgba(255,255,255,0.5)", fontSize: 9, fontWeight: "600", letterSpacing: 0.3, marginTop: 3 },
-  heroStVal: { color: "#fff", fontSize: 15, fontWeight: "900" },
+  heroStVal: { color: Colors.onPrimary, fontSize: 15, fontWeight: "900" },
   statsRow: { flexDirection: "row", paddingHorizontal: Spacing.xl, gap: 10, marginTop: 8 },
   distTitle: { color: Colors.text, fontSize: 14, fontWeight: "800", marginBottom: 4 },
   distLbl: { color: Colors.text, fontSize: 12, fontWeight: "600" },
@@ -568,7 +568,7 @@ const styles = StyleSheet.create({
   linkTitle: { color: Colors.text, fontWeight: "800", fontSize: 14 },
   linkDesc: { color: Colors.textMuted, fontSize: 11, marginTop: 2 },
   countBadge: { minWidth: 24, height: 24, borderRadius: 12, backgroundColor: Colors.danger, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
-  countBadgeText: { color: "#fff", fontSize: 11, fontWeight: "900" },
-  exportBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#7C3AED", paddingVertical: 14, borderRadius: Radius.lg },
-  exportBtnText: { color: "#fff", fontWeight: "800", fontSize: 13 },
+  countBadgeText: { color: Colors.onPrimary, fontSize: 11, fontWeight: "900" },
+  exportBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.secondary, paddingVertical: 14, borderRadius: Radius.lg },
+  exportBtnText: { color: Colors.onPrimary, fontWeight: "800", fontSize: 13 },
 });

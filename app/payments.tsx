@@ -7,7 +7,7 @@ import { ArrowLeft, ArrowDownLeft, ArrowUpRight, CreditCard } from "lucide-react
 
 import { api, formatXAF } from "@/src/api";
 import { resolvePaymentDisplayStatus } from "@/src/payment-status";
-import { Card, EmptyState, SkeletonCard } from "@/src/ui";
+import { Button, Card, EmptyState, SkeletonCard } from "@/src/ui";
 import { Colors, Spacing } from "@/src/theme";
 
 interface Payment {
@@ -30,13 +30,15 @@ export default function PaymentsScreen() {
   const router = useRouter();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
+    setLoadError(false);
     api.get<Payment[]>("/payments/history")
       .then(setPayments)
-      .catch(() => {})
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   }, []);
 
@@ -149,11 +151,20 @@ export default function PaymentsScreen() {
           }}
           ListEmptyComponent={
             <Card style={{ marginTop: 20 }}>
-              <EmptyState
-                title="Aucun paiement"
-                description="Vos transactions apparaîtront ici avec un statut clair."
-                icon={<CreditCard color={Colors.textMuted} size={40} />}
-              />
+              {loadError ? (
+                <EmptyState
+                  title="Historique indisponible"
+                  description="Impossible de charger vos paiements. Vérifiez votre connexion puis réessayez."
+                  icon={<CreditCard color={Colors.textMuted} size={40} />}
+                  cta={<Button label="Réessayer" onPress={load} variant="secondary" />}
+                />
+              ) : (
+                <EmptyState
+                  title="Aucun paiement"
+                  description="Vos transactions apparaîtront ici avec un statut clair."
+                  icon={<CreditCard color={Colors.textMuted} size={40} />}
+                />
+              )}
             </Card>
           }
         />

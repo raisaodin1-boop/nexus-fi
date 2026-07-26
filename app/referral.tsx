@@ -11,7 +11,7 @@ import {
   Linking,
   Platform,
 } from "react-native";
-import { Clipboard } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -66,7 +66,7 @@ export default function ReferralScreen() {
 
   const copyCode = async () => {
     if (!info) return;
-    Clipboard.setString(info.invite_code);
+    Clipboard.setStringAsync(info.invite_code).catch(() => {});
     showToast();
   };
 

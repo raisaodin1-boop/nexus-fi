@@ -45,7 +45,9 @@ export default function SplitExpenseScreen() {
     try {
       const data = await listSplitExpenses(user.id);
       setSplits(data);
-    } catch { /* silent */ }
+    } catch {
+      show("Impossible de charger vos partages — réessayez.", "error");
+    }
     setLoading(false);
   };
 

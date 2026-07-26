@@ -29,14 +29,14 @@ import { MIN_TOUCH, useResponsive } from "@/src/hooks/use-responsive";
 // ─── Event label map ──────────────────────────────────────────────────────────
 
 const EVENT_LABELS: Record<string, { label: string; icon: string; color: string }> = {
-  pin_set: { label: "PIN configuré", icon: "🔐", color: "#10B981" },
-  pin_ok: { label: "PIN vérifié", icon: "✓", color: "#10B981" },
-  pin_fail: { label: "PIN incorrect", icon: "⚠️", color: "#F59E0B" },
+  pin_set: { label: "PIN configuré", icon: "🔐", color: Colors.success },
+  pin_ok: { label: "PIN vérifié", icon: "✓", color: Colors.success },
+  pin_fail: { label: "PIN incorrect", icon: "⚠️", color: Colors.warning },
   otp_generated: { label: "Code OTP généré", icon: "📱", color: Colors.secondary },
-  otp_ok: { label: "OTP vérifié", icon: "✓", color: "#10B981" },
-  otp_fail: { label: "OTP incorrect", icon: "⚠️", color: "#F59E0B" },
-  wallet_frozen: { label: "Wallet gelé", icon: "🧊", color: "#EF4444" },
-  wallet_unfrozen: { label: "Wallet dégelé", icon: "✓", color: "#10B981" },
+  otp_ok: { label: "OTP vérifié", icon: "✓", color: Colors.success },
+  otp_fail: { label: "OTP incorrect", icon: "⚠️", color: Colors.warning },
+  wallet_frozen: { label: "Wallet gelé", icon: "🧊", color: Colors.danger },
+  wallet_unfrozen: { label: "Wallet dégelé", icon: "✓", color: Colors.success },
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -145,7 +145,7 @@ export default function WalletSecurityScreen() {
             </View>
           ) : (
             <View style={styles.bannerActive}>
-              <CheckCircle size={16} color="#10B981" />
+              <CheckCircle size={16} color=Colors.success />
               <Text style={styles.bannerActiveText}>Wallet actif et sécurisé</Text>
             </View>
           )}
@@ -164,7 +164,7 @@ export default function WalletSecurityScreen() {
                 <Text
                   style={[
                     styles.statusChipText,
-                    { color: pinStatus?.has_pin ? "#10B981" : "#F59E0B" },
+                    { color: pinStatus?.has_pin ? Colors.success : Colors.warning },
                   ]}
                 >
                   {pinStatus?.has_pin ? "Activé" : "Non configuré"}
@@ -213,7 +213,7 @@ export default function WalletSecurityScreen() {
               <View key={i} style={styles.protectionRow}>
                 <Text style={styles.protectionIcon}>{item.icon}</Text>
                 <Text style={styles.protectionLabel}>{item.label}</Text>
-                <Text style={{ color: item.active ? "#10B981" : "#F59E0B", fontWeight: "700" }}>
+                <Text style={{ color: item.active ? Colors.success : Colors.warning, fontWeight: "700" }}>
                   {item.active ? "✓" : "⚠️"}
                 </Text>
               </View>
@@ -235,7 +235,7 @@ export default function WalletSecurityScreen() {
               </View>
             ) : (
               <View style={styles.deviceOk}>
-                <CheckCircle size={14} color="#10B981" />
+                <CheckCircle size={14} color=Colors.success />
                 <Text style={styles.deviceOkText}>Appareil sécurisé</Text>
               </View>
             )}
@@ -314,12 +314,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: Spacing.md,
     borderWidth: 1,
-    borderColor: "#EF4444",
+    borderColor: Colors.danger,
     gap: Spacing.md,
   },
-  bannerFrozenText: { color: "#EF4444", fontWeight: "700", fontSize: 13 },
+  bannerFrozenText: { color: Colors.danger, fontWeight: "700", fontSize: 13 },
   unfreezeBtn: {
-    backgroundColor: "#EF4444",
+    backgroundColor: Colors.danger,
     borderRadius: 8,
     paddingHorizontal: 14,
     minHeight: MIN_TOUCH,
@@ -334,9 +334,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: Spacing.md,
     borderWidth: 1,
-    borderColor: "#10B981",
+    borderColor: Colors.success,
   },
-  bannerActiveText: { color: "#10B981", fontWeight: "700", fontSize: 13 },
+  bannerActiveText: { color: Colors.success, fontWeight: "700", fontSize: 13 },
 
   // Cards
   card: { gap: Spacing.sm },
@@ -367,11 +367,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: Spacing.md,
     borderWidth: 1,
-    borderColor: "#F59E0B",
+    borderColor: Colors.warning,
     marginTop: Spacing.sm,
     gap: 4,
   },
-  deviceWarningTitle: { color: "#F59E0B", fontWeight: "700", fontSize: 13 },
+  deviceWarningTitle: { color: Colors.warning, fontWeight: "700", fontSize: 13 },
   deviceWarningReason: { color: "#92400E", fontSize: 12 },
   deviceOk: {
     flexDirection: "row",
@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: Spacing.sm,
   },
-  deviceOkText: { color: "#10B981", fontWeight: "600", fontSize: 13 },
+  deviceOkText: { color: Colors.success, fontWeight: "600", fontSize: 13 },
 
   // Log
   emptyLog: { color: Colors.textMuted, fontSize: 13, textAlign: "center", paddingVertical: Spacing.md },

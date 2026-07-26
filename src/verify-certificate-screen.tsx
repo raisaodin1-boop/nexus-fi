@@ -8,8 +8,8 @@ import { CheckCircle, ShieldCheck, XCircle } from "lucide-react-native";
 import { verifyCertificateByHash, type CertificateVerification } from "@/src/db/verify";
 import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 
-const NAVY = "#0B1F3A";
-const EMERALD = "#10B981";
+const NAVY = Colors.brandNavy;
+const EMERALD = Colors.success;
 
 function formatDate(iso: string) {
   try {

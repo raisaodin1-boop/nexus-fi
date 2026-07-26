@@ -15,10 +15,11 @@ import { useRouter } from "expo-router";
 
 import type { DashboardStory } from "@/src/db/dashboard-story";
 import { formatXAF } from "@/src/api";
+import { Colors } from "@/src/theme";
 
-const NAVY = "#0B1F3A";
-const EMERALD = "#10B981";
-const GOLD = "#C9A227";
+const NAVY = Colors.brandNavy;
+const EMERALD = Colors.success;
+const GOLD = Colors.gold;
 
 type Props = {
   story: DashboardStory;

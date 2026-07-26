@@ -288,12 +288,12 @@ export function MemberDashboard() {
           <QuickAction icon={<Receipt color={Colors.accent} size={22} />} label="Partager facture" onPress={() => router.push("/split-expense")} testID="home-action-split" compact={isCompact} />
         </View>
         <View style={[styles.qaRow, contentPad]}>
-          <QuickAction icon={<Gavel color="#7C3AED" size={22} />} label="Enchères Tontine" onPress={() => router.push("/tontine-auction" as any)} testID="home-action-auction" compact={isCompact} />
-          <QuickAction icon={<Target color="#10B981" size={22} />} label="Objectif Collectif" onPress={() => router.push("/collective-goal" as any)} testID="home-action-collective" compact={isCompact} />
+          <QuickAction icon={<Gavel color={Colors.secondary} size={22} />} label="Enchères Tontine" onPress={() => router.push("/tontine-auction" as any)} testID="home-action-auction" compact={isCompact} />
+          <QuickAction icon={<Target color={Colors.success} size={22} />} label="Objectif Collectif" onPress={() => router.push("/collective-goal" as any)} testID="home-action-collective" compact={isCompact} />
         </View>
         <View style={[styles.qaRow, contentPad]}>
-          <QuickAction icon={<CreditCard color="#0B1F3A" size={22} />} label="Carte Virtuelle" onPress={() => router.push("/virtual-card" as any)} testID="home-action-virtual-card" compact={isCompact} />
-          <QuickAction icon={<Store color="#EF4444" size={22} />} label="HODIX Pay Pro" onPress={() => router.push("/merchant-qr" as any)} testID="home-action-merchant" compact={isCompact} />
+          <QuickAction icon={<CreditCard color={Colors.brandNavy} size={22} />} label="Carte Virtuelle" onPress={() => router.push("/virtual-card" as any)} testID="home-action-virtual-card" compact={isCompact} />
+          <QuickAction icon={<Store color={Colors.danger} size={22} />} label="HODIX Pay Pro" onPress={() => router.push("/merchant-qr" as any)} testID="home-action-merchant" compact={isCompact} />
         </View>
 
         {/* Subscription plan badge + upgrade CTA */}

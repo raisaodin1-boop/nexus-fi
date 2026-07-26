@@ -112,9 +112,9 @@ function formatWhen(iso: string) {
 
 function categoryStyle(cat: string) {
   switch (cat) {
-    case "fraud": return { bg: "#FEE2E2", color: "#991B1B" };
-    case "kyc": return { bg: "#DBEAFE", color: "#1D4ED8" };
-    case "financial": return { bg: "#D1FAE5", color: "#065F46" };
+    case "fraud": return { bg: Colors.dangerLight, color: Colors.danger };
+    case "kyc": return { bg: Colors.infoLight, color: Colors.info };
+    case "financial": return { bg: Colors.successLight, color: Colors.success };
     case "security": return { bg: "#FEF3C7", color: "#92400E" };
     case "admin": return { bg: "#EDE9FE", color: "#5B21B6" };
     default: return { bg: "#F3F4F6", color: "#374151" };
@@ -204,7 +204,7 @@ export function AdminCompliancePanel({ embedded = false }: { embedded?: boolean 
         />
       ) : null}
       {/* Stats strip */}
-      <LinearGradient colors={["#0B1F3A", "#134E4A"]} style={styles.statsHero}>
+      <LinearGradient colors={[Colors.gradStart, Colors.gradMid]} style={styles.statsHero}>
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
             <Text style={styles.statVal}>{stats?.open_fraud_alerts ?? 0}</Text>
@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  filterChipActive: { backgroundColor: "#0B1F3A", borderColor: "#0B1F3A" },
+  filterChipActive: { backgroundColor: Colors.brandNavy, borderColor: Colors.brandNavy },
   filterChipText: { fontSize: 12, fontWeight: "600", color: Colors.textMuted },
   filterChipTextActive: { color: "#fff" },
   card: {

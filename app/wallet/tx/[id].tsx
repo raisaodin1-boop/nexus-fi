@@ -49,7 +49,7 @@ export default function WalletTxDetailScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-      <LinearGradient colors={["#0B1F3A", "#1D4ED8"]} style={styles.header}>
+      <LinearGradient colors={[Colors.gradStart, Colors.secondary]} style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.back}>
           <ChevronLeft color="#fff" size={24} />
         </TouchableOpacity>

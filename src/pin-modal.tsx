@@ -332,7 +332,12 @@ export function PinConfirmModal({ visible, userId, amount, onSuccess, onCancel }
         if (!valid && stored && stored === hashPinLegacy(next, userId)) {
           valid = true;
           await storePinHash(h);
-          api.post("/wallet/pin/set", { pin_hash: h }).catch(() => {});
+          // Sync migrated hash to server; a failure here would desync other devices.
+          api.post("/wallet/pin/set", { pin_hash: h }).catch(() => {
+            api.post("/wallet/pin/set", { pin_hash: h }).catch((e) =>
+              console.warn("[pin] sync serveur du PIN migré échouée", e),
+            );
+          });
         }
 
         // Server is source of truth (new device / cleared storage)

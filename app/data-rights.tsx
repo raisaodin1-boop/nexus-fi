@@ -1,12 +1,13 @@
 // HODIX — Mes Données & Droits RGPD/CEMAC
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowLeft, Download, Trash2, Eye, Edit, Ban, Bell, BellOff, Shield, CheckCircle } from "lucide-react-native";
 
 import { api } from "@/src/api";
+import { confirmDialog, infoDialog } from "@/src/dialogs";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { useToast } from "@/src/toast";
 
@@ -46,30 +47,23 @@ export default function DataRightsScreen() {
     }
   };
 
-  const handleDeleteAccount = () => {
-    Alert.alert(
+  const handleDeleteAccount = async () => {
+    const ok = await confirmDialog(
       "Supprimer mon compte",
       "Cette action est irréversible. Votre compte sera désactivé et vos données personnelles seront supprimées selon les délais légaux (5 ans pour les données KYC, 10 ans pour les transactions financières).\n\nVos fonds disponibles vous seront remboursés préalablement.\n\nVoulez-vous continuer ?",
-      [
-        { text: "Annuler", style: "cancel" },
-        {
-          text: "Supprimer mon compte",
-          style: "destructive",
-          onPress: async () => {
-            setDeleteLoading(true);
-            try {
-              await api.post("/users/me/delete-request");
-              show("Demande de suppression reçue. Notre équipe vous contactera dans 48h.", "success");
-              router.replace("/(auth)/login" as any);
-            } catch {
-              show("Erreur. Contactez privacy@hodix.app pour procéder à la suppression.", "error");
-            } finally {
-              setDeleteLoading(false);
-            }
-          },
-        },
-      ]
+      { confirmText: "Supprimer mon compte", destructive: true },
     );
+    if (!ok) return;
+    setDeleteLoading(true);
+    try {
+      await api.post("/users/me/delete-request");
+      show("Demande de suppression reçue. Notre équipe vous contactera dans 48h.", "success");
+      router.replace("/(auth)/login" as any);
+    } catch {
+      show("Erreur. Contactez privacy@hodix.app pour procéder à la suppression.", "error");
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   const handleRectifyData = () => {
@@ -77,10 +71,9 @@ export default function DataRightsScreen() {
   };
 
   const handleUnsubscribeNotifs = () => {
-    Alert.alert(
+    infoDialog(
       "Désactiver les notifications",
       "Vous pouvez désactiver les notifications push depuis les paramètres de votre appareil, ou nous contacter à privacy@hodix.app pour retirer votre consentement aux communications marketing.",
-      [{ text: "OK" }]
     );
   };
 

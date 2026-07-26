@@ -55,7 +55,11 @@ export default function CollectiveGoalScreen() {
 
   const load = async () => {
     setLoading(true);
-    try { setGoals(await listCollectiveGoals()); } catch { /* silent */ }
+    try {
+      setGoals(await listCollectiveGoals());
+    } catch {
+      show("Impossible de charger les cagnottes — réessayez.", "error");
+    }
     setLoading(false);
   };
 

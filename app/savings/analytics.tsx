@@ -107,13 +107,23 @@ export default function SavingsAnalyticsScreen() {
     peer_stats: PeerStats;
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    if (!id) {
+      setError("Objectif introuvable — ouvrez l'analyse depuis votre épargne.");
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
     api.get<any>(`/savings/${id}/analytics`)
       .then(setData)
-      .catch(() => {})
+      .catch(() => setError("Impossible de charger l'analyse. Vérifiez votre connexion."))
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => { load(); }, [load]);
 
   if (loading) {
     return (
@@ -127,14 +137,36 @@ export default function SavingsAnalyticsScreen() {
       </SafeAreaView>
     );
   }
-  if (!data) return null;
+  if (!data) {
+    return (
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: Spacing.xxl, gap: 12 }}>
+          <Text style={{ fontSize: 16, fontWeight: "800", color: Colors.text, textAlign: "center" }}>
+            Analyse indisponible
+          </Text>
+          <Text style={{ fontSize: 13, color: Colors.textMuted, textAlign: "center", lineHeight: 19 }}>
+            {error ?? "Aucune donnée d'analyse pour cet objectif."}
+          </Text>
+          <TouchableOpacity
+            onPress={load}
+            style={{ backgroundColor: Colors.primary, borderRadius: Radius.full, paddingVertical: 12, paddingHorizontal: 28, marginTop: 6 }}
+          >
+            <Text style={{ color: "#fff", fontWeight: "700" }}>Réessayer</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.back()} style={{ paddingVertical: 8 }}>
+            <Text style={{ color: Colors.textMuted, fontWeight: "600" }}>Retour</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const { goal, prediction: p, histogram, peer_stats: peer } = data;
   const { pattern } = p;
 
   // Color coding
   const statusColor = p.on_track === null ? Colors.secondary
-    : p.on_track ? "#10B981" : "#F59E0B";
+    : p.on_track ? Colors.success : Colors.warning;
 
   const TREND_LABELS = { increasing: "En hausse 📈", decreasing: "En baisse 📉", stable: "Stable ➡️" };
 
@@ -143,7 +175,7 @@ export default function SavingsAnalyticsScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
 
         {/* ── Header ── */}
-        <LinearGradient colors={["#0B1F3A", "#1D4ED8"]} style={styles.header}>
+        <LinearGradient colors={[Colors.gradStart, Colors.secondary]} style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.back}>
             <ChevronLeft color="#fff" size={24} />
           </TouchableOpacity>

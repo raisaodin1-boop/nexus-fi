@@ -51,6 +51,13 @@ const REJECT_REASONS = [
   "Informations supplémentaires nécessaires",
 ];
 
+const CONTRIB_INFO_MESSAGES = [
+  "Merci d'envoyer une preuve de paiement plus lisible.",
+  "La référence de transaction est manquante — merci de la fournir.",
+  "Le montant reçu ne correspond pas — merci de préciser le paiement effectué.",
+  "Merci de confirmer le nom du payeur et la date du transfert.",
+];
+
 const ENROLL_REJECT = [
   "Document illisible ou incomplet",
   "Preuve de résidence à l'étranger insuffisante",
@@ -381,7 +388,7 @@ function AdminDiasporaContributions({ embedded }: { embedded?: boolean }) {
   const [selected, setSelected] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [choicePicker, setChoicePicker] = useState<null | { kind: "reject"; options: string[] }>(null);
+  const [choicePicker, setChoicePicker] = useState<null | { kind: "reject" | "info"; options: string[] }>(null);
   const [stats, setStats] = useState({ pending: 0, received_today: 0, validated_total: 0 });
 
   const load = useCallback(async () => {
@@ -435,12 +442,22 @@ function AdminDiasporaContributions({ embedded }: { embedded?: boolean }) {
     setChoicePicker({ kind: "reject", options: REJECT_REASONS });
   };
 
-  const runChoice = async (reason: string) => {
+  const requestInfo = () => {
     if (!selected || busy) return;
+    setChoicePicker({ kind: "info", options: CONTRIB_INFO_MESSAGES });
+  };
+
+  const runChoice = async (value: string) => {
+    if (!selected || busy || !choicePicker) return;
     setBusy(true);
     try {
-      await api.post("/admin/diaspora/reject", { request_id: selected.id, reason });
-      show("Cotisation rejetée", "success");
+      if (choicePicker.kind === "reject") {
+        await api.post("/admin/diaspora/reject", { request_id: selected.id, reason: value });
+        show("Cotisation rejetée", "success");
+      } else {
+        await api.post("/admin/diaspora/needs-info", { request_id: selected.id, message: value });
+        show("Demande envoyée au membre", "success");
+      }
       setSelected(null);
       setChoicePicker(null);
       await load();
@@ -487,33 +504,19 @@ function AdminDiasporaContributions({ embedded }: { embedded?: boolean }) {
             }} disabled={busy}>
               <AlertTriangle color="#fff" size={16} /><Text style={styles.actionText}>Suspect</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionBtn, styles.infoBtn, busy && styles.actionDisabled]} onPress={async () => {
-              if (busy) return;
-              const msg = Platform.OS === "web"
-                ? (typeof window !== "undefined" ? window.prompt("Message au membre") : null)
-                : await new Promise<string | null>((resolve) => {
-                    Alert.prompt?.(
-                      "Demander des informations",
-                      "Message au membre",
-                      (value) => resolve(value ?? null),
-                    ) ?? resolve(null);
-                  });
-              if (!msg?.trim()) return;
-              setBusy(true);
-              try {
-                await api.post("/admin/diaspora/needs-info", { request_id: selected.id, message: msg });
-                show("Demande envoyée", "success");
-                setSelected(null);
-                await load();
-              } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
-              finally { setBusy(false); }
-            }} disabled={busy}>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.infoBtn, busy && styles.actionDisabled]}
+              onPress={requestInfo}
+              disabled={busy}
+            >
               <MessageSquare color="#fff" size={16} /><Text style={styles.actionText}>Infos</Text>
             </TouchableOpacity>
           </View>
           {choicePicker ? (
             <View style={styles.choiceBox}>
-              <Text style={styles.choiceTitle}>Motif du rejet</Text>
+              <Text style={styles.choiceTitle}>
+                {choicePicker.kind === "reject" ? "Motif du rejet" : "Message au membre"}
+              </Text>
               {choicePicker.options.map((opt) => (
                 <TouchableOpacity key={opt} style={styles.choiceBtn} onPress={() => runChoice(opt)} disabled={busy}>
                   <Text style={styles.choiceBtnText}>{opt}</Text>

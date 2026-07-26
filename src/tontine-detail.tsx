@@ -1004,7 +1004,7 @@ export function TontineDetailView({ id }: { id: string }) {
               style={[styles.disbBtn, Shadow.card]}
               testID="tontine-auction-btn"
             >
-              <LinearGradient colors={["#4C1D95", "#7C3AED"]} style={styles.disbBtnGrad}>
+              <LinearGradient colors={[Colors.brandNavy, Colors.brandNavyLight]} style={styles.disbBtnGrad}>
                 <Gavel color="#fff" size={18} />
                 <Text style={styles.disbBtnText}>Tour anticipé / Enchères</Text>
                 <ChevronRight color="#fff" size={16} />
@@ -1032,8 +1032,8 @@ export function TontineDetailView({ id }: { id: string }) {
 
             {tontine.is_hodix_verified ? (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 4, marginBottom: 8 }}>
-                <Award size={16} color="#1D4ED8" />
-                <Text style={{ color: "#1D4ED8", fontWeight: "800", fontSize: 13 }}>
+                <Award size={16} color=Colors.secondary />
+                <Text style={{ color: Colors.secondary, fontWeight: "800", fontSize: 13 }}>
                   Badge Vérifié HODIX
                   {tontine.verified_source === "auto"
                     ? " · gagné"
@@ -1069,7 +1069,7 @@ export function TontineDetailView({ id }: { id: string }) {
               && !tontine.is_personal ? (
               <Card style={{ padding: 14, marginBottom: 12, gap: 10, backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <Award size={20} color="#1D4ED8" />
+                  <Award size={20} color=Colors.secondary />
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: "#1E40AF", fontWeight: "800", fontSize: 13 }}>Badge Vérifié HODIX</Text>
                     <Text style={{ color: "#3B82F6", fontSize: 11, marginTop: 2 }}>
@@ -1131,7 +1131,7 @@ export function TontineDetailView({ id }: { id: string }) {
                         label: `Badge Vérifié — ${tontine.name}`,
                       });
                     }}
-                    style={{ backgroundColor: "#1D4ED8", borderRadius: 12, paddingVertical: 12, alignItems: "center" }}
+                    style={{ backgroundColor: Colors.secondary, borderRadius: 12, paddingVertical: 12, alignItems: "center" }}
                     testID="tontine-pay-verified"
                   >
                     <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>
@@ -1157,7 +1157,7 @@ export function TontineDetailView({ id }: { id: string }) {
                   style={{ opacity: verifiedBusy || verifiedReq?.status === "pending" ? 0.6 : 1, alignItems: "center", paddingVertical: 4 }}
                   testID="tontine-request-verified"
                 >
-                  <Text style={{ color: "#1D4ED8", fontWeight: "700", fontSize: 12 }}>
+                  <Text style={{ color: Colors.secondary, fontWeight: "700", fontSize: 12 }}>
                     {verifiedReq?.status === "pending" ? "Revue admin — en attente" : "Ou demander une revue admin"}
                   </Text>
                 </TouchableOpacity>
@@ -1233,8 +1233,8 @@ export function TontineDetailView({ id }: { id: string }) {
                       params: { peer_id: msgContacts.platform_admin!.id, peer_name: "Admin HODIX" },
                     } as any)}
                   >
-                    <Shield size={14} color="#1D4ED8" />
-                    <Text style={[styles.msgContactText, { color: "#1D4ED8" }]}>Admin HODIX</Text>
+                    <Shield size={14} color=Colors.secondary />
+                    <Text style={[styles.msgContactText, { color: Colors.secondary }]}>Admin HODIX</Text>
                   </TouchableOpacity>
                 ) : null}
                 <TouchableOpacity

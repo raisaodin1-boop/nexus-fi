@@ -24,6 +24,7 @@ export const Colors = {
   text: "#0C1A2E",
   textMuted: "#5B6B7F",
   textSubtle: "#8B9AAF",
+  onPrimary: "#FFFFFF",
 
   // UI
   border: "#D8E0EA",

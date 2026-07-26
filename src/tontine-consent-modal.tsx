@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2, textAlign: "center",
     marginBottom: 8,
   },
-  typeInputValid: { borderColor: "#10B981" },
+  typeInputValid: { borderColor: Colors.success },
   hintErr: { color: Colors.danger, fontSize: 12, fontWeight: "600", marginBottom: 10, textAlign: "center" },
 
   signBtn: {

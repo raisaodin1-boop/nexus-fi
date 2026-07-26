@@ -9,6 +9,9 @@ const FALLBACK: Rates = {
   rates: {
     USD: 1,
     EUR: 0.92,
+    GBP: 0.78,
+    CHF: 0.88,
+    CAD: 1.37,
     XAF: 603.48,
     XOF: 603.48,
     NGN: 1550,

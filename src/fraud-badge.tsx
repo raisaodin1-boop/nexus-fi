@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { ShieldOff, ShieldCheck } from "lucide-react-native";
+import { Colors } from "@/src/theme";
 
 interface Props {
   flags: string[];
@@ -16,7 +17,7 @@ export function TrustBadge({ flags, size = "md" }: Props) {
   }
 
   const label = isFraud ? "Fraudeur confirmé" : "Compte suspendu";
-  const color = "#EF4444";
+  const color = Colors.danger;
   const Icon = ShieldOff;
   const small = size === "sm";
 
@@ -37,9 +38,9 @@ export function VerifiedBadge({
 }) {
   const small = size === "sm";
   return (
-    <View style={[styles.badge, { backgroundColor: "#10B98118", borderColor: "#10B98144", padding: small ? 4 : 6 }]}>
-      <ShieldCheck size={small ? 11 : 14} color="#10B981" />
-      <Text style={[styles.label, { color: "#10B981", fontSize: small ? 10 : 12 }]}>{label}</Text>
+    <View style={[styles.badge, { backgroundColor: Colors.success + "18", borderColor: Colors.success + "44", padding: small ? 4 : 6 }]}>
+      <ShieldCheck size={small ? 11 : 14} color={Colors.success} />
+      <Text style={[styles.label, { color: Colors.success, fontSize: small ? 10 : 12 }]}>{label}</Text>
     </View>
   );
 }

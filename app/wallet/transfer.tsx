@@ -109,7 +109,7 @@ export default function TransferScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <View style={styles.successBox}>
-          <CheckCircle2 size={64} color="#10B981" />
+          <CheckCircle2 size={64} color={Colors.success} />
           <Text style={styles.successTitle}>Transfert effectué !</Text>
           <Text style={styles.successSub}>{success}</Text>
           <Button label="Retour au wallet" onPress={() => router.replace("/wallet")} />
@@ -140,7 +140,7 @@ export default function TransferScreen() {
         onCancel={() => { setShowOtp(false); setLoading(false); }}
       />
 
-      <LinearGradient colors={["#0B1F3A", "#1D4ED8"]} style={styles.header}>
+      <LinearGradient colors={[Colors.gradStart, Colors.secondary]} style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.back}>
           <ChevronLeft color="#fff" size={24} />
         </TouchableOpacity>

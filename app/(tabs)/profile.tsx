@@ -560,7 +560,15 @@ export default function ProfileScreen() {
           <SectionTitle>Préférences</SectionTitle>
           <View style={{ paddingHorizontal: Spacing.xl }}>
             <Card>
-              <SettingRow icon={<Globe color={Colors.secondary} size={18} />} label={t("profile.language") + " · " + (language === "fr" ? "Français" : "English")} onPress={() => Alert.alert("Langue / Language", "", [{ text: "Français", onPress: () => setLanguage("fr") }, { text: "English", onPress: () => setLanguage("en") }, { text: t("common.cancel"), style: "cancel" }])} testID="profile-language" borderColor={borderColor} txtColor={txt} />
+              <SettingRow
+                icon={<Globe color={Colors.secondary} size={18} />}
+                label={`${t("profile.language")} · ${language === "fr" ? "Français" : "English"}`}
+                hint={language === "fr" ? "Switch to English" : "Passer en français"}
+                onPress={() => setLanguage(language === "fr" ? "en" : "fr")}
+                testID="profile-language"
+                borderColor={borderColor}
+                txtColor={txt}
+              />
               <SettingRow icon={<Bell color={Colors.secondary} size={18} />} label="Centre de notifications" onPress={() => router.push("/notifications")} testID="profile-go-notifs" borderColor={borderColor} txtColor={txt} />
               <SettingRow icon={<Gift color={Colors.accent} size={18} />} label="Parrainage & réseau" onPress={() => router.push("/referral" as any)} testID="profile-go-referral" borderColor={borderColor} txtColor={txt} />
               {Platform.OS !== "web" ? (
@@ -591,7 +599,7 @@ export default function ProfileScreen() {
               <SettingRow icon={<Settings2 color={Colors.brandNavy} size={18} />} label="Tableau de gestion" onPress={() => router.push("/manage" as any)} testID="profile-go-manage" borderColor={borderColor} txtColor={txt} />
               <SettingRow icon={<ShieldCheck color={Colors.accent} size={18} />} label="Vérification KYC" onPress={() => router.push("/kyc")} testID="profile-go-kyc" borderColor={borderColor} txtColor={txt} />
               <SettingRow icon={<CreditCard color={Colors.primary} size={18} />} label="Mes Paiements" onPress={() => router.push("/payments")} testID="profile-go-payments" borderColor={borderColor} txtColor={txt} />
-              <SettingRow icon={<Shield color="#7C3AED" size={18} />} label="Mes données & droits" onPress={() => router.push("/data-rights" as any)} testID="profile-go-data-rights" borderColor={borderColor} txtColor={txt} />
+              <SettingRow icon={<Shield color={Colors.secondary} size={18} />} label="Mes données & droits" onPress={() => router.push("/data-rights" as any)} testID="profile-go-data-rights" borderColor={borderColor} txtColor={txt} />
               <SettingRow icon={<Shield color={Colors.secondary} size={18} />} label="Politique de confidentialité" onPress={() => router.push("/privacy" as any)} testID="profile-go-privacy" borderColor={borderColor} txtColor={txt} />
               <SettingRow icon={<Shield color={Colors.textMuted} size={18} />} label="Conditions d'utilisation (CGU)" onPress={() => router.push("/cgu" as any)} testID="profile-go-cgu" borderColor={borderColor} txtColor={txt} />
               {user?.role === "member" ? (
@@ -676,13 +684,16 @@ function InfoRow({ icon, label, value, last, txtColor, txtMuted, borderColor }: 
 }
 
 function SettingRow({
-  icon, label, onPress, disabled, testID, borderColor, txtColor,
-}: { icon: React.ReactNode; label: string; onPress: () => void; disabled?: boolean; testID?: string; borderColor: string; txtColor: string }) {
+  icon, label, hint, onPress, disabled, testID, borderColor, txtColor,
+}: { icon: React.ReactNode; label: string; hint?: string; onPress: () => void; disabled?: boolean; testID?: string; borderColor: string; txtColor: string }) {
   return (
     <TouchableOpacity onPress={onPress} disabled={disabled} activeOpacity={0.7} testID={testID}>
       <View style={[styles.settingRow, { borderBottomWidth: 1, borderBottomColor: borderColor }]}>
         {icon}
-        <Text style={[styles.settingLabel, { color: disabled ? Colors.textSubtle : txtColor }]}>{label}</Text>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={[styles.settingLabel, { flex: undefined, color: disabled ? Colors.textSubtle : txtColor }]}>{label}</Text>
+          {hint ? <Text style={{ fontSize: 11, color: Colors.textSubtle, marginTop: 1 }}>{hint}</Text> : null}
+        </View>
         <ChevronRight color={Colors.textSubtle} size={18} />
       </View>
     </TouchableOpacity>
@@ -714,8 +725,8 @@ const styles = StyleSheet.create({
   fullName: { color: "#fff", fontSize: 22, fontWeight: "900", letterSpacing: -0.3, marginTop: 12 },
   email: { color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 4, fontWeight: "500" },
   rolePill: {
-    backgroundColor: "rgba(16,185,129,0.2)", paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 999, marginTop: 12, borderWidth: 1, borderColor: "rgba(16,185,129,0.4)",
+    backgroundColor: "rgba(201,162,39,0.22)", paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 999, marginTop: 12, borderWidth: 1, borderColor: "rgba(201,162,39,0.45)",
   },
   roleText: { color: Colors.accent, fontWeight: "800", fontSize: 11, letterSpacing: 1 },
   infoRow: { flexDirection: "row", alignItems: "center", paddingVertical: 12, gap: 12 },
@@ -724,7 +735,7 @@ const styles = StyleSheet.create({
   infoValue: { fontSize: 14, fontWeight: "700", marginTop: 2 },
   editBtn: { flexDirection: "row", alignItems: "center", gap: 6, padding: 6 },
   editBtnText: { color: Colors.secondary, fontWeight: "700", fontSize: 13 },
-  error: { backgroundColor: "#FEE2E2", color: Colors.danger, padding: 12, borderRadius: 12, fontSize: 13, fontWeight: "600", marginBottom: 12 },
+  error: { backgroundColor: Colors.dangerLight, color: Colors.danger, padding: 12, borderRadius: 12, fontSize: 13, fontWeight: "600", marginBottom: 12 },
   settingRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14 },
   settingLabel: { flex: 1, fontSize: 14, fontWeight: "700" },
   toggleRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10 },

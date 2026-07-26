@@ -137,25 +137,25 @@ interface AdminChatMessage {
 }
 
 const ROLE_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
-  super_admin: { label: "Super Admin", bg: "#7C3AED", color: "#fff" },
-  tontine_manager: { label: "Manager", bg: "#F59E0B", color: "#fff" },
-  admin: { label: "Admin", bg: "#3B82F6", color: "#fff" },
-  member: { label: "Membre", bg: "#E5E7EB", color: "#374151" },
+  super_admin: { label: "Super Admin", bg: Colors.gold, color: Colors.onPrimary },
+  tontine_manager: { label: "Manager", bg: Colors.warning, color: Colors.onPrimary },
+  admin: { label: "Admin", bg: Colors.secondary, color: Colors.onPrimary },
+  member: { label: "Membre", bg: Colors.surfaceAlt, color: Colors.textMuted },
 };
 
 const KYC_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
-  verified: { label: "Vérifié", bg: "#D1FAE5", color: "#065F46" },
-  approved: { label: "Vérifié", bg: "#D1FAE5", color: "#065F46" },
-  pending_review: { label: "En attente", bg: "#FEF3C7", color: "#92400E" },
-  pending: { label: "En attente", bg: "#FEF3C7", color: "#92400E" },
-  rejected: { label: "Rejeté", bg: "#FEE2E2", color: "#991B1B" },
-  not_started: { label: "Non démarré", bg: "#F3F4F6", color: "#6B7280" },
-  not_submitted: { label: "Non soumis", bg: "#F3F4F6", color: "#6B7280" },
+  verified: { label: "Vérifié", bg: Colors.successLight, color: Colors.success },
+  approved: { label: "Vérifié", bg: Colors.successLight, color: Colors.success },
+  pending_review: { label: "En attente", bg: Colors.warningLight, color: Colors.warning },
+  pending: { label: "En attente", bg: Colors.warningLight, color: Colors.warning },
+  rejected: { label: "Rejeté", bg: Colors.dangerLight, color: Colors.danger },
+  not_started: { label: "Non démarré", bg: Colors.surfaceAlt, color: Colors.textMuted },
+  not_submitted: { label: "Non soumis", bg: Colors.surfaceAlt, color: Colors.textMuted },
 };
 
 function Avatar({ name, size = 40, bg }: { name: string; size?: number; bg?: string }) {
   const initials = name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase() || "?";
-  const colors = ["#6366F1", "#8B5CF6", "#EC4899", "#F59E0B", "#10B981", "#3B82F6"];
+  const colors = [Colors.primary, Colors.secondary, Colors.brandNavyLight, Colors.gold, Colors.success, Colors.info];
   const colorIndex = name.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % colors.length;
   const bgColor = bg ?? colors[colorIndex];
   return (
@@ -225,8 +225,8 @@ export default function AdminConsole() {
   if (user?.role !== "super_admin") {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
-        <LinearGradient colors={["#0F172A", "#1E293B"]} style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 16 }}>
-          <ShieldAlert color="#EF4444" size={48} />
+        <LinearGradient colors={[Colors.brandNavy, Colors.brandNavyLight]} style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 16 }}>
+          <ShieldAlert color={Colors.danger} size={48} />
           <Text style={{ color: "#fff", fontSize: 20, fontWeight: "900" }}>Accès refusé</Text>
           <Text style={{ color: "rgba(255,255,255,0.5)", fontSize: 14 }}>Zone réservée aux super admins</Text>
         </LinearGradient>
@@ -450,25 +450,25 @@ export default function AdminConsole() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       {/* Header */}
-      <LinearGradient colors={["#0F172A", "#1E3A5F"]} style={styles.header}>
+      <LinearGradient colors={[Colors.gradStart, Colors.gradMid]} style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <ArrowLeft color="#fff" size={20} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Zap color="#F5C842" size={14} fill="#F5C842" />
+            <Zap color={Colors.gradGold3} size={14} fill={Colors.gradGold3} />
             <Text style={styles.headerEyebrow}>HODIX CONTROL CENTER</Text>
           </View>
           <Text style={styles.headerTitle}>Console Admin</Text>
         </View>
-        <Avatar name={user?.full_name ?? "A"} size={38} bg="#6366F1" />
+        <Avatar name={user?.full_name ?? "A"} size={38} bg={Colors.gold} />
       </LinearGradient>
 
       {/* Stats strip */}
-      <LinearGradient colors={["#1E3A5F", "#0F172A"]} style={styles.statsStrip}>
+      <LinearGradient colors={[Colors.brandNavyLight, Colors.brandNavy]} style={styles.statsStrip}>
         {[
           { label: "Membres", value: adminStats.total_users, color: "#60A5FA" },
-          { label: "KYC pending", value: adminStats.pending_kyc, color: "#FBBF24" },
+          { label: "KYC pending", value: adminStats.pending_kyc, color: Colors.gradGold3 },
           { label: "Tontines", value: adminStats.total_tontines, color: "#34D399" },
         ].map((s) => (
           <View key={s.label} style={styles.statItem}>
@@ -498,7 +498,7 @@ export default function AdminConsole() {
                 activeOpacity={0.75}
               >
                 {active ? (
-                  <LinearGradient colors={["#6366F1", "#8B5CF6"]} style={styles.tabBtnGrad}>
+                  <LinearGradient colors={[Colors.primary, Colors.secondary]} style={styles.tabBtnGrad}>
                     <Icon color="#fff" size={13} />
                     <Text style={styles.tabLabelActive}>{t.label}</Text>
                     {!!t.count && (
@@ -574,8 +574,8 @@ export default function AdminConsole() {
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                         <Text style={styles.userName} numberOfLines={1}>{u.full_name}</Text>
                         {isDeactivated && (
-                          <View style={{ backgroundColor: "#FEE2E2", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999 }}>
-                            <Text style={{ color: "#991B1B", fontSize: 10, fontWeight: "700" }}>Inactif</Text>
+                          <View style={{ backgroundColor: Colors.dangerLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999 }}>
+                            <Text style={{ color: Colors.danger, fontSize: 10, fontWeight: "700" }}>Inactif</Text>
                           </View>
                         )}
                       </View>
@@ -592,13 +592,13 @@ export default function AdminConsole() {
                       </TouchableOpacity>
                     )}
                     {u.role === "tontine_manager" && (
-                      <TouchableOpacity style={[styles.promoteBtn, { backgroundColor: "#EDE9FE" }]} onPress={() => handleRoleChange(u.id, "member")}>
-                        <Text style={[styles.promoteBtnText, { color: "#6D28D9" }]}>↓ Membre</Text>
+                      <TouchableOpacity style={[styles.promoteBtn, { backgroundColor: Colors.secondaryLight }]} onPress={() => handleRoleChange(u.id, "member")}>
+                        <Text style={[styles.promoteBtnText, { color: Colors.secondary }]}>↓ Membre</Text>
                       </TouchableOpacity>
                     )}
                     {!isDeactivated && u.role !== "super_admin" && (
                       <TouchableOpacity style={styles.deactivateBtn} onPress={() => handleDeactivate(u.id)}>
-                        <XCircle color="#EF4444" size={14} />
+                        <XCircle color={Colors.danger} size={14} />
                       </TouchableOpacity>
                     )}
                   </View>
@@ -628,13 +628,13 @@ export default function AdminConsole() {
                     <View style={{ marginTop: 4, flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
                       <StatusBadge config={kycConf} />
                       {hasDocs && (
-                        <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: "#DBEAFE" }}>
-                          <Text style={{ fontSize: 10, fontWeight: "700", color: "#1D4ED8" }}>Documents</Text>
+                        <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: Colors.infoLight }}>
+                          <Text style={{ fontSize: 10, fontWeight: "700", color: Colors.info }}>Documents</Text>
                         </View>
                       )}
                       {!!k.verification_mode && (
-                        <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: "#EEF2FF" }}>
-                          <Text style={{ fontSize: 10, fontWeight: "700", color: "#4338CA" }}>{k.verification_mode}</Text>
+                        <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: Colors.secondaryLight }}>
+                          <Text style={{ fontSize: 10, fontWeight: "700", color: Colors.secondary }}>{k.verification_mode}</Text>
                         </View>
                       )}
                     </View>
@@ -666,8 +666,8 @@ export default function AdminConsole() {
               <Text style={styles.sectionHeading}>Historique</Text>
               {promos.filter((p) => p.status !== "pending").map((p) => {
                 const statusConf = p.status === "approved"
-                  ? { label: "Approuvé", bg: "#D1FAE5", color: "#065F46" }
-                  : { label: "Refusé", bg: "#FEE2E2", color: "#991B1B" };
+                  ? { label: "Approuvé", bg: Colors.successLight, color: Colors.success }
+                  : { label: "Refusé", bg: Colors.dangerLight, color: Colors.danger };
                 return (
                   <View key={p.id} style={styles.userCard}>
                     <View style={styles.userCardLeft}>
@@ -723,18 +723,18 @@ export default function AdminConsole() {
                       ) : null}
                       <View style={{ flexDirection: "row", gap: 8 }}>
                         <TouchableOpacity
-                          style={{ flex: 1, backgroundColor: "#059669", borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: modBusyId === rep.id ? 0.5 : 1 }}
+                          style={{ flex: 1, backgroundColor: Colors.success, borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: modBusyId === rep.id ? 0.5 : 1 }}
                           disabled={!!modBusyId}
                           onPress={() => handleReportReview(rep.id, "resolved")}
                         >
                           <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>Traité</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
-                          style={{ flex: 1, backgroundColor: "#FEE2E2", borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: modBusyId === rep.id ? 0.5 : 1 }}
+                          style={{ flex: 1, backgroundColor: Colors.dangerLight, borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: modBusyId === rep.id ? 0.5 : 1 }}
                           disabled={!!modBusyId}
                           onPress={() => handleReportReview(rep.id, "dismissed")}
                         >
-                          <Text style={{ color: "#991B1B", fontWeight: "800", fontSize: 13 }}>Classer</Text>
+                          <Text style={{ color: Colors.danger, fontWeight: "800", fontSize: 13 }}>Classer</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -758,18 +758,18 @@ export default function AdminConsole() {
                       </TouchableOpacity>
                       <View style={{ flexDirection: "row", gap: 8 }}>
                         <TouchableOpacity
-                          style={{ flex: 1, backgroundColor: "#059669", borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: modBusyId === vr.id ? 0.5 : 1 }}
+                          style={{ flex: 1, backgroundColor: Colors.success, borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: modBusyId === vr.id ? 0.5 : 1 }}
                           disabled={!!modBusyId}
                           onPress={() => handleVerifiedReview(vr.id, true)}
                         >
                           <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>Accorder</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
-                          style={{ flex: 1, backgroundColor: "#FEE2E2", borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: modBusyId === vr.id ? 0.5 : 1 }}
+                          style={{ flex: 1, backgroundColor: Colors.dangerLight, borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: modBusyId === vr.id ? 0.5 : 1 }}
                           disabled={!!modBusyId}
                           onPress={() => handleVerifiedReview(vr.id, false)}
                         >
-                          <Text style={{ color: "#991B1B", fontWeight: "800", fontSize: 13 }}>Refuser</Text>
+                          <Text style={{ color: Colors.danger, fontWeight: "800", fontSize: 13 }}>Refuser</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -787,16 +787,16 @@ export default function AdminConsole() {
           renderItem={({ item: t }) => {
             const mod = t.moderation_status ?? "approved";
             const modConf = mod === "pending_review"
-              ? { label: "Revue risque", bg: "#FEF3C7", color: "#92400E" }
+              ? { label: "Revue risque", bg: Colors.warningLight, color: Colors.warning }
               : mod === "rejected"
-              ? { label: "Refusée", bg: "#FEE2E2", color: "#991B1B" }
+              ? { label: "Refusée", bg: Colors.dangerLight, color: Colors.danger }
               : mod === "suspended"
-              ? { label: "Suspendue", bg: "#FEE2E2", color: "#991B1B" }
+              ? { label: "Suspendue", bg: Colors.dangerLight, color: Colors.danger }
               : t.is_hodix_verified
-              ? { label: "Vérifié HODIX", bg: "#DBEAFE", color: "#1D4ED8" }
+              ? { label: "Vérifié HODIX", bg: Colors.goldLight, color: Colors.goldDark }
               : t.status === "active"
-              ? { label: "Active", bg: "#D1FAE5", color: "#065F46" }
-              : { label: t.status, bg: "#F3F4F6", color: "#6B7280" };
+              ? { label: "Active", bg: Colors.successLight, color: Colors.success }
+              : { label: t.status, bg: Colors.surfaceAlt, color: Colors.textMuted };
             return (
               <View style={[styles.userCard, { flexDirection: "column", alignItems: "stretch", gap: 8 }]}>
                 <TouchableOpacity
@@ -805,7 +805,7 @@ export default function AdminConsole() {
                   activeOpacity={0.8}
                 >
                   <View style={styles.userCardLeft}>
-                    <Avatar name={t.name} size={44} bg="#10B981" />
+                    <Avatar name={t.name} size={44} bg={Colors.success} />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.userName} numberOfLines={1}>{t.name}</Text>
                       <Text style={styles.userEmail}>
@@ -820,7 +820,7 @@ export default function AdminConsole() {
                         ) : null}
                       </View>
                       {t.moderation_reason ? (
-                        <Text style={{ fontSize: 11, color: "#92400E", marginTop: 4 }} numberOfLines={2}>{t.moderation_reason}</Text>
+                        <Text style={{ fontSize: 11, color: Colors.warning, marginTop: 4 }} numberOfLines={2}>{t.moderation_reason}</Text>
                       ) : null}
                     </View>
                   </View>
@@ -829,18 +829,18 @@ export default function AdminConsole() {
                 {mod === "pending_review" ? (
                   <View style={{ flexDirection: "row", gap: 8 }}>
                     <TouchableOpacity
-                      style={{ flex: 1, backgroundColor: "#059669", borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: modBusyId === t.id ? 0.5 : 1 }}
+                      style={{ flex: 1, backgroundColor: Colors.success, borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: modBusyId === t.id ? 0.5 : 1 }}
                       disabled={!!modBusyId}
                       onPress={() => handleModerationReview(t.id, true)}
                     >
                       <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>Publier Découvrir</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={{ flex: 1, backgroundColor: "#FEE2E2", borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: modBusyId === t.id ? 0.5 : 1 }}
+                      style={{ flex: 1, backgroundColor: Colors.dangerLight, borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: modBusyId === t.id ? 0.5 : 1 }}
                       disabled={!!modBusyId}
                       onPress={() => handleModerationReview(t.id, false)}
                     >
-                      <Text style={{ color: "#991B1B", fontWeight: "800", fontSize: 13 }}>Refuser</Text>
+                      <Text style={{ color: Colors.danger, fontWeight: "800", fontSize: 13 }}>Refuser</Text>
                     </TouchableOpacity>
                   </View>
                 ) : null}
@@ -933,7 +933,7 @@ export default function AdminConsole() {
       ) : (
         <ScrollView contentContainerStyle={{ padding: Spacing.xl, gap: 16, paddingBottom: 100 }}>
           <View style={styles.broadcastCard}>
-            <LinearGradient colors={["#6366F1", "#8B5CF6"]} style={styles.broadcastIconBg}>
+            <LinearGradient colors={[Colors.primary, Colors.secondary]} style={styles.broadcastIconBg}>
               <Bell color="#fff" size={22} />
             </LinearGradient>
             <Text style={styles.broadcastTitle}>Canal publicitaire</Text>
@@ -956,7 +956,7 @@ export default function AdminConsole() {
               multiline
             />
             <TouchableOpacity style={[styles.sendBtn, broadcasting && { opacity: 0.6 }]} onPress={handleBroadcast} disabled={broadcasting} activeOpacity={0.85}>
-              <LinearGradient colors={["#6366F1", "#8B5CF6"]} style={styles.sendBtnGrad}>
+              <LinearGradient colors={[Colors.primary, Colors.secondary]} style={styles.sendBtnGrad}>
                 {broadcasting
                   ? <ActivityIndicator color="#fff" size="small" />
                   : <><Send color="#fff" size={15} /><Text style={styles.sendBtnText}>Envoyer à tous</Text></>}
@@ -978,7 +978,7 @@ export default function AdminConsole() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#F8FAFC" },
+  safe: { flex: 1, backgroundColor: Colors.bg },
   header: {
     flexDirection: "row", alignItems: "center", gap: 12,
     paddingHorizontal: 20, paddingVertical: 16,
@@ -987,7 +987,7 @@ const styles = StyleSheet.create({
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center",
   },
-  headerEyebrow: { color: "#F5C842", fontSize: 10, fontWeight: "800", letterSpacing: 1.5 },
+  headerEyebrow: { color: Colors.gradGold3, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 },
   headerTitle: { color: "#fff", fontSize: 20, fontWeight: "900", marginTop: 1 },
   statsStrip: {
     flexDirection: "row", justifyContent: "space-around",
@@ -997,9 +997,9 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 22, fontWeight: "900" },
   statLabel: { fontSize: 10, color: "rgba(255,255,255,0.5)", fontWeight: "600", marginTop: 1 },
   tabsBar: {
-    backgroundColor: "#fff",
+    backgroundColor: Colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    borderBottomColor: Colors.border,
     flexGrow: 0,
     flexShrink: 0,
   },
@@ -1018,7 +1018,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: Radius.full,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: Colors.surfaceAlt,
     flexShrink: 0,
     flexGrow: 0,
     height: 36,
@@ -1043,7 +1043,7 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: Radius.full,
   },
-  tabLabel: { fontSize: 12, fontWeight: "700", color: "#94A3B8" },
+  tabLabel: { fontSize: 12, fontWeight: "700", color: Colors.textSubtle },
   tabLabelActive: { fontSize: 12, fontWeight: "700", color: "#fff" },
   tabBadge: {
     minWidth: 16, height: 16, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.3)",
@@ -1053,14 +1053,14 @@ const styles = StyleSheet.create({
   searchRow: {
     flexDirection: "row", alignItems: "center", gap: 10,
     marginHorizontal: 16, marginVertical: 12,
-    backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: "#E5E7EB",
+    backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border,
     paddingHorizontal: 14, paddingVertical: 10,
     shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 },
     elevation: 1,
   },
-  searchInput: { flex: 1, fontSize: 14, color: "#1E293B", outlineStyle: "none" } as any,
+  searchInput: { flex: 1, fontSize: 14, color: Colors.text, outlineStyle: "none" } as any,
   userCard: {
-    backgroundColor: "#fff", borderRadius: 16, padding: 14,
+    backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: 14,
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
     elevation: 2,
@@ -1069,44 +1069,44 @@ const styles = StyleSheet.create({
   userCardLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1, minWidth: 0 },
   userActions: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 },
   userActionsStack: { flexWrap: "wrap", justifyContent: "flex-end" },
-  userName: { fontSize: 14, fontWeight: "800", color: "#1E293B" },
-  userEmail: { fontSize: 11, color: "#94A3B8", fontWeight: "500", marginTop: 1 },
+  userName: { fontSize: 14, fontWeight: "800", color: Colors.text },
+  userEmail: { fontSize: 11, color: Colors.textSubtle, fontWeight: "500", marginTop: 1 },
   promoteBtn: {
-    backgroundColor: "#EFF6FF", paddingHorizontal: 10, paddingVertical: 5,
+    backgroundColor: Colors.infoLight, paddingHorizontal: 10, paddingVertical: 5,
     borderRadius: 8,
   },
-  promoteBtnText: { fontSize: 11, fontWeight: "800", color: "#2563EB" },
+  promoteBtnText: { fontSize: 11, fontWeight: "800", color: Colors.info },
   deactivateBtn: {
     width: MIN_TOUCH, height: MIN_TOUCH, borderRadius: 8,
-    backgroundColor: "#FEF2F2", alignItems: "center", justifyContent: "center",
+    backgroundColor: Colors.dangerLight, alignItems: "center", justifyContent: "center",
   },
   approveBtn: {
     flexDirection: "row", alignItems: "center", gap: 3,
-    backgroundColor: "#10B981", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
+    backgroundColor: Colors.success, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
   },
   approveBtnText: { color: "#fff", fontSize: 11, fontWeight: "800" },
   rejectBtn: {
     flexDirection: "row", alignItems: "center", gap: 3,
-    backgroundColor: "#EF4444", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
+    backgroundColor: Colors.danger, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
   },
   rejectBtnText: { color: "#fff", fontSize: 11, fontWeight: "800" },
-  empty: { textAlign: "center", color: "#94A3B8", fontWeight: "600", marginTop: 48, fontSize: 14 },
+  empty: { textAlign: "center", color: Colors.textSubtle, fontWeight: "600", marginTop: 48, fontSize: 14 },
   sectionHeading: { color: Colors.text, fontSize: 15, fontWeight: "900", marginBottom: 4 },
   pageHint: { fontSize: 12, color: Colors.textMuted, marginBottom: 10, textAlign: "center" },
   broadcastCard: {
-    backgroundColor: "#fff", borderRadius: 20, padding: 20, gap: 14,
+    backgroundColor: Colors.surface, borderRadius: 20, padding: 20, gap: 14,
     shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
     elevation: 3,
   },
   broadcastIconBg: {
     width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center",
   },
-  broadcastTitle: { fontSize: 18, fontWeight: "900", color: "#1E293B" },
-  broadcastDesc: { fontSize: 13, color: "#94A3B8", lineHeight: 19 },
+  broadcastTitle: { fontSize: 18, fontWeight: "900", color: Colors.text },
+  broadcastDesc: { fontSize: 13, color: Colors.textMuted, lineHeight: 19 },
   broadcastInput: {
-    borderWidth: 1.5, borderColor: "#E5E7EB", borderRadius: 12,
+    borderWidth: 1.5, borderColor: Colors.border, borderRadius: Radius.md,
     paddingHorizontal: 14, paddingVertical: 12, fontSize: 14,
-    color: "#1E293B", backgroundColor: "#F8FAFC",
+    color: Colors.text, backgroundColor: Colors.bg,
   },
   sendBtn: { borderRadius: 14, overflow: "hidden", marginTop: 4 },
   sendBtnGrad: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 15 },
@@ -1117,13 +1117,13 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: Spacing.xl,
     paddingVertical: 12,
-    backgroundColor: "#fff",
+    backgroundColor: Colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    borderBottomColor: Colors.border,
   },
   adminBubble: { maxWidth: "80%", padding: 12, borderRadius: 14 },
   adminBubbleMe: { alignSelf: "flex-end", backgroundColor: Colors.primary },
-  adminBubbleThem: { alignSelf: "flex-start", backgroundColor: "#F1F5F9" },
+  adminBubbleThem: { alignSelf: "flex-start", backgroundColor: Colors.surfaceAlt },
   adminBubbleSender: { fontSize: 11, fontWeight: "700", color: Colors.primary, marginBottom: 4 },
   adminBubbleText: { fontSize: 14, color: Colors.text, lineHeight: 20 },
   adminReplyRow: {
@@ -1131,19 +1131,19 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     gap: 8,
     padding: Spacing.xl,
-    backgroundColor: "#fff",
+    backgroundColor: Colors.surface,
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
+    borderTopColor: Colors.border,
   },
   adminReplyInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 12,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontSize: 14,
-    color: "#1E293B",
+    color: Colors.text,
     maxHeight: 100,
     outlineStyle: "none",
   } as any,

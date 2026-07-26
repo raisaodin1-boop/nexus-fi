@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Share, StyleSheet, Text, TouchableOpacity, View, Clipboard, ActivityIndicator } from "react-native";
+import { Share, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { ShieldCheck, Link2, Copy } from "lucide-react-native";
 import QRCode from "react-native-qrcode-svg";
 
@@ -35,7 +36,7 @@ export function IdentityVerificationCard() {
 
   const copyLink = async () => {
     if (!cert?.verify_url) return;
-    Clipboard.setString(cert.verify_url);
+    Clipboard.setStringAsync(cert.verify_url).catch(() => {});
   };
 
   const shareLink = async () => {

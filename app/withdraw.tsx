@@ -14,9 +14,9 @@ import { Colors, Radius, Shadow, Spacing } from "@/src/theme";
 
 type Method = "orange" | "mtn" | "bank";
 
-const METHODS: { key: Method; label: string; icon: string; color: string }[] = [
-  { key: "orange", label: "Orange Money", icon: "🟠", color: "#FF6900" },
+const METHODS: { key: Method; label: string; icon: string; color: string; soon?: boolean }[] = [
   { key: "mtn",    label: "MTN Money",    icon: "🟡", color: "#FFCC00" },
+  { key: "orange", label: "Orange Money", icon: "🟠", color: "#FF6900", soon: true },
   { key: "bank",   label: "Virement bancaire", icon: "🏦", color: Colors.secondary },
 ];
 
@@ -31,7 +31,7 @@ interface WithdrawalResult {
 export default function WithdrawScreen() {
   const router = useRouter();
   const { goal_id, amount: preAmount } = useLocalSearchParams<{ goal_id?: string; amount?: string }>();
-  const [method, setMethod] = useState<Method>("orange");
+  const [method, setMethod] = useState<Method>("mtn");
   const [amount, setAmount] = useState(preAmount ?? "");
   const [phone, setPhone] = useState("");
   const [reason, setReason] = useState("");
@@ -122,11 +122,17 @@ export default function WithdrawScreen() {
             <TouchableOpacity
               key={m.key}
               onPress={() => setMethod(m.key)}
-              style={[styles.methodBtn, method === m.key && { borderColor: m.color, backgroundColor: m.color + "15" }]}
+              disabled={m.soon}
+              style={[
+                styles.methodBtn,
+                method === m.key && { borderColor: m.color, backgroundColor: m.color + "15" },
+                m.soon && { opacity: 0.45 },
+              ]}
               testID={`withdraw-method-${m.key}`}
             >
               <Text style={{ fontSize: 20 }}>{m.icon}</Text>
               <Text style={[styles.methodLabel, method === m.key && { color: m.color }]}>{m.label}</Text>
+              {m.soon ? <Text style={{ fontSize: 10, fontWeight: "700", color: Colors.textSubtle }}>Bientôt</Text> : null}
             </TouchableOpacity>
           ))}
         </View>

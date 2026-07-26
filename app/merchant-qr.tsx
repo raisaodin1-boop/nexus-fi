@@ -36,7 +36,9 @@ export default function MerchantQRScreen() {
       const m = await getMerchantProfile();
       setMerchant(m);
       if (m) setTransactions(await getMerchantTransactions());
-    } catch { /* silent */ }
+    } catch {
+      show("Impossible de charger le profil marchand — réessayez.", "error");
+    }
     setLoading(false);
   };
 

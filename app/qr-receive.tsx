@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { Alert, Clipboard, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Copy, Share2 } from "lucide-react-native";
@@ -24,7 +25,7 @@ export default function QRReceiveScreen() {
 
   const copyTag = () => {
     if (qrData?.hodix_tag) {
-      Clipboard.setString(qrData.hodix_tag);
+      Clipboard.setStringAsync(qrData.hodix_tag).catch(() => {});
       Alert.alert("Copié !", "Votre tag a été copié");
     }
   };

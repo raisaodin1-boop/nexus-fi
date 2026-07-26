@@ -109,7 +109,7 @@ export function ManagerDashboard() {
 
         {proStatus && !proStatus.active && proStatus.eligible ? (
           <View style={{ paddingHorizontal: Spacing.xl, marginBottom: 8 }}>
-            <LinearGradient colors={["#7C3AED", "#5B21B6"]} style={[styles.proBanner, Shadow.card]}>
+            <LinearGradient colors={[Colors.brandNavy, Colors.brandNavyLight]} style={[styles.proBanner, Shadow.card]}>
               <Text style={styles.proTitle}>Manager Pro</Text>
               <Text style={styles.proSub}>
                 Statistiques avancées, exports PDF, alertes prioritaires — {formatXAF(proStatus.monthly_price_xaf ?? MANAGER_PRO_MONTHLY_XAF)}/mois
@@ -183,10 +183,10 @@ export function ManagerDashboard() {
 
         <SectionTitle>Nouvelles fonctionnalités</SectionTitle>
         <View style={styles.qaGrid}>
-          <ManagerAction icon={<Gavel color="#7C3AED" size={20} />} label="Enchères Tontine" onPress={() => router.push("/tontine-auction" as any)} testID="manager-action-auction" />
-          <ManagerAction icon={<Target color="#10B981" size={20} />} label="Objectif Collectif" onPress={() => router.push("/collective-goal" as any)} testID="manager-action-collective" />
-          <ManagerAction icon={<CreditCard color="#0B1F3A" size={20} />} label="Carte Virtuelle" onPress={() => router.push("/virtual-card" as any)} testID="manager-action-virtual-card" />
-          <ManagerAction icon={<Store color="#EF4444" size={20} />} label="HODIX Pay Pro" onPress={() => router.push("/merchant-qr" as any)} testID="manager-action-merchant" />
+          <ManagerAction icon={<Gavel color={Colors.secondary} size={20} />} label="Enchères Tontine" onPress={() => router.push("/tontine-auction" as any)} testID="manager-action-auction" />
+          <ManagerAction icon={<Target color={Colors.success} size={20} />} label="Objectif Collectif" onPress={() => router.push("/collective-goal" as any)} testID="manager-action-collective" />
+          <ManagerAction icon={<CreditCard color={Colors.brandNavy} size={20} />} label="Carte Virtuelle" onPress={() => router.push("/virtual-card" as any)} testID="manager-action-virtual-card" />
+          <ManagerAction icon={<Store color={Colors.danger} size={20} />} label="HODIX Pay Pro" onPress={() => router.push("/merchant-qr" as any)} testID="manager-action-merchant" />
         </View>
 
         <SectionTitle action={

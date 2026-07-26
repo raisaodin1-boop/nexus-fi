@@ -3,8 +3,8 @@ import type { PaymentMeta } from "@/src/db/payments";
 
 export interface PaymentReceipt {
   id: string;
-  payment_id: string;
-  receipt_id: string;
+  payment_id?: string;
+  receipt_id?: string;
   amount_xaf: number;
   method?: string;
   payment_method?: string;

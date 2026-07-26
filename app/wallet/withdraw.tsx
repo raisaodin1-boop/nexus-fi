@@ -125,7 +125,7 @@ export default function WithdrawScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <View style={styles.successBox}>
-          <CheckCircle2 size={64} color="#10B981" />
+          <CheckCircle2 size={64} color=Colors.success />
           <Text style={styles.successTitle}>Retrait enregistré</Text>
           <View style={[styles.statusPill, { backgroundColor: st.color + "22" }]}>
             <Text style={[styles.statusPillText, { color: st.color }]}>{st.label}</Text>
@@ -165,7 +165,7 @@ export default function WithdrawScreen() {
         onCancel={() => { setShowOtp(false); setLoading(false); }}
       />
 
-      <LinearGradient colors={["#0B1F3A", "#EF4444"]} style={styles.header}>
+      <LinearGradient colors={[Colors.gradStart, Colors.brandNavyLight]} style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.back}>
           <ChevronLeft color="#fff" size={24} />
         </TouchableOpacity>

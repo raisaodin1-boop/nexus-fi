@@ -166,7 +166,7 @@ export default function SavingsList() {
                     {predictions[g.id] && (() => {
                       const pred = predictions[g.id];
                       const chipColor = pred.on_track === null ? Colors.secondary
-                        : pred.on_track ? "#10B981" : "#F59E0B";
+                        : pred.on_track ? Colors.success : Colors.warning;
                       const chipLabel = pred.on_track === true ? `✅ Dans les temps`
                         : pred.on_track === false
                           ? `⚠️ +${pred.delay_months}m de retard`
@@ -192,7 +192,7 @@ export default function SavingsList() {
                             <View style={[styles.goalProgressFill, { width: `${goalPct}%` as any, backgroundColor: barColor }]} />
                           </View>
                           <Text style={styles.goalProgressText}>
-                            {"Objectif: "}{g.target_amount.toLocaleString()}{" FCFA · "}{goalPct.toFixed(0)}{"% atteint"}
+                            {"Objectif: "}{formatXAF(g.target_amount, g.currency)}{" · "}{goalPct.toFixed(0)}{"% atteint"}
                           </Text>
                         </View>
                       );
@@ -214,10 +214,10 @@ const styles = StyleSheet.create({
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
     paddingHorizontal: Spacing.xl, paddingVertical: Spacing.lg,
   },
-  h1: { color: Colors.primary, fontSize: 28, fontWeight: "900", letterSpacing: -0.5 },
+  h1: { color: Colors.brandNavy, fontSize: 24, fontWeight: "900", letterSpacing: -0.4 },
   subtitle: { color: Colors.textMuted, fontSize: 13, marginTop: 2 },
   fab: {
-    width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.secondary,
+    width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.primary,
     alignItems: "center", justifyContent: "center", ...Shadow.card,
   },
   totalCard: { padding: 24, overflow: "hidden" },
