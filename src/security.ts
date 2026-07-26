@@ -1,25 +1,26 @@
 /**
  * HODIX Security Engine — client-side utilities.
- * Lightweight: no heavy libraries, pure JS + expo-device + expo-secure-store.
+ * Lightweight: no heavy libraries, pure JS + expo-device + secure storage.
  */
 import { Platform } from "react-native";
 import * as Device from "expo-device";
 import * as SecureStore from "expo-secure-store";
 import * as Crypto from "expo-crypto";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-/* ── Key names in SecureStore ───────────────────────────────── */
+/* ── Key names ───────────────────────────────────────────── */
 const PIN_KEY = "hodix_wallet_pin_hash";
 const PIN_ATTEMPTS_KEY = "hodix_pin_attempts";
 const PIN_LOCKOUT_KEY = "hodix_pin_lockout_until";
 
-/* ── PIN hashing ────────────────────────────────────────────── */
+/* ── PIN hashing ─────────────────────────────────────────── */
 // v2: SHA-256 (expo-crypto), iterated to slow down offline brute-force.
-// hashPinLegacy (djb2/FNV v1) is kept only to migrate PINs created
-// before the upgrade — see verify flow in pin-modal.
-
+// Do NOT change PIN_ITERATIONS — it would invalidate existing hashes.
 const PIN_ITERATIONS = 10_000;
 
 export async function hashPin(pin: string, salt: string): Promise<string> {
+  if (!salt?.trim()) throw new Error("Identifiant utilisateur requis pour le PIN.");
+  if (!/^\d{4}$/.test(pin)) throw new Error("PIN invalide.");
   let digest = `hodix:${salt}:${pin}:v2`;
   for (let i = 0; i < PIN_ITERATIONS; i++) {
     digest = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, digest);
@@ -42,14 +43,61 @@ export function hashPinLegacy(pin: string, salt: string): string {
   return `${h.toString(16).padStart(8, "0")}${h2.toString(16).padStart(8, "0")}`;
 }
 
-/* ── PIN storage (SecureStore — AES-256 on device, never leaves device) ── */
+/* ── Durable PIN storage (SecureStore + AsyncStorage web/fallback) ── */
+// Raw string values (not JSON) so existing SecureStore hashes keep working.
+
+async function durableSet(key: string, value: string): Promise<void> {
+  let secureOk = false;
+  if (Platform.OS !== "web") {
+    try {
+      await SecureStore.setItemAsync(key, value);
+      secureOk = true;
+    } catch (e) {
+      console.warn("[security] SecureStore set failed, falling back", e);
+    }
+  }
+  try {
+    await AsyncStorage.setItem(key, value);
+  } catch (e) {
+    if (!secureOk) throw e instanceof Error ? e : new Error("Stockage PIN impossible.");
+  }
+}
+
+async function durableGet(key: string): Promise<string | null> {
+  if (Platform.OS !== "web") {
+    try {
+      const v = await SecureStore.getItemAsync(key);
+      if (v) return v;
+    } catch (e) {
+      console.warn("[security] SecureStore get failed, falling back", e);
+    }
+  }
+  try {
+    return await AsyncStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+async function durableDelete(key: string): Promise<void> {
+  if (Platform.OS !== "web") {
+    try { await SecureStore.deleteItemAsync(key); } catch { /* ignore */ }
+  }
+  try { await AsyncStorage.removeItem(key); } catch { /* ignore */ }
+}
 
 export async function storePinHash(hash: string): Promise<void> {
-  await SecureStore.setItemAsync(PIN_KEY, hash);
+  if (!hash?.trim()) throw new Error("Hash PIN vide.");
+  await durableSet(PIN_KEY, hash.trim());
 }
 
 export async function getStoredPinHash(): Promise<string | null> {
-  return SecureStore.getItemAsync(PIN_KEY);
+  const h = await durableGet(PIN_KEY);
+  return h?.trim() || null;
+}
+
+export async function clearStoredPinHash(): Promise<void> {
+  await durableDelete(PIN_KEY);
 }
 
 export async function isPinSet(): Promise<boolean> {
@@ -63,13 +111,13 @@ const MAX_ATTEMPTS = 3;
 const LOCKOUT_MS = 30 * 60 * 1000; // 30 minutes
 
 export async function checkPinLocked(): Promise<{ locked: boolean; minutesLeft: number }> {
-  const until = await SecureStore.getItemAsync(PIN_LOCKOUT_KEY);
+  const until = await durableGet(PIN_LOCKOUT_KEY);
   if (!until) return { locked: false, minutesLeft: 0 };
   const t = Number(until);
   const now = Date.now();
   if (now >= t) {
-    await SecureStore.deleteItemAsync(PIN_LOCKOUT_KEY);
-    await SecureStore.deleteItemAsync(PIN_ATTEMPTS_KEY);
+    await durableDelete(PIN_LOCKOUT_KEY);
+    await durableDelete(PIN_ATTEMPTS_KEY);
     return { locked: false, minutesLeft: 0 };
   }
   return { locked: true, minutesLeft: Math.ceil((t - now) / 60000) };
@@ -77,22 +125,22 @@ export async function checkPinLocked(): Promise<{ locked: boolean; minutesLeft: 
 
 export async function recordPinAttempt(success: boolean): Promise<void> {
   if (success) {
-    await SecureStore.deleteItemAsync(PIN_ATTEMPTS_KEY);
-    await SecureStore.deleteItemAsync(PIN_LOCKOUT_KEY);
+    await durableDelete(PIN_ATTEMPTS_KEY);
+    await durableDelete(PIN_LOCKOUT_KEY);
     return;
   }
-  const current = Number(await SecureStore.getItemAsync(PIN_ATTEMPTS_KEY) ?? "0");
+  const current = Number((await durableGet(PIN_ATTEMPTS_KEY)) ?? "0");
   const next = current + 1;
   if (next >= MAX_ATTEMPTS) {
-    await SecureStore.setItemAsync(PIN_LOCKOUT_KEY, String(Date.now() + LOCKOUT_MS));
-    await SecureStore.deleteItemAsync(PIN_ATTEMPTS_KEY);
+    await durableSet(PIN_LOCKOUT_KEY, String(Date.now() + LOCKOUT_MS));
+    await durableDelete(PIN_ATTEMPTS_KEY);
   } else {
-    await SecureStore.setItemAsync(PIN_ATTEMPTS_KEY, String(next));
+    await durableSet(PIN_ATTEMPTS_KEY, String(next));
   }
 }
 
 export async function getRemainingAttempts(): Promise<number> {
-  const current = Number(await SecureStore.getItemAsync(PIN_ATTEMPTS_KEY) ?? "0");
+  const current = Number((await durableGet(PIN_ATTEMPTS_KEY)) ?? "0");
   return MAX_ATTEMPTS - current;
 }
 
@@ -101,18 +149,15 @@ export async function getRemainingAttempts(): Promise<number> {
 export function detectSuspiciousEnvironment(): { suspicious: boolean; reasons: string[] } {
   const reasons: string[] = [];
 
-  // Emulator fingerprints
   const model = Device.modelName?.toLowerCase() ?? "";
   const isEmulator = !Device.isDevice;
   if (isEmulator) reasons.push("emulator");
   if (model.includes("generic") || model.includes("sdk") || model.includes("emulator"))
     reasons.push("emulator_model");
 
-  // iOS simulator
   if (Platform.OS === "ios" && !Device.isDevice)
     reasons.push("ios_simulator");
 
-  // Impossibly old device year (common in VMs)
   if (Device.deviceYearClass && Device.deviceYearClass < 2015)
     reasons.push("old_device");
 
@@ -128,8 +173,8 @@ export interface RiskCheck {
   flags: string[];
 }
 
-const PIN_THRESHOLD = 5_000;    // XAF — require PIN above this
-const OTP_THRESHOLD = 100_000;  // XAF — require OTP above this
+const PIN_THRESHOLD = 5_000;
+const OTP_THRESHOLD = 100_000;
 
 export function assessTransactionRisk(
   amount: number,
@@ -155,9 +200,6 @@ export function assessTransactionRisk(
   };
 }
 
-/* ── OTP generation (client display only — stored server-side) ── */
-
 export function formatOtpForDisplay(code: string): string {
-  // "123456" → "123 456" for readability
   return code.slice(0, 3) + " " + code.slice(3);
 }

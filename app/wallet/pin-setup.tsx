@@ -1,24 +1,15 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { ActivityIndicator, Alert, View } from "react-native";
 import { useRouter } from "expo-router";
-import { api } from "@/src/api";
 import { Colors } from "@/src/theme";
 import { PinSetupModal } from "@/src/pin-modal";
+import { useAuth } from "@/src/auth-context";
 
 export default function PinSetupScreen() {
   const router = useRouter();
-  const [userId, setUserId] = useState<string | null>(null);
+  const { user, loading } = useAuth();
 
-  useEffect(() => {
-    api.get<{ id: string }>("/users/me")
-      .then(me => setUserId(me.id))
-      .catch(() => {
-        Alert.alert("Erreur", "Impossible de charger le profil.");
-        router.back();
-      });
-  }, []);
-
-  if (!userId) {
+  if (loading || !user?.id) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: Colors.bg }}>
         <ActivityIndicator color={Colors.secondary} size="large" />
@@ -28,10 +19,10 @@ export default function PinSetupScreen() {
 
   return (
     <PinSetupModal
-      visible={true}
-      userId={userId}
+      visible
+      userId={user.id}
       onSuccess={() => {
-        Alert.alert("PIN configuré !", "Votre PIN est actif.");
+        Alert.alert("PIN configuré", "Votre PIN est actif sur ce compte et cet appareil.");
         router.back();
       }}
       onCancel={() => router.back()}

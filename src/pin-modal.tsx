@@ -1,20 +1,24 @@
 /**
  * PIN modals — setup and confirmation.
  * PinSetupModal: first-time 4-digit PIN creation (enter + confirm).
- * PinConfirmModal: transaction confirmation with lockout logic.
+ * PinConfirmModal: transaction confirmation with lockout + server verify.
  */
 import React, { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Modal,
+  Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
-  Platform,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors, Radius, Spacing } from "@/src/theme";
-import { api, formatXAF } from "@/src/api";
+import { api, ApiError, formatXAF } from "@/src/api";
 import {
   hashPin,
   hashPinLegacy,
@@ -25,8 +29,7 @@ import {
   getRemainingAttempts,
 } from "@/src/security";
 import { getBiometricInfo, isBiometricEnabled, authenticateBiometric } from "@/src/biometrics";
-
-// ─── Numpad ──────────────────────────────────────────────────────────────────
+import { MIN_TOUCH } from "@/src/hooks/use-responsive";
 
 const KEYS = [
   ["1", "2", "3"],
@@ -35,21 +38,32 @@ const KEYS = [
   ["", "0", "⌫"],
 ];
 
-function Numpad({ onKey }: { onKey: (k: string) => void }) {
+function useKeySize() {
+  const { width } = useWindowDimensions();
+  // Fit 3 keys + gaps on narrow phones (320–360)
+  if (width < 360) return 64;
+  if (width < 400) return 68;
+  return 72;
+}
+
+function Numpad({ onKey, disabled }: { onKey: (k: string) => void; disabled?: boolean }) {
+  const keySize = useKeySize();
   return (
     <View style={styles.numpad}>
       {KEYS.map((row, ri) => (
         <View key={ri} style={styles.numpadRow}>
           {row.map((key, ki) => {
             if (key === "") {
-              return <View key={ki} style={styles.keyPlaceholder} />;
+              return <View key={ki} style={{ width: keySize, height: keySize }} />;
             }
             return (
               <TouchableOpacity
                 key={ki}
-                style={styles.key}
+                style={[styles.key, { width: keySize, height: keySize, borderRadius: keySize / 2 }, disabled && { opacity: 0.45 }]}
                 onPress={() => onKey(key)}
                 activeOpacity={0.7}
+                disabled={disabled}
+                hitSlop={4}
               >
                 <Text style={styles.keyText}>{key}</Text>
               </TouchableOpacity>
@@ -61,27 +75,15 @@ function Numpad({ onKey }: { onKey: (k: string) => void }) {
   );
 }
 
-// ─── PIN Dots ─────────────────────────────────────────────────────────────────
-
 function PinDots({ count, shake }: { count: number; shake: Animated.Value }) {
   return (
-    <Animated.View
-      style={[styles.dotsRow, { transform: [{ translateX: shake }] }]}
-    >
+    <Animated.View style={[styles.dotsRow, { transform: [{ translateX: shake }] }]}>
       {[0, 1, 2, 3].map((i) => (
-        <View
-          key={i}
-          style={[
-            styles.dot,
-            i < count ? styles.dotFilled : styles.dotEmpty,
-          ]}
-        />
+        <View key={i} style={[styles.dot, i < count ? styles.dotFilled : styles.dotEmpty]} />
       ))}
     </Animated.View>
   );
 }
-
-// ─── Shake animation helper ───────────────────────────────────────────────────
 
 function usePinShake() {
   const shake = useRef(new Animated.Value(0)).current;
@@ -97,7 +99,33 @@ function usePinShake() {
   return { shake, triggerShake };
 }
 
-// ─── PinSetupModal ────────────────────────────────────────────────────────────
+function SheetShell({
+  children,
+  onRequestClose,
+}: {
+  children: React.ReactNode;
+  onRequestClose: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onRequestClose}>
+      <View style={styles.backdrop}>
+        <View style={[styles.sheet, { maxHeight: height * 0.92, paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
+          <View style={styles.handle} />
+          <ScrollView
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.sheetScroll}
+            showsVerticalScrollIndicator={false}
+          >
+            {children}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
 interface PinSetupModalProps {
   visible: boolean;
@@ -121,6 +149,10 @@ export function PinSetupModal({ visible, userId, onSuccess, onCancel }: PinSetup
     setError(null);
   };
 
+  useEffect(() => {
+    if (!visible) reset();
+  }, [visible]);
+
   const handleKey = async (key: string) => {
     if (loading) return;
     if (key === "⌫") {
@@ -137,61 +169,75 @@ export function PinSetupModal({ visible, userId, onSuccess, onCancel }: PinSetup
         setPin("");
         setStep("confirm");
         setError(null);
+      } else if (next !== firstPin) {
+        triggerShake();
+        setError("Les PINs ne correspondent pas");
+        setPin("");
       } else {
-        // Confirm step
-        if (next !== firstPin) {
-          triggerShake();
-          setError("Les PINs ne correspondent pas");
+        if (!userId?.trim()) {
+          setError("Session invalide — reconnectez-vous.");
           setPin("");
-        } else {
-          setLoading(true);
-          try {
-            const h = await hashPin(next, userId);
-            await storePinHash(h);
-            await api.post("/wallet/pin/set", { pin_hash: h });
-            reset();
-            onSuccess();
-          } catch {
-            setError("Erreur lors de la sauvegarde du PIN.");
-          } finally {
-            setLoading(false);
-          }
+          return;
+        }
+        setLoading(true);
+        setError(null);
+        try {
+          const h = await hashPin(next, userId);
+          // Server first so status UI reflects truth; then cache on device
+          await api.post("/wallet/pin/set", { pin_hash: h });
+          await storePinHash(h);
+          reset();
+          onSuccess();
+        } catch (e) {
+          const msg = e instanceof ApiError
+            ? e.detail
+            : e instanceof Error
+              ? e.message
+              : "Erreur lors de la sauvegarde du PIN.";
+          setError(msg);
+          setPin("");
+        } finally {
+          setLoading(false);
         }
       }
     }
   };
 
-  const handleCancel = () => {
-    reset();
-    onCancel();
-  };
+  if (!visible) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleCancel}>
-      <View style={styles.backdrop}>
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
+    <SheetShell onRequestClose={() => { reset(); onCancel(); }}>
+      <Text style={styles.title}>
+        {step === "enter" ? "Choisissez votre PIN à 4 chiffres" : "Confirmez votre PIN"}
+      </Text>
+      <Text style={styles.subtitle}>
+        Requis pour les transactions ≥ 5 000 XAF. Mémorisez-le — il sécurise votre wallet.
+      </Text>
 
-          <Text style={styles.title}>
-            {step === "enter" ? "Choisissez votre PIN à 4 chiffres" : "Confirmez votre PIN"}
-          </Text>
-
-          {error ? <Text style={styles.errorText}>{error}</Text> : <View style={{ height: 20 }} />}
-
-          <PinDots count={pin.length} shake={shake} />
-
-          <Numpad onKey={handleKey} />
-
-          <TouchableOpacity onPress={handleCancel} style={styles.cancelBtn}>
-            <Text style={styles.cancelText}>Annuler</Text>
-          </TouchableOpacity>
+      {loading ? (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator color={Colors.primary} size="large" />
+          <Text style={styles.loadingText}>Enregistrement sécurisé…</Text>
         </View>
-      </View>
-    </Modal>
+      ) : (
+        <>
+          {error ? <Text style={styles.errorText}>{error}</Text> : <View style={{ height: 20 }} />}
+          <PinDots count={pin.length} shake={shake} />
+          <Numpad onKey={handleKey} disabled={loading} />
+        </>
+      )}
+
+      <TouchableOpacity
+        onPress={() => { reset(); onCancel(); }}
+        style={styles.cancelBtn}
+        disabled={loading}
+        hitSlop={8}
+      >
+        <Text style={styles.cancelText}>Annuler</Text>
+      </TouchableOpacity>
+    </SheetShell>
   );
 }
-
-// ─── PinConfirmModal ──────────────────────────────────────────────────────────
 
 interface PinConfirmModalProps {
   visible: boolean;
@@ -213,10 +259,19 @@ export function PinConfirmModal({ visible, userId, amount, onSuccess, onCancel }
     setError(null);
   };
 
+  useEffect(() => {
+    if (!visible) reset();
+  }, [visible]);
+
   const tryBiometric = async () => {
+    if (!userId?.trim()) {
+      setError("Session invalide — reconnectez-vous.");
+      return;
+    }
     const stored = await getStoredPinHash();
+    // Biometrics only if PIN already cached on device
     if (!stored) {
-      setError("Aucun PIN configuré. Définissez-en un dans Paramètres → Sécurité.");
+      setError("Entrez votre PIN une fois pour activer la biométrie sur cet appareil.");
       return;
     }
     const ok = await authenticateBiometric(
@@ -229,8 +284,6 @@ export function PinConfirmModal({ visible, userId, amount, onSuccess, onCancel }
     }
   };
 
-  // When the user enabled biometrics, offer Face ID / fingerprint as a
-  // faster alternative to the PIN (auto-prompted once on open).
   useEffect(() => {
     if (!visible) return;
     let active = true;
@@ -256,35 +309,41 @@ export function PinConfirmModal({ visible, userId, amount, onSuccess, onCancel }
     setPin(next);
 
     if (next.length === 4) {
+      if (!userId?.trim()) {
+        setError("Session invalide — reconnectez-vous.");
+        setPin("");
+        return;
+      }
       setLoading(true);
       try {
         const lockStatus = await checkPinLocked();
         if (lockStatus.locked) {
           setError(`PIN bloqué — réessayez dans ${lockStatus.minutesLeft} minute${lockStatus.minutesLeft > 1 ? "s" : ""}`);
           setPin("");
-          setLoading(false);
-          return;
-        }
-
-        const stored = await getStoredPinHash();
-        if (!stored) {
-          setError("Aucun PIN configuré. Définissez-en un dans Paramètres → Sécurité.");
-          setPin("");
-          setLoading(false);
           return;
         }
 
         const h = await hashPin(next, userId);
+        const stored = await getStoredPinHash();
 
-        // PINs created before the SHA-256 upgrade were stored with the
-        // legacy hash — accept once, then transparently re-store as v2.
-        let valid = h === stored;
+        let valid = !!stored && h === stored;
+
+        // Legacy local hash migrate
         if (!valid && stored && stored === hashPinLegacy(next, userId)) {
           valid = true;
           await storePinHash(h);
-          api.post("/wallet/pin/set", { pin_hash: h }).catch((e) => {
-            console.warn("[pin-modal] PIN v2 sync failed — will retry next login", e);
-          });
+          api.post("/wallet/pin/set", { pin_hash: h }).catch(() => {});
+        }
+
+        // Server is source of truth (new device / cleared storage)
+        if (!valid) {
+          try {
+            const res = await api.post<{ valid: boolean }>("/wallet/pin/verify", { pin_hash: h });
+            valid = !!res?.valid;
+            if (valid) await storePinHash(h);
+          } catch {
+            // keep valid=false
+          }
         }
 
         if (valid) {
@@ -298,7 +357,13 @@ export function PinConfirmModal({ visible, userId, amount, onSuccess, onCancel }
           if (remaining <= 0) {
             setError("PIN bloqué — réessayez dans 30 minutes");
           } else {
-            setError(`PIN incorrect (${remaining} essai${remaining > 1 ? "s" : ""} restant${remaining > 1 ? "s" : ""})`);
+            // Distinguish "no pin on server" vs wrong pin
+            const status = await api.get<{ has_pin: boolean }>("/wallet/pin/status").catch(() => null);
+            if (status && !status.has_pin) {
+              setError("Aucun PIN configuré. Allez dans Wallet → Sécurité.");
+            } else {
+              setError(`PIN incorrect (${remaining} essai${remaining > 1 ? "s" : ""} restant${remaining > 1 ? "s" : ""})`);
+            }
           }
           setPin("");
         }
@@ -311,46 +376,45 @@ export function PinConfirmModal({ visible, userId, amount, onSuccess, onCancel }
     }
   };
 
-  const handleCancel = () => {
-    reset();
-    onCancel();
-  };
+  if (!visible) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleCancel}>
-      <View style={styles.backdrop}>
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
+    <SheetShell onRequestClose={() => { reset(); onCancel(); }}>
+      <Text style={styles.title}>Entrez votre PIN</Text>
+      {amount !== undefined ? (
+        <Text style={styles.amountLabel}>Confirmer {formatXAF(amount)}</Text>
+      ) : null}
 
-          <Text style={styles.title}>Entrez votre PIN</Text>
-          {amount !== undefined && (
-            <Text style={styles.amountLabel}>
-              Confirmer {formatXAF(amount)}
-            </Text>
-          )}
-
-          {error ? <Text style={styles.errorText}>{error}</Text> : <View style={{ height: 20 }} />}
-
-          <PinDots count={pin.length} shake={shake} />
-
-          <Numpad onKey={handleKey} />
-
-          {bioLabel ? (
-            <TouchableOpacity onPress={tryBiometric} style={styles.bioBtn}>
-              <Text style={styles.bioBtnText}>Utiliser {bioLabel}</Text>
-            </TouchableOpacity>
-          ) : null}
-
-          <TouchableOpacity onPress={handleCancel} style={styles.cancelBtn}>
-            <Text style={styles.cancelText}>Annuler</Text>
-          </TouchableOpacity>
+      {loading ? (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator color={Colors.primary} size="large" />
+          <Text style={styles.loadingText}>Vérification…</Text>
         </View>
-      </View>
-    </Modal>
+      ) : (
+        <>
+          {error ? <Text style={styles.errorText}>{error}</Text> : <View style={{ height: 20 }} />}
+          <PinDots count={pin.length} shake={shake} />
+          <Numpad onKey={handleKey} disabled={loading} />
+        </>
+      )}
+
+      {bioLabel ? (
+        <TouchableOpacity onPress={tryBiometric} style={styles.bioBtn} disabled={loading}>
+          <Text style={styles.bioBtnText}>Utiliser {bioLabel}</Text>
+        </TouchableOpacity>
+      ) : null}
+
+      <TouchableOpacity
+        onPress={() => { reset(); onCancel(); }}
+        style={styles.cancelBtn}
+        disabled={loading}
+        hitSlop={8}
+      >
+        <Text style={styles.cancelText}>Annuler</Text>
+      </TouchableOpacity>
+    </SheetShell>
   );
 }
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   backdrop: {
@@ -362,23 +426,39 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bg,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    padding: Spacing.xxl,
-    paddingBottom: 40,
+    paddingTop: Spacing.lg,
+    paddingHorizontal: Spacing.xl,
+    width: "100%",
+    alignSelf: "center",
+    maxWidth: 480,
+  },
+  sheetScroll: {
     alignItems: "center",
+    paddingBottom: 8,
   },
   handle: {
     width: 40,
     height: 4,
     borderRadius: 2,
     backgroundColor: Colors.border,
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
+    alignSelf: "center",
   },
   title: {
     fontSize: 18,
     fontWeight: "800",
     color: Colors.text,
     textAlign: "center",
+    marginBottom: Spacing.xs,
+    paddingHorizontal: 8,
+  },
+  subtitle: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    textAlign: "center",
+    lineHeight: 17,
     marginBottom: Spacing.sm,
+    paddingHorizontal: 12,
   },
   amountLabel: {
     fontSize: 15,
@@ -391,44 +471,48 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.danger,
     textAlign: "center",
-    height: 20,
+    minHeight: 20,
     marginBottom: Spacing.sm,
+    paddingHorizontal: 8,
+  },
+  loadingBox: {
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 36,
+  },
+  loadingText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: Colors.textMuted,
   },
   dotsRow: {
     flexDirection: "row",
     gap: 16,
-    marginVertical: Spacing.xl,
+    marginVertical: Spacing.lg,
   },
-  dot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-  },
-  dotFilled: {
-    backgroundColor: Colors.primary,
-  },
+  dot: { width: 14, height: 14, borderRadius: 7 },
+  dotFilled: { backgroundColor: Colors.primary },
   dotEmpty: {
     backgroundColor: Colors.surfaceAlt,
     borderWidth: 1.5,
     borderColor: Colors.border,
   },
   numpad: {
-    gap: 12,
-    marginTop: Spacing.lg,
+    gap: 10,
+    marginTop: Spacing.md,
     width: "100%",
     alignItems: "center",
   },
   numpadRow: {
     flexDirection: "row",
-    gap: 20,
+    gap: 16,
   },
   key: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
     backgroundColor: Colors.surface,
     alignItems: "center",
     justifyContent: "center",
+    minWidth: MIN_TOUCH,
+    minHeight: MIN_TOUCH,
     ...Platform.select({
       ios: {
         shadowColor: "#000",
@@ -445,16 +529,14 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: Colors.text,
   },
-  keyPlaceholder: {
-    width: 72,
-    height: 72,
-  },
   bioBtn: {
     marginTop: Spacing.lg,
+    minHeight: MIN_TOUCH,
     paddingVertical: 12,
     paddingHorizontal: 28,
     borderRadius: Radius.lg,
     backgroundColor: Colors.primaryLight,
+    justifyContent: "center",
   },
   bioBtnText: {
     fontSize: 15,
@@ -462,13 +544,16 @@ const styles = StyleSheet.create({
     color: Colors.primaryDark,
   },
   cancelBtn: {
-    marginTop: Spacing.xl,
-    paddingVertical: 10,
+    marginTop: Spacing.lg,
+    minHeight: MIN_TOUCH,
+    paddingVertical: 12,
     paddingHorizontal: 24,
+    justifyContent: "center",
   },
   cancelText: {
     fontSize: 15,
     fontWeight: "600",
     color: Colors.textMuted,
+    textAlign: "center",
   },
 });

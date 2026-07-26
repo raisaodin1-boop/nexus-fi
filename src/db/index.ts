@@ -1,5 +1,6 @@
 export { invalidateCache, invalidateUserStatsCaches } from "./helpers";
 export * from "./profiles";
+export * from "./profile-photo";
 export * from "./tontines";
 export * from "./groups";
 export * from "./savings";

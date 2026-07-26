@@ -6,6 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { ChevronLeft, CheckCircle2, Info } from "lucide-react-native";
 
 import { api, formatXAF } from "@/src/api";
+import { useAuth } from "@/src/auth-context";
 import { useDisplayCurrency } from "@/src/hooks/use-display-currency";
 import { Button, Field } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
@@ -17,6 +18,7 @@ const CURRENCIES: Currency[] = ["XAF", "EUR", "USD"];
 
 export default function TransferScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const { to, name, amount: preAmount } = useLocalSearchParams<{ to?: string; name?: string; amount?: string }>();
   const { currency, setCurrency } = useDisplayCurrency();
   const [recipient, setRecipient] = useState("");
@@ -29,12 +31,11 @@ export default function TransferScreen() {
   const [showOtp, setShowOtp]     = useState(false);
   const [pendingOtp, setPendingOtp] = useState(false);
   const [amountXaf, setAmountXaf] = useState(0);
-  const [userId, setUserId]       = useState("");
+  const userId = user?.id ?? "";
   const [recipientUserId, setRecipientUserId] = useState<string | undefined>();
   const [rates, setRates]         = useState<Rates | null>(null);
 
   useEffect(() => {
-    api.get<{ id: string }>("/users/me").then(me => setUserId(me.id)).catch(() => {});
     getRates().then(setRates).catch(() => {});
   }, []);
 
@@ -88,6 +89,10 @@ export default function TransferScreen() {
       }
       setAmountXaf(amtXaf);
       if (check.requires_pin) {
+        if (!userId) {
+          setError("Session invalide — reconnectez-vous pour confirmer avec le PIN.");
+          return;
+        }
         setPendingOtp(check.requires_otp);
         setShowPin(true);
       } else if (check.requires_otp) {

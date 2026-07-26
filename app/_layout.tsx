@@ -34,6 +34,7 @@ import { runDueAutoSavings } from "@/src/db/auto-savings";
 import { FloatingBackButton } from "@/src/screen-back";
 import { WebShellChrome } from "@/src/web-shell";
 import { HodixBootAnimation, HodixLogo } from "@/src/logo";
+import { isProfileActionReady, isProfileCompletionAllowedPath } from "@/src/profile-completeness";
 
 if (Platform.OS !== "web") {
   SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -105,6 +106,27 @@ function FirstLaunchGuard() {
     if (publicPath) return;
     router.replace("/welcome");
   }, [isFirstLaunch, pathname, router]);
+
+  return null;
+}
+
+/**
+ * Soft signup (Google / empty fields OK) → hard gate before any other action:
+ * phone, profession, city, and avatar (real or generic).
+ */
+function ProfileCompletenessGate() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (loading || !user) return;
+    // Session stub omits city/occupation; buildUser always sets them (null or string).
+    if (!("city" in user) || !("occupation" in user)) return;
+    if (isProfileCompletionAllowedPath(pathname)) return;
+    if (isProfileActionReady(user)) return;
+    router.replace("/complete-profile");
+  }, [loading, user, pathname, router]);
 
   return null;
 }
@@ -189,6 +211,7 @@ function RootLayoutInner() {
       <DeepLinkHandler />
       <PushSetup />
       <FirstLaunchGuard />
+      <ProfileCompletenessGate />
       <StatusBar style="light" />
       <OfflineBanner />
       <WebShellChrome />

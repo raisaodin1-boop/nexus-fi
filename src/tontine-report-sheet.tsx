@@ -3,19 +3,21 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Flag, Paperclip, X } from "lucide-react-native";
 
 import { api, ApiError } from "@/src/api";
 import { Button } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
+import { MIN_TOUCH } from "@/src/hooks/use-responsive";
 
 const REASONS: { code: string; label: string }[] = [
   { code: "fraude", label: "Fraude / escroquerie" },
@@ -35,6 +37,8 @@ type Props = {
 };
 
 export function TontineReportSheet({ tontineId, tontineName, visible, onClose, onSubmitted }: Props) {
+  const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
   const [reason, setReason] = useState("fraude");
   const [detail, setDetail] = useState("");
   const [proofs, setProofs] = useState<{ path: string; label: string }[]>([]);
@@ -119,7 +123,7 @@ export function TontineReportSheet({ tontineId, tontineName, visible, onClose, o
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
       <View style={styles.backdrop}>
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { maxHeight: height * 0.92, paddingBottom: Math.max(insets.bottom, 12) }]}>
           <View style={styles.sheetHeader}>
             <View style={{ flex: 1 }}>
               <Text style={styles.title}>Signaler la tontine</Text>
@@ -251,11 +255,12 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   sheet: {
-    maxHeight: "92%",
+    width: "100%",
+    maxWidth: 480,
+    alignSelf: "center",
     backgroundColor: Colors.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingBottom: Platform.OS === "ios" ? 28 : 16,
   },
   sheetHeader: {
     flexDirection: "row",
@@ -269,9 +274,9 @@ const styles = StyleSheet.create({
   title: { fontSize: 17, fontWeight: "900", color: Colors.text },
   sub: { fontSize: 12, color: Colors.textMuted, marginTop: 2, fontWeight: "600" },
   closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: MIN_TOUCH,
+    height: MIN_TOUCH,
+    borderRadius: MIN_TOUCH / 2,
     backgroundColor: Colors.surfaceAlt,
     alignItems: "center",
     justifyContent: "center",
@@ -281,7 +286,9 @@ const styles = StyleSheet.create({
   reasonWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   reasonChip: {
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 10,
+    minHeight: MIN_TOUCH,
+    justifyContent: "center",
     borderRadius: Radius.full,
     backgroundColor: Colors.surfaceAlt,
     borderWidth: 1,
@@ -305,6 +312,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     padding: 12,
+    minHeight: MIN_TOUCH,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: Colors.primary,

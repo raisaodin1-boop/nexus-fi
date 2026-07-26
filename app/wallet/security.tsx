@@ -24,6 +24,7 @@ import { api } from "@/src/api";
 import { Card, Button } from "@/src/ui";
 import { Colors, Spacing } from "@/src/theme";
 import { detectSuspiciousEnvironment } from "@/src/security";
+import { MIN_TOUCH, useResponsive } from "@/src/hooks/use-responsive";
 
 // ─── Event label map ──────────────────────────────────────────────────────────
 
@@ -59,6 +60,7 @@ interface SecurityEvent {
 
 export default function WalletSecurityScreen() {
   const router = useRouter();
+  const { horizontalPad, isCompact } = useResponsive();
 
   const [freezeStatus, setFreezeStatus] = useState<FreezeStatus | null>(null);
   const [pinStatus, setPinStatus] = useState<PinStatus | null>(null);
@@ -102,12 +104,12 @@ export default function WalletSecurityScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+      <View style={[styles.header, { paddingHorizontal: horizontalPad }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Sécurité Wallet</Text>
-        <View style={{ width: 40 }} />
+        <Text style={[styles.headerTitle, isCompact && { fontSize: 15 }]} numberOfLines={1}>Sécurité Wallet</Text>
+        <View style={{ width: MIN_TOUCH }} />
       </View>
 
       {loading ? (
@@ -117,8 +119,9 @@ export default function WalletSecurityScreen() {
       ) : (
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingHorizontal: horizontalPad }]}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           {/* B. Freeze status banner */}
           {freezeStatus?.frozen ? (
@@ -291,12 +294,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  backBtn: { width: 40, alignItems: "flex-start" },
+  backBtn: {
+    width: MIN_TOUCH,
+    height: MIN_TOUCH,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   backText: { fontSize: 22, color: Colors.secondary },
   headerTitle: { flex: 1, textAlign: "center", fontSize: 16, fontWeight: "700", color: Colors.text },
   loaderWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
   scroll: { flex: 1 },
-  content: { padding: Spacing.xl, gap: Spacing.lg, paddingBottom: 60 },
+  content: { paddingVertical: Spacing.xl, gap: Spacing.lg, paddingBottom: 80 },
 
   // Banner
   bannerFrozen: {
@@ -314,7 +322,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#EF4444",
     borderRadius: 8,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    minHeight: MIN_TOUCH,
+    justifyContent: "center",
   },
   unfreezeBtnText: { color: "#fff", fontWeight: "700", fontSize: 12 },
   bannerActive: {

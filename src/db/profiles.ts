@@ -20,9 +20,18 @@ export async function getMe() {
   };
 }
 
+const ME_UPDATABLE = [
+  "full_name", "phone", "gender", "country", "city", "neighborhood",
+  "occupation", "date_of_birth", "birth_place", "address",
+  "push_consent", "marketing_consent",
+] as const;
+
 export async function updateMe(body: Record<string, any>) {
   const me = await uid();
-  const payload = { ...body, updated_at: new Date().toISOString() };
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  for (const key of ME_UPDATABLE) {
+    if (key in (body ?? {})) payload[key] = body[key];
+  }
 
   // Postgres `date` columns reject "" — coerce empty optional dates to null.
   if ("date_of_birth" in payload) {
@@ -37,7 +46,7 @@ export async function updateMe(body: Record<string, any>) {
     .select()
     .maybeSingle();
   throwSb(error);
-  return data ?? { id: me, ...body };
+  return data ?? { id: me, ...payload };
 }
 
 export async function requestDataExport() {

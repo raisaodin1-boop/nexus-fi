@@ -23,6 +23,8 @@ export interface User {
   city?: string | null;
   occupation?: string | null;
   photo_base64?: string | null;
+  photo_url?: string | null;
+  avatar_kind?: "real" | "generic" | string | null;
   push_consent?: boolean | null;
   created_at: string;
 }
@@ -75,6 +77,8 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     // ── Users
     if (method === "GET"   && s[0] === "users" && s[1] === "me" && !s[2])              return (await db.getMe()) as T;
     if (method === "PATCH" && s[0] === "users" && s[1] === "me")                        return (await db.updateMe(body)) as T;
+    if (method === "POST" && s[0] === "users" && s[1] === "me" && s[2] === "photo")     return (await db.uploadProfilePhoto(body ?? {})) as T;
+    if (method === "POST" && s[0] === "users" && s[1] === "me" && s[2] === "avatar-generic") return (await db.setGenericAvatar(body?.avatar_id)) as T;
     if (method === "POST" && s[0] === "users" && s[1] === "me" && s[2] === "data-export") return (await db.requestDataExport()) as T;
     if (method === "POST" && s[0] === "users" && s[1] === "me" && s[2] === "delete-request") return (await db.requestAccountDeletion()) as T;
     if (method === "GET"   && s[0] === "users" && s[1] === "me" && s[2] === "kyc")      return (await db.getKycStatus()) as T;

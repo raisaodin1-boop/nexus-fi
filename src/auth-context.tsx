@@ -5,6 +5,7 @@ import { supabase } from "@/src/supabase";
 import { sendWelcomeMessage, applyReferralBonus } from "@/src/db";
 import { normalizeEmail } from "@/src/db/helpers";
 import { notifyUser } from "@/src/db/notifications";
+import { maybeRemindIncompleteProfile } from "@/src/db/profile-photo";
 import { getOAuthRedirectUrl } from "@/src/oauth-redirect";
 
 // Complete auth session on mobile (no-op on web)
@@ -25,6 +26,8 @@ export interface User {
   city?: string | null;
   occupation?: string | null;
   photo_base64?: string | null;
+  photo_url?: string | null;
+  avatar_kind?: string | null;
   date_of_birth?: string | null;
   birth_place?: string | null;
   neighborhood?: string | null;
@@ -62,7 +65,7 @@ async function fetchProfile(userId: string): Promise<Partial<User>> {
     const timeout = new Promise<null>((res) => setTimeout(() => res(null), 2500));
     const query = supabase
       .from("profiles")
-      .select("full_name,role,phone,gender,country,city,occupation,date_of_birth,birth_place,neighborhood,address,kyc_status,trust_score,email,push_consent,marketing_consent,diaspora_status,diaspora_country,diaspora_currency")
+      .select("full_name,role,phone,gender,country,city,occupation,photo_url,avatar_kind,date_of_birth,birth_place,neighborhood,address,kyc_status,trust_score,email,push_consent,marketing_consent,diaspora_status,diaspora_country,diaspora_currency")
       .eq("id", userId)
       .single();
     const result = await Promise.race([query, timeout]);
@@ -120,6 +123,8 @@ async function buildUser(sbUser: any): Promise<User> {
     country: profile.country ?? null,
     city: profile.city ?? null,
     occupation: profile.occupation ?? null,
+    photo_url: (profile as any).photo_url ?? null,
+    avatar_kind: (profile as any).avatar_kind ?? null,
     date_of_birth: profile.date_of_birth ?? null,
     birth_place: profile.birth_place ?? null,
     neighborhood: profile.neighborhood ?? null,
@@ -183,6 +188,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 }
               }
             } catch (err) { logAuthBestEffort("welcome message", err); }
+            try {
+              await maybeRemindIncompleteProfile(session.user!.id);
+            } catch (err) { logAuthBestEffort("profile reminder", err); }
           }, 2000);
         }
       } else {

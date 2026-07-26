@@ -2,7 +2,6 @@
 import { useEffect, useState } from "react";
 import {
   Alert,
-  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -16,7 +15,7 @@ import {
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { LogOut, Save, Shield, ShieldCheck, Bell, ChevronRight, Edit3, Mail, MapPin, Phone, Briefcase, Sparkles, CreditCard, Moon, Fingerprint, Globe, Gift, Settings2 } from "lucide-react-native";
+import { LogOut, Save, Shield, ShieldCheck, Bell, ChevronRight, Edit3, Mail, MapPin, Phone, Briefcase, Sparkles, CreditCard, Moon, Fingerprint, Globe, Gift, Settings2, Camera } from "lucide-react-native";
 
 import { useAuth } from "@/src/auth-context";
 import { isDiasporaMember } from "@/src/diaspora-enrollment-config";
@@ -34,6 +33,9 @@ import {
 import { getBiometricInfo, authenticateBiometricDetailed, isBiometricEnabled, setBiometricEnabled } from "@/src/biometrics";
 import { VerifiedName } from "@/src/verified-name";
 import { isKycVerified } from "@/src/profile-display";
+import { ProfileAvatar } from "@/src/profile-avatar";
+import { GENERIC_AVATARS } from "@/src/generic-avatars";
+import { AI_PHOTO_REJECT_MESSAGE, REAL_PHOTO_CREDIBILITY_TIP } from "@/src/profile-photo-guard";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -174,6 +176,67 @@ export default function ProfileScreen() {
     }
   };
 
+  const changePhoto = () => {
+    Alert.alert(
+      "Photo de profil",
+      REAL_PHOTO_CREDIBILITY_TIP,
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Photo réelle",
+          onPress: async () => {
+            try {
+              const { launchImageLibraryAsync, MediaTypeOptions } = await import("expo-image-picker");
+              const res = await launchImageLibraryAsync({
+                mediaTypes: MediaTypeOptions.Images,
+                base64: true,
+                quality: 0.75,
+                allowsEditing: true,
+                aspect: [1, 1],
+                exif: true,
+              });
+              if (res.canceled || !res.assets[0]?.base64) return;
+              const asset = res.assets[0];
+              await api.post("/users/me/photo", {
+                base64: asset.base64,
+                mime: asset.mimeType ?? "image/jpeg",
+                fileName: asset.fileName ?? null,
+                exif: asset.exif ?? null,
+              });
+              await refresh();
+              Alert.alert("Photo enregistrée", "Votre photo réelle renforce votre crédibilité et votre Trust Score.");
+            } catch (e) {
+              Alert.alert("Photo refusée", e instanceof ApiError ? e.detail : AI_PHOTO_REJECT_MESSAGE);
+            }
+          },
+        },
+        {
+          text: "Avatar générique",
+          onPress: () => {
+            Alert.alert(
+              "Avatar générique",
+              "Choisissez une couleur. Une photo réelle donne plus de score et de crédibilité.",
+              [
+                ...GENERIC_AVATARS.map((a) => ({
+                  text: a.label,
+                  onPress: async () => {
+                    try {
+                      await api.post("/users/me/avatar-generic", { avatar_id: a.id });
+                      await refresh();
+                    } catch (e) {
+                      Alert.alert("Erreur", e instanceof ApiError ? e.detail : "Impossible d'enregistrer l'avatar.");
+                    }
+                  },
+                })),
+                { text: "Annuler", style: "cancel" as const },
+              ],
+            );
+          },
+        },
+      ],
+    );
+  };
+
   const confirmLogout = () => {
     const doLogout = async () => {
       try { await logout(); } catch {}
@@ -271,13 +334,27 @@ export default function ProfileScreen() {
         <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
           {/* Header banner */}
           <LinearGradient colors={[Colors.primary, Colors.gradMid]} style={styles.banner}>
-            <View style={styles.avatar}>
-              {user?.photo_base64 ? (
-                <Image source={{ uri: `data:image/png;base64,${user.photo_base64}` }} style={styles.avatarImg} />
-              ) : (
-                <Text style={styles.avatarLetter}>{user?.full_name?.[0]?.toUpperCase() ?? "?"}</Text>
-              )}
-            </View>
+            <TouchableOpacity
+              onPress={changePhoto}
+              activeOpacity={0.85}
+              testID="profile-change-photo"
+              style={{ marginBottom: 4 }}
+            >
+              <View>
+                <ProfileAvatar
+                  photoUrl={user?.photo_url}
+                  avatarKind={user?.avatar_kind}
+                  name={user?.full_name}
+                  size={72}
+                />
+                <View style={styles.cameraBadge}>
+                  <Camera size={12} color="#fff" />
+                </View>
+              </View>
+            </TouchableOpacity>
+            {user?.avatar_kind !== "real" ? (
+              <Text style={styles.photoTip}>Photo réelle = + Trust Score · les photos IA sont refusées</Text>
+            ) : null}
             <VerifiedName
               name={[form.title, form.first_name, form.last_name].filter(Boolean).join(" ") || user?.full_name || ""}
               kycVerified={isKycVerified(user?.kyc_status)}
@@ -527,7 +604,7 @@ export default function ProfileScreen() {
               {user?.role === "super_admin" ? (
                 <SettingRow icon={<Shield color={Colors.accent} size={18} />} label="Console admin" onPress={() => router.push("/admin")} testID="profile-go-admin" borderColor={borderColor} txtColor={txt} />
               ) : (
-                <SettingRow icon={<Shield color={Colors.accent} size={18} />} label="Sécurité du compte" onPress={() => {}} disabled borderColor={borderColor} txtColor={txt} />
+                <SettingRow icon={<Shield color={Colors.accent} size={18} />} label="Sécurité du compte" onPress={() => router.push("/wallet/security" as any)} testID="profile-go-security" borderColor={borderColor} txtColor={txt} />
               )}
 
               {/* Dark mode toggle */}
@@ -629,14 +706,16 @@ const styles = StyleSheet.create({
   banner: {
     paddingTop: 30, paddingBottom: 48, alignItems: "center",
   },
-  avatar: {
-    width: 84, height: 84, borderRadius: 42, backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center", justifyContent: "center", marginBottom: 12,
-    borderWidth: 3, borderColor: "rgba(255,255,255,0.25)",
+  cameraBadge: {
+    position: "absolute", right: -2, bottom: -2, width: 26, height: 26, borderRadius: 13,
+    backgroundColor: Colors.secondary, alignItems: "center", justifyContent: "center",
+    borderWidth: 2, borderColor: "#fff",
   },
-  avatarImg: { width: "100%", height: "100%", borderRadius: 42 },
-  avatarLetter: { color: "#fff", fontSize: 36, fontWeight: "900" },
-  fullName: { color: "#fff", fontSize: 22, fontWeight: "900", letterSpacing: -0.3 },
+  photoTip: {
+    color: "rgba(255,255,255,0.85)", fontSize: 11, fontWeight: "700",
+    marginTop: 10, marginBottom: 4, textAlign: "center", paddingHorizontal: 16,
+  },
+  fullName: { color: "#fff", fontSize: 22, fontWeight: "900", letterSpacing: -0.3, marginTop: 12 },
   email: { color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 4, fontWeight: "500" },
   rolePill: {
     backgroundColor: "rgba(16,185,129,0.2)", paddingHorizontal: 12, paddingVertical: 6,

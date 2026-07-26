@@ -6,6 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { ChevronLeft, CheckCircle2, Shield } from "lucide-react-native";
 
 import { api } from "@/src/api";
+import { useAuth } from "@/src/auth-context";
 import { useDisplayCurrency } from "@/src/hooks/use-display-currency";
 import { Button, Field } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
@@ -20,6 +21,7 @@ const CURRENCIES: Currency[] = ["XAF", "XOF", "NGN", "GHS", "EUR", "USD"];
 
 export default function WithdrawScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const { currency, setCurrency } = useDisplayCurrency();
   const [wallet, setWallet]       = useState<WalletBalance | null>(null);
   const [amount, setAmount]       = useState("");
@@ -34,7 +36,7 @@ export default function WithdrawScreen() {
   const [showOtp, setShowOtp]     = useState(false);
   const [pendingOtp, setPendingOtp] = useState(false);
   const [amountXaf, setAmountXaf] = useState(0);
-  const [userId, setUserId]       = useState("");
+  const userId = user?.id ?? "";
   const [kycStatus, setKycStatus] = useState<string>("not_submitted");
   const [rates, setRates]         = useState<Rates | null>(null);
 
@@ -45,7 +47,6 @@ export default function WithdrawScreen() {
       api.get<{ id: string; kyc_status?: string }>("/users/me"),
       api.get<{ status?: string }>("/users/me/kyc").catch(() => null),
     ]).then(([me, kyc]) => {
-      setUserId(me.id);
       setKycStatus(me.kyc_status ?? kyc?.status ?? "not_submitted");
     }).catch(() => {});
   }, []);
@@ -103,6 +104,10 @@ export default function WithdrawScreen() {
       }
       setAmountXaf(amtXaf);
       if (check.requires_pin) {
+        if (!userId) {
+          setError("Session invalide — reconnectez-vous pour confirmer avec le PIN.");
+          return;
+        }
         setPendingOtp(check.requires_otp);
         setShowPin(true);
       } else if (check.requires_otp) {

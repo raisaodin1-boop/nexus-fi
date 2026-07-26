@@ -24,18 +24,25 @@ export async function logSecurityEvent(userId: string, eventType: string, metada
 // PIN hashes live in the private wallet_security table (RLS: own row only),
 // NOT in profiles which is readable by all authenticated users.
 export async function setWalletPin(pinHash: string) {
+  const hash = String(pinHash ?? "").trim();
+  if (!hash || hash.length < 16) throw { status: 400, detail: "Hash PIN invalide." };
   const me = await uid();
   const { error } = await getSupabase().from("wallet_security")
-    .upsert({ user_id: me, pin_hash: pinHash, updated_at: new Date().toISOString() });
-  if (error) throw new Error(error.message);
+    .upsert(
+      { user_id: me, pin_hash: hash, updated_at: new Date().toISOString() },
+      { onConflict: "user_id" },
+    );
+  if (error) throw { status: 400, detail: error.message || "Impossible d'enregistrer le PIN." };
   await logSecurityEvent(me, "pin_set", {});
-  return { ok: true };
+  return { ok: true, has_pin: true };
 }
 
 export async function verifyWalletPin(pinHash: string): Promise<{ valid: boolean }> {
+  const hash = String(pinHash ?? "").trim();
+  if (!hash) return { valid: false };
   const me = await uid();
   const { data } = await getSupabase().from("wallet_security").select("pin_hash").eq("user_id", me).maybeSingle();
-  const valid = !!data?.pin_hash && data.pin_hash === pinHash;
+  const valid = !!data?.pin_hash && data.pin_hash === hash;
   await logSecurityEvent(me, valid ? "pin_ok" : "pin_fail", {});
   return { valid };
 }

@@ -62,8 +62,11 @@ export async function getIdentity() {
 
     const createdAt = sbUser.session?.user?.created_at ?? new Date().toISOString();
     const progression = await loadProgressionData(me, createdAt);
-    await syncIdentityScore(me, progression.displayScore);
-    const levelConfig = trustLevelFromScore(progression.displayScore, progression.platinum_eligible);
+    const avatarKind = (profile as any).avatar_kind as string | null | undefined;
+    const photoBonus = avatarKind === "real" ? 15 : 0;
+    const displayScore = progression.displayScore + photoBonus;
+    await syncIdentityScore(me, displayScore);
+    const levelConfig = trustLevelFromScore(displayScore, progression.platinum_eligible);
 
     const participation = Math.min(100, groupCount * 15);
     const longevity = Math.min(100, progression.metrics.accountAgeDays / 10.95);
@@ -87,16 +90,22 @@ export async function getIdentity() {
           "Complétez votre KYC pour renforcer votre crédibilité.",
         ];
 
+    if (avatarKind !== "real") {
+      tips.unshift("Ajoutez une photo réelle (pas d'IA) pour +15 points de crédibilité Trust Score.");
+    }
+
     return {
       user: {
         full_name: (profile as any).full_name ?? sbUser.session?.user?.user_metadata?.full_name ?? "",
         email: sbUser.session?.user?.email ?? "",
         phone: (profile as any).phone ?? null, country: (profile as any).country ?? null,
         city: (profile as any).city ?? null, occupation: (profile as any).occupation ?? null,
+        photo_url: (profile as any).photo_url ?? null,
+        avatar_kind: avatarKind ?? null,
         created_at: createdAt,
       },
       trust_score: {
-        score: progression.displayScore,
+        score: displayScore,
         score_max: progression.scoreMax,
         level: levelConfig.level,
         risk: levelConfig.risk,

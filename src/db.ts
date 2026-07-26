@@ -5,6 +5,7 @@
  */
 
 export * from "./db/profiles";
+export * from "./db/profile-photo";
 export * from "./db/tontines";
 export * from "./db/groups";
 export * from "./db/savings";
