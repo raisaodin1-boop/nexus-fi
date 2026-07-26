@@ -233,6 +233,27 @@ export async function submitDiasporaEnrollment(payload: {
     metadata: { action_url: "/diaspora" },
   });
 
+  // Alert admins so the dossier appears in their review queue immediately.
+  try {
+    const { data: admins } = await getSupabase()
+      .from("profiles")
+      .select("id")
+      .in("role", ["admin", "super_admin"])
+      .limit(20);
+    const name = payload.full_name.trim();
+    const country = payload.country_of_residence.trim();
+    for (const admin of admins ?? []) {
+      if (admin.id === me) continue;
+      await notifyUser({
+        user_id: admin.id,
+        title: "Nouvelle inscription Diaspora",
+        body: `${name} (${country}) — à valider, refuser ou demander des infos.`,
+        type: "alert",
+        metadata: { action_url: "/admin?tab=diaspora" },
+      }).catch(() => {});
+    }
+  } catch { /* best-effort */ }
+
   invalidateCache(`diaspora-access-${me}`);
   return { detail: "Dossier soumis pour validation", status: "pending_review" as const };
 }
@@ -241,9 +262,12 @@ export async function submitDiasporaEnrollment(payload: {
 
 export async function adminListDiasporaEnrollments(status?: string) {
   await requireAdmin();
-  let q = getSupabase().from("diaspora_enrollments").select("*").order("submitted_at", { ascending: false, nullsFirst: false });
-  if (status && status !== "all") q = q.eq("status", status);
-  else q = q.neq("status", "not_submitted");
+  let q = getSupabase()
+    .from("diaspora_enrollments")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (status && status.trim() && status !== "all") q = q.eq("status", status.trim());
+  else q = q.in("status", ["pending_review", "needs_info", "approved", "rejected"]);
   const { data, error } = await q.limit(200);
   throwSb(error);
 
@@ -314,10 +338,12 @@ export async function adminApproveDiasporaEnrollment(enrollmentId: string, note?
 export async function adminRejectDiasporaEnrollment(enrollmentId: string, reason: string, note?: string) {
   await requireAdmin();
   const me = await uid();
+  if (!enrollmentId) throw { status: 400, detail: "Dossier requis." };
+  if (!reason?.trim()) throw { status: 400, detail: "Motif de rejet requis." };
   const { data, error } = await getSupabase().from("diaspora_enrollments")
     .update({
       status: "rejected",
-      rejection_reason: reason,
+      rejection_reason: reason.trim(),
       reviewed_by: me,
       reviewed_at: new Date().toISOString(),
       internal_note: note ?? null,
@@ -335,7 +361,7 @@ export async function adminRejectDiasporaEnrollment(enrollmentId: string, reason
     await notifyUser({
       user_id: data.user_id,
       title: "Inscription Diaspora non validée",
-      body: reason,
+      body: reason.trim(),
       type: "alert",
       metadata: { action_url: "/diaspora/enroll" },
     });
@@ -343,16 +369,53 @@ export async function adminRejectDiasporaEnrollment(enrollmentId: string, reason
   return { detail: "Inscription rejetée" };
 }
 
+export async function adminRequestDiasporaEnrollmentInfo(enrollmentId: string, message: string) {
+  await requireAdmin();
+  const me = await uid();
+  if (!enrollmentId) throw { status: 400, detail: "Dossier requis." };
+  const msg = message?.trim();
+  if (!msg) throw { status: 400, detail: "Précisez les informations demandées." };
+
+  const { data, error } = await getSupabase().from("diaspora_enrollments")
+    .update({
+      status: "needs_info",
+      rejection_reason: msg,
+      reviewed_by: me,
+      reviewed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", enrollmentId)
+    .in("status", ["pending_review", "needs_info"])
+    .select("user_id")
+    .single();
+  throwSb(error);
+
+  if (data?.user_id) {
+    await getSupabase().from("profiles").update({ diaspora_status: "needs_info" }).eq("id", data.user_id);
+    invalidateCache(`diaspora-access-${data.user_id}`);
+    await notifyUser({
+      user_id: data.user_id,
+      title: "Informations complémentaires requises",
+      body: msg,
+      type: "alert",
+      metadata: { action_url: "/diaspora/enroll" },
+    });
+  }
+  return { detail: "Demande d'informations envoyée" };
+}
+
 export async function adminDiasporaEnrollmentStats() {
   await requireAdmin();
   const sb = getSupabase();
-  const [pending, approved, rejected] = await Promise.all([
+  const [pending, needsInfo, approved, rejected] = await Promise.all([
     sb.from("diaspora_enrollments").select("*", { count: "exact", head: true }).eq("status", "pending_review"),
+    sb.from("diaspora_enrollments").select("*", { count: "exact", head: true }).eq("status", "needs_info"),
     sb.from("diaspora_enrollments").select("*", { count: "exact", head: true }).eq("status", "approved"),
     sb.from("diaspora_enrollments").select("*", { count: "exact", head: true }).eq("status", "rejected"),
   ]);
   return {
     pending: pending.count ?? 0,
+    needs_info: needsInfo.count ?? 0,
     approved: approved.count ?? 0,
     rejected: rejected.count ?? 0,
   };

@@ -72,19 +72,36 @@ function AdminDiasporaEnrollments() {
   const [filter, setFilter] = useState("pending_review");
   const [selected, setSelected] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [stats, setStats] = useState({ pending: 0, approved: 0, rejected: 0 });
+  const [stats, setStats] = useState({ pending: 0, needs_info: 0, approved: 0, rejected: 0 });
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
-      const [list, st] = await Promise.all([
-        api.get<any[]>(`/admin/diaspora/enrollments?status=${filter === "all" ? "" : filter}`),
-        api.get<{ pending: number; approved: number; rejected: number }>("/admin/diaspora/enrollments/stats"),
-      ]);
-      setItems(list);
-      setStats(st);
-    } catch { setItems([]); }
-    finally { setLoading(false); }
+      const statusQs = filter === "all" ? "all" : filter;
+      let list: any[] = [];
+      try {
+        list = await api.get<any[]>(`/admin/diaspora/enrollments?status=${encodeURIComponent(statusQs)}`);
+      } catch (e) {
+        setLoadError(e instanceof ApiError ? e.detail : "Impossible de charger les inscriptions.");
+        list = [];
+      }
+      setItems(Array.isArray(list) ? list : []);
+      try {
+        const st = await api.get<{ pending: number; needs_info?: number; approved: number; rejected: number }>(
+          "/admin/diaspora/enrollments/stats",
+        );
+        setStats({
+          pending: st.pending ?? 0,
+          needs_info: st.needs_info ?? 0,
+          approved: st.approved ?? 0,
+          rejected: st.rejected ?? 0,
+        });
+      } catch { /* keep previous stats */ }
+    } finally {
+      setLoading(false);
+    }
   }, [filter]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -92,7 +109,9 @@ function AdminDiasporaEnrollments() {
   const openDetail = async (id: string) => {
     try {
       setSelected(await api.get<any>(`/admin/diaspora/enrollments/${id}`));
-    } catch { show("Erreur chargement dossier", "error"); }
+    } catch (e) {
+      show(e instanceof ApiError ? e.detail : "Erreur chargement dossier", "error");
+    }
   };
 
   const approve = () => {
@@ -128,6 +147,33 @@ function AdminDiasporaEnrollments() {
     ]);
   };
 
+  const requestInfo = () => {
+    if (!selected) return;
+    const messages = [
+      "Merci de renvoyer une photo plus lisible de votre pièce d'identité.",
+      "Preuve de résidence à l'étranger manquante ou insuffisante.",
+      "Selfie non conforme — visage bien visible, fond neutre.",
+      "Coordonnées incomplètes — vérifiez adresse et téléphone.",
+    ];
+    Alert.alert("Demander des informations", "Choisissez le message envoyé au membre", [
+      ...messages.map((message) => ({
+        text: message.length > 42 ? `${message.slice(0, 42)}…` : message,
+        onPress: async () => {
+          try {
+            await api.post("/admin/diaspora/enrollment-needs-info", {
+              enrollment_id: selected.id,
+              message,
+            });
+            show("Demande envoyée au membre", "success");
+            setSelected(null);
+            load();
+          } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
+        },
+      })),
+      { text: "Annuler", style: "cancel" as const },
+    ]);
+  };
+
   if (selected) {
     return (
       <ScrollView contentContainerStyle={styles.detailScroll}>
@@ -139,13 +185,19 @@ function AdminDiasporaEnrollments() {
           <Text style={styles.meta}>{selected.address_line1}, {selected.postal_code} {selected.city}</Text>
           <Text style={styles.meta}>{selected.country_of_residence} · {selected.preferred_currency}</Text>
           <Text style={styles.meta}>Tél. {selected.phone} · Doc: {selected.id_document_type}</Text>
+          <Text style={styles.meta}>Statut : {selected.status}</Text>
+          {selected.rejection_reason ? <Text style={[styles.meta, { color: Colors.danger }]}>Note : {selected.rejection_reason}</Text> : null}
           {selected.id_front_url ? <Image source={{ uri: selected.id_front_url }} style={styles.proofImg} resizeMode="contain" /> : null}
+          {selected.id_back_url ? <Image source={{ uri: selected.id_back_url }} style={styles.proofImg} resizeMode="contain" /> : null}
           {selected.selfie_url ? <Image source={{ uri: selected.selfie_url }} style={styles.proofImg} resizeMode="contain" /> : null}
           {selected.proof_abroad_url ? <Image source={{ uri: selected.proof_abroad_url }} style={styles.proofImg} resizeMode="contain" /> : null}
         </Card>
         <View style={styles.actions}>
           <TouchableOpacity style={[styles.actionBtn, styles.validateBtn]} onPress={approve}>
             <CheckCircle color="#fff" size={18} /><Text style={styles.actionText}>Activer Diaspora</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: Colors.warning }]} onPress={requestInfo}>
+            <MessageSquare color="#fff" size={18} /><Text style={styles.actionText}>Demander infos</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={reject}>
             <XCircle color="#fff" size={18} /><Text style={styles.actionText}>Rejeter</Text>
@@ -159,28 +211,49 @@ function AdminDiasporaEnrollments() {
     <>
       <View style={styles.statsRow}>
         <StatPill label="En attente" value={stats.pending} color={Colors.warning} />
+        <StatPill label="Infos" value={stats.needs_info} color={Colors.secondary} />
         <StatPill label="Approuvées" value={stats.approved} color={Colors.success} />
         <StatPill label="Rejetées" value={stats.rejected} color={Colors.danger} />
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
-        {[{ key: "pending_review", label: "En attente" }, { key: "approved", label: "Approuvées" }, { key: "rejected", label: "Rejetées" }, { key: "all", label: "Toutes" }].map((f) => (
+        {[
+          { key: "pending_review", label: "En attente" },
+          { key: "needs_info", label: "Infos demandées" },
+          { key: "approved", label: "Approuvées" },
+          { key: "rejected", label: "Rejetées" },
+          { key: "all", label: "Toutes" },
+        ].map((f) => (
           <TouchableOpacity key={f.key} style={[styles.chip, filter === f.key && styles.chipActive]} onPress={() => setFilter(f.key)}>
             <Text style={[styles.chipText, filter === f.key && styles.chipTextActive]}>{f.label}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
+      <TouchableOpacity onPress={load} style={{ paddingHorizontal: Spacing.lg, paddingBottom: 4 }}>
+        <Text style={{ color: Colors.primary, fontWeight: "800", fontSize: 12 }}>Actualiser</Text>
+      </TouchableOpacity>
       {loading ? <ActivityIndicator style={{ marginTop: 40 }} color={Colors.primary} /> : (
         <ScrollView contentContainerStyle={{ padding: Spacing.lg, gap: 10, paddingBottom: 80 }}>
+          {loadError ? <Text style={[styles.empty, { color: Colors.danger }]}>{loadError}</Text> : null}
           {items.map((item) => (
             <TouchableOpacity key={item.id} onPress={() => openDetail(item.id)}>
               <Card>
                 <Text style={styles.itemName}>{item.full_name ?? item.user?.full_name}</Text>
                 <Text style={styles.itemTontine}>{item.country_of_residence} · {item.preferred_currency}</Text>
-                <Text style={styles.itemAmount}>{item.status}</Text>
+                <Text style={styles.itemAmount}>{item.status === "pending_review" ? "En attente de validation" : item.status}</Text>
+                {item.submitted_at ? (
+                  <Text style={styles.itemTontine}>
+                    Soumis le {new Date(item.submitted_at).toLocaleString("fr-FR")}
+                  </Text>
+                ) : null}
               </Card>
             </TouchableOpacity>
           ))}
-          {!items.length ? <Text style={styles.empty}>Aucune inscription.</Text> : null}
+          {!items.length && !loadError ? (
+            <Text style={styles.empty}>
+              Aucune inscription {filter === "pending_review" ? "en attente" : ""}.
+              {"\n"}Onglet Inscriptions · filtre « En attente ».
+            </Text>
+          ) : null}
         </ScrollView>
       )}
     </>

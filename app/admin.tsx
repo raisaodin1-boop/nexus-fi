@@ -186,6 +186,15 @@ export default function AdminConsole() {
     }
     return "users";
   });
+  const [diasporaPending, setDiasporaPending] = useState(0);
+
+  useEffect(() => {
+    const t = params.tab;
+    if (t === "compliance" || t === "kyc" || t === "users" || t === "promotions" || t === "tontines" || t === "messages" || t === "broadcast" || t === "diaspora") {
+      setTab(t);
+    }
+  }, [params.tab]);
+
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -265,7 +274,7 @@ export default function AdminConsole() {
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch { return null; }
     };
-    const [statsData, kycData, promosData, tontinesData, verifiedData, reportsData, complianceStats] = await Promise.all([
+    const [statsData, kycData, promosData, tontinesData, verifiedData, reportsData, complianceStats, diasporaStats] = await Promise.all([
       safe(() => api.get<AdminStats>("/admin/stats")),
       safe(() => api.get<KycEntry[]>("/admin/kyc")),
       safe(() => api.get<PromoRequest[]>("/admin/promotion-requests")),
@@ -273,6 +282,7 @@ export default function AdminConsole() {
       safe(() => api.get<VerifiedBadgeRequest[]>("/admin/tontines/verified-requests?status=pending")),
       safe(() => api.get<TontineReportRow[]>("/admin/tontines/reports?status=open")),
       safe(() => api.get<{ open_fraud_alerts: number }>("/admin/compliance/stats")),
+      safe(() => api.get<{ pending: number; needs_info?: number }>("/admin/diaspora/enrollments/stats")),
     ]);
     if (statsData) setAdminStats(statsData);
     if (kycData) setKyc(kycData);
@@ -281,6 +291,7 @@ export default function AdminConsole() {
     if (verifiedData) setVerifiedReqs(verifiedData);
     if (reportsData) setTontineReports(reportsData);
     if (complianceStats) setOpenFraudAlerts(complianceStats.open_fraud_alerts);
+    if (diasporaStats) setDiasporaPending((diasporaStats.pending ?? 0) + (diasporaStats.needs_info ?? 0));
     setLoading(false);
   }, []);
 
@@ -291,6 +302,7 @@ export default function AdminConsole() {
     const ch = supabase
       .channel("rt-admin-console")
       .on("postgres_changes", { event: "*", schema: "public", table: "kyc_submissions" }, () => { load(); loadUsers(search, 0, false); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "diaspora_enrollments" }, () => { load(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => { load(); loadUsers(search, 0, false); })
       .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () => { load(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "tontines" }, () => { load(); })
@@ -430,7 +442,7 @@ export default function AdminConsole() {
     { key: "promotions", label: "Promos", icon: Crown, count: promos.filter(p => p.status === "pending").length || undefined },
     { key: "tontines", label: "Tontines", icon: BarChart3 },
     { key: "messages", label: "Messages", icon: MessageCircle, count: msgUnreadTotal || undefined },
-    { key: "diaspora", label: "Diaspora", icon: Globe },
+    { key: "diaspora", label: "Diaspora", icon: Globe, count: diasporaPending || undefined },
     { key: "compliance", label: "Compliance", icon: ShieldAlert, count: openFraudAlerts || undefined },
     { key: "broadcast", label: "Annonces", icon: Bell },
   ];

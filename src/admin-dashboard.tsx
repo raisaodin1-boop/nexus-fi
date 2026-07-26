@@ -6,7 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   ShieldAlert, Users, Activity, ChevronRight, Crown, Sparkles, FileText,
-  TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Zap, DollarSign,
+  TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Zap, DollarSign, Globe,
 } from "lucide-react-native";
 
 import { api, formatXAF } from "@/src/api";
@@ -114,6 +114,7 @@ export function AdminDashboard() {
   const [pendingReqs, setPendingReqs] = useState(0);
   const [promoRequests, setPromoRequests] = useState<PromotionRequestRow[]>([]);
   const [pendingJoins, setPendingJoins] = useState(0);
+  const [pendingDiasporaEnrollments, setPendingDiasporaEnrollments] = useState(0);
   const [openFraudAlerts, setOpenFraudAlerts] = useState(0);
   const [criticalFraudAlerts, setCriticalFraudAlerts] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -123,7 +124,7 @@ export function AdminDashboard() {
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch { return null; }
     };
-    const [a, s, u, p, comp, ik, c90, s90, u90, joins] = await Promise.all([
+    const [a, s, u, p, comp, ik, c90, s90, u90, joins, diasporaEnroll] = await Promise.all([
       safe(() => api.get<Analytics>("/admin/analytics")),
       safe(() => api.get<Series>("/analytics/platform/savings?days=14")),
       safe(() => api.get<Series>("/analytics/platform/users?days=14")),
@@ -134,6 +135,7 @@ export function AdminDashboard() {
       safe(() => api.get<Series>("/analytics/platform/savings?days=90")),
       safe(() => api.get<Series>("/analytics/platform/users?days=90")),
       safe(() => api.get<any[]>("/tontines/join-requests")),
+      safe(() => api.get<{ pending: number; needs_info?: number }>("/admin/diaspora/enrollments/stats")),
     ]);
     setAnalytics(a ?? DEFAULT_ANALYTICS);
     setAnalyticsDegraded(!a);
@@ -144,6 +146,9 @@ export function AdminDashboard() {
       setPendingReqs(p.filter((r: any) => r.status === "pending").length);
     }
     setPendingJoins(Array.isArray(joins) ? joins.length : 0);
+    setPendingDiasporaEnrollments(
+      (diasporaEnroll?.pending ?? 0) + (diasporaEnroll?.needs_info ?? 0),
+    );
     if (comp) {
       setOpenFraudAlerts(comp.open_fraud_alerts);
       setCriticalFraudAlerts(comp.critical_fraud_alerts ?? 0);
@@ -269,6 +274,25 @@ export function AdminDashboard() {
             <View style={{ flex: 1 }}>
               <Text style={styles.alertTitle}>{pendingReqs} demande{pendingReqs > 1 ? "s" : ""} de promotion en attente</Text>
               <Text style={styles.alertDesc}>Membres souhaitant devenir Tontine Managers.</Text>
+            </View>
+            <ChevronRight color={Colors.text} size={16} />
+          </TouchableOpacity>
+        ) : null}
+
+        {pendingDiasporaEnrollments > 0 ? (
+          <TouchableOpacity
+            onPress={() => router.push({ pathname: "/admin", params: { tab: "diaspora" } } as any)}
+            style={[styles.alertCard, Shadow.card]}
+            testID="admin-diaspora-enroll-banner"
+          >
+            <View style={[styles.alertIcon, { backgroundColor: "#0F766E" }]}><Globe color="#fff" size={18} /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.alertTitle}>
+                {pendingDiasporaEnrollments} inscription{pendingDiasporaEnrollments > 1 ? "s" : ""} Diaspora à traiter
+              </Text>
+              <Text style={styles.alertDesc}>
+                Valider, refuser ou demander des informations — onglet Diaspora → Inscriptions.
+              </Text>
             </View>
             <ChevronRight color={Colors.text} size={16} />
           </TouchableOpacity>

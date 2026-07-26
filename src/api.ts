@@ -422,6 +422,8 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"   && s[0] === "admin" && s[1] === "diaspora" && s[2] === "enrollments") return (await db.adminListDiasporaEnrollments(query.get("status") ?? undefined)) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "diaspora" && s[2] === "enrollment-approve") return (await db.adminApproveDiasporaEnrollment(body?.enrollment_id, body?.note)) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "diaspora" && s[2] === "enrollment-reject") return (await db.adminRejectDiasporaEnrollment(body?.enrollment_id, body?.reason, body?.note)) as T;
+    if (method === "POST"  && s[0] === "admin" && s[1] === "diaspora" && s[2] === "enrollment-needs-info")
+      return (await db.adminRequestDiasporaEnrollmentInfo(body?.enrollment_id, body?.message ?? body?.reason ?? "")) as T;
 
     // ── Messages
     if (method === "GET"  && s[0] === "messages" && s[1] === "conversations")                   return (await db.listConversations()) as T;
