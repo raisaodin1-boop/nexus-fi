@@ -1,10 +1,10 @@
 import { useCallback, useState } from "react";
 import {
-  ActivityIndicator, Alert, Image, ScrollView,
+  ActivityIndicator, Alert, Image, Linking, ScrollView,
   StyleSheet, Text, TouchableOpacity, View,
 } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { CheckCircle, XCircle, AlertTriangle, MessageSquare, UserCheck, Receipt } from "lucide-react-native";
+import { CheckCircle, XCircle, AlertTriangle, MessageSquare, UserCheck, Receipt, ExternalLink } from "lucide-react-native";
 
 import { api, ApiError, formatXAF } from "@/src/api";
 import type { DiasporaRequest } from "@/src/db/diaspora";
@@ -46,11 +46,10 @@ const ENROLL_REJECT = [
 ];
 
 export function AdminDiasporaPanel({ embedded }: { embedded?: boolean }) {
-  const { show } = useToast();
   const [section, setSection] = useState<"enrollments" | "contributions">("enrollments");
 
   return (
-    <View style={{ flex: embedded ? undefined : 1 }}>
+    <View style={[styles.panelRoot, embedded && styles.panelRootEmbedded]}>
       <View style={styles.sectionTabs}>
         <TouchableOpacity style={[styles.sectionTab, section === "enrollments" && styles.sectionTabActive]} onPress={() => setSection("enrollments")}>
           <UserCheck size={14} color={section === "enrollments" ? Colors.primary : Colors.textMuted} />
@@ -61,7 +60,31 @@ export function AdminDiasporaPanel({ embedded }: { embedded?: boolean }) {
           <Text style={[styles.sectionTabText, section === "contributions" && styles.sectionTabTextActive]}>Cotisations</Text>
         </TouchableOpacity>
       </View>
-      {section === "enrollments" ? <AdminDiasporaEnrollments /> : <AdminDiasporaContributions embedded={embedded} />}
+      <View style={styles.panelBody}>
+        {section === "enrollments" ? <AdminDiasporaEnrollments /> : <AdminDiasporaContributions embedded={embedded} />}
+      </View>
+    </View>
+  );
+}
+
+function DocPreview({ label, uri }: { label: string; uri?: string | null }) {
+  if (!uri) return null;
+  return (
+    <View style={styles.docBlock}>
+      <View style={styles.docHeader}>
+        <Text style={styles.docLabel}>{label}</Text>
+        <TouchableOpacity
+          onPress={() => Linking.openURL(uri).catch(() => {})}
+          style={styles.docOpenBtn}
+          hitSlop={8}
+        >
+          <ExternalLink size={14} color={Colors.primary} />
+          <Text style={styles.docOpenText}>Ouvrir</Text>
+        </TouchableOpacity>
+      </View>
+      <TouchableOpacity activeOpacity={0.9} onPress={() => Linking.openURL(uri).catch(() => {})}>
+        <Image source={{ uri }} style={styles.proofImg} resizeMode="contain" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -176,39 +199,71 @@ function AdminDiasporaEnrollments() {
 
   if (selected) {
     return (
-      <ScrollView contentContainerStyle={styles.detailScroll}>
-        <TouchableOpacity onPress={() => setSelected(null)}><Text style={styles.back}>← Retour</Text></TouchableOpacity>
-        <Text style={styles.detailTitle}>Inscription Diaspora</Text>
-        <Card>
-          <Text style={styles.member}>{selected.full_name}</Text>
-          <Text style={styles.meta}>{selected.user?.email} · KYC: {selected.user?.kyc_status ?? "—"}</Text>
-          <Text style={styles.meta}>{selected.address_line1}, {selected.postal_code} {selected.city}</Text>
-          <Text style={styles.meta}>{selected.country_of_residence} · {selected.preferred_currency}</Text>
-          <Text style={styles.meta}>Tél. {selected.phone} · Doc: {selected.id_document_type}</Text>
-          <Text style={styles.meta}>Statut : {selected.status}</Text>
-          {selected.rejection_reason ? <Text style={[styles.meta, { color: Colors.danger }]}>Note : {selected.rejection_reason}</Text> : null}
-          {selected.id_front_url ? <Image source={{ uri: selected.id_front_url }} style={styles.proofImg} resizeMode="contain" /> : null}
-          {selected.id_back_url ? <Image source={{ uri: selected.id_back_url }} style={styles.proofImg} resizeMode="contain" /> : null}
-          {selected.selfie_url ? <Image source={{ uri: selected.selfie_url }} style={styles.proofImg} resizeMode="contain" /> : null}
-          {selected.proof_abroad_url ? <Image source={{ uri: selected.proof_abroad_url }} style={styles.proofImg} resizeMode="contain" /> : null}
-        </Card>
-        <View style={styles.actions}>
-          <TouchableOpacity style={[styles.actionBtn, styles.validateBtn]} onPress={approve}>
-            <CheckCircle color="#fff" size={18} /><Text style={styles.actionText}>Activer Diaspora</Text>
+      <View style={styles.detailRoot}>
+        <View style={styles.detailTop}>
+          <TouchableOpacity onPress={() => setSelected(null)} hitSlop={8}>
+            <Text style={styles.back}>← Retour à la liste</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: Colors.warning }]} onPress={requestInfo}>
-            <MessageSquare color="#fff" size={18} /><Text style={styles.actionText}>Demander infos</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={reject}>
-            <XCircle color="#fff" size={18} /><Text style={styles.actionText}>Rejeter</Text>
-          </TouchableOpacity>
+          <Text style={styles.detailTitle}>Inscription Diaspora</Text>
+          <View style={styles.actionsSticky}>
+            <TouchableOpacity style={[styles.actionBtn, styles.validateBtn]} onPress={approve}>
+              <CheckCircle color="#fff" size={16} /><Text style={styles.actionText}>Activer</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: Colors.warning }]} onPress={requestInfo}>
+              <MessageSquare color="#fff" size={16} /><Text style={styles.actionText}>Infos</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={reject}>
+              <XCircle color="#fff" size={16} /><Text style={styles.actionText}>Rejeter</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </ScrollView>
+
+        <ScrollView
+          style={styles.detailScrollView}
+          contentContainerStyle={styles.detailScroll}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          showsVerticalScrollIndicator
+        >
+          <Card>
+            <Text style={styles.member}>{selected.full_name}</Text>
+            <Text style={styles.meta}>{selected.user?.email} · KYC: {selected.user?.kyc_status ?? "—"}</Text>
+            <Text style={styles.meta}>{selected.address_line1}, {selected.postal_code} {selected.city}</Text>
+            <Text style={styles.meta}>{selected.country_of_residence} · {selected.preferred_currency}</Text>
+            <Text style={styles.meta}>Tél. {selected.phone} · Doc: {selected.id_document_type}</Text>
+            <Text style={styles.meta}>Statut : {selected.status}</Text>
+            {selected.rejection_reason ? (
+              <Text style={[styles.meta, { color: Colors.danger }]}>Note : {selected.rejection_reason}</Text>
+            ) : null}
+          </Card>
+
+          <Text style={styles.docsTitle}>Pièces jointes — faites défiler ou ouvrez en grand</Text>
+          <DocPreview label="Pièce d'identité (recto)" uri={selected.id_front_url} />
+          <DocPreview label="Pièce d'identité (verso)" uri={selected.id_back_url} />
+          <DocPreview label="Selfie" uri={selected.selfie_url} />
+          <DocPreview label="Preuve de résidence" uri={selected.proof_abroad_url} />
+          {!selected.id_front_url && !selected.selfie_url && !selected.proof_abroad_url ? (
+            <Text style={styles.noProof}>Aucune pièce jointe disponible</Text>
+          ) : null}
+
+          <View style={[styles.actions, { marginBottom: 24 }]}>
+            <TouchableOpacity style={[styles.actionBtn, styles.validateBtn]} onPress={approve}>
+              <CheckCircle color="#fff" size={18} /><Text style={styles.actionText}>Activer Diaspora</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: Colors.warning }]} onPress={requestInfo}>
+              <MessageSquare color="#fff" size={18} /><Text style={styles.actionText}>Demander infos</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={reject}>
+              <XCircle color="#fff" size={18} /><Text style={styles.actionText}>Rejeter</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
     );
   }
 
   return (
-    <>
+    <View style={styles.listRoot}>
       <View style={styles.statsRow}>
         <StatPill label="En attente" value={stats.pending} color={Colors.warning} />
         <StatPill label="Infos" value={stats.needs_info} color={Colors.secondary} />
@@ -232,7 +287,12 @@ function AdminDiasporaEnrollments() {
         <Text style={{ color: Colors.primary, fontWeight: "800", fontSize: 12 }}>Actualiser</Text>
       </TouchableOpacity>
       {loading ? <ActivityIndicator style={{ marginTop: 40 }} color={Colors.primary} /> : (
-        <ScrollView contentContainerStyle={{ padding: Spacing.lg, gap: 10, paddingBottom: 80 }}>
+        <ScrollView
+          style={styles.listScroll}
+          contentContainerStyle={{ padding: Spacing.lg, gap: 10, paddingBottom: 100 }}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator
+        >
           {loadError ? <Text style={[styles.empty, { color: Colors.danger }]}>{loadError}</Text> : null}
           {items.map((item) => (
             <TouchableOpacity key={item.id} onPress={() => openDetail(item.id)}>
@@ -256,7 +316,7 @@ function AdminDiasporaEnrollments() {
           ) : null}
         </ScrollView>
       )}
-    </>
+    </View>
   );
 }
 
@@ -337,71 +397,76 @@ function AdminDiasporaContributions({ embedded }: { embedded?: boolean }) {
 
   if (selected) {
     return (
-      <ScrollView contentContainerStyle={styles.detailScroll}>
-        <TouchableOpacity onPress={() => setSelected(null)}>
-          <Text style={styles.back}>← Retour à la liste</Text>
-        </TouchableOpacity>
-        <Text style={styles.detailTitle}>Validation Diaspora</Text>
-        <Card>
-          <Text style={styles.member}>{selected.user?.full_name} · {selected.user?.email}</Text>
-          <Text style={styles.meta}>KYC : {selected.user?.kyc_status ?? "—"} · Pays : {selected.user?.country ?? "—"}</Text>
-          <Text style={styles.tontine}>{selected.tontine_name}</Text>
-          <Text style={styles.amount}>{formatXAF(selected.amount_expected)}</Text>
-          <Text style={styles.ref}>Réf. {selected.reference_code}</Text>
-          <DiasporaStatusBadge status={selected.status} />
-          <View style={styles.compare}>
-            <Text style={styles.compareLine}>Attendu : {formatXAF(selected.amount_expected)}</Text>
-            <Text style={styles.compareLine}>Déclaré : {selected.declared_amount ? formatXAF(selected.declared_amount) : "—"}</Text>
-            <Text style={styles.compareLine}>Méthode : {selected.payment_method ?? "—"}</Text>
-            <Text style={styles.compareLine}>Payeur : {selected.payer_name ?? "—"}</Text>
-          </View>
-          {selected.comment ? <Text style={styles.comment}>« {selected.comment} »</Text> : null}
-          {selected.proof_url ? (
-            <Image source={{ uri: selected.proof_url }} style={styles.proofImg} resizeMode="contain" />
-          ) : (
-            <Text style={styles.noProof}>Aucune preuve jointe</Text>
-          )}
-        </Card>
-        <View style={styles.actions}>
-          <TouchableOpacity style={[styles.actionBtn, styles.validateBtn]} onPress={validate}>
-            <CheckCircle color="#fff" size={18} />
-            <Text style={styles.actionText}>Valider</Text>
+      <View style={styles.detailRoot}>
+        <View style={styles.detailTop}>
+          <TouchableOpacity onPress={() => setSelected(null)} hitSlop={8}>
+            <Text style={styles.back}>← Retour à la liste</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={reject}>
-            <XCircle color="#fff" size={18} />
-            <Text style={styles.actionText}>Rejeter</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, styles.warnBtn]} onPress={async () => {
-            try {
-              await api.post("/admin/diaspora/suspicious", { request_id: selected.id });
-              show("Marqué suspect", "success");
-              load();
-            } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
-          }}>
-            <AlertTriangle color="#fff" size={18} />
-            <Text style={styles.actionText}>Suspect</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, styles.infoBtn]} onPress={() => {
-            Alert.prompt?.("Demander des informations", "Message au membre", async (msg) => {
-              if (!msg?.trim()) return;
+          <Text style={styles.detailTitle}>Validation Diaspora</Text>
+          <View style={styles.actionsSticky}>
+            <TouchableOpacity style={[styles.actionBtn, styles.validateBtn]} onPress={validate}>
+              <CheckCircle color="#fff" size={16} /><Text style={styles.actionText}>Valider</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={reject}>
+              <XCircle color="#fff" size={16} /><Text style={styles.actionText}>Rejeter</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.actionBtn, styles.warnBtn]} onPress={async () => {
               try {
-                await api.post("/admin/diaspora/needs-info", { request_id: selected.id, message: msg });
-                show("Demande envoyée", "success");
-                setSelected(null);
+                await api.post("/admin/diaspora/suspicious", { request_id: selected.id });
+                show("Marqué suspect", "success");
                 load();
               } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
-            });
-          }}>
-            <MessageSquare color="#fff" size={18} />
-            <Text style={styles.actionText}>Infos</Text>
-          </TouchableOpacity>
+            }}>
+              <AlertTriangle color="#fff" size={16} /><Text style={styles.actionText}>Suspect</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.actionBtn, styles.infoBtn]} onPress={() => {
+              Alert.prompt?.("Demander des informations", "Message au membre", async (msg) => {
+                if (!msg?.trim()) return;
+                try {
+                  await api.post("/admin/diaspora/needs-info", { request_id: selected.id, message: msg });
+                  show("Demande envoyée", "success");
+                  setSelected(null);
+                  load();
+                } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
+              });
+            }}>
+              <MessageSquare color="#fff" size={16} /><Text style={styles.actionText}>Infos</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </ScrollView>
+
+        <ScrollView
+          style={styles.detailScrollView}
+          contentContainerStyle={styles.detailScroll}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          showsVerticalScrollIndicator
+        >
+          <Card>
+            <Text style={styles.member}>{selected.user?.full_name} · {selected.user?.email}</Text>
+            <Text style={styles.meta}>KYC : {selected.user?.kyc_status ?? "—"} · Pays : {selected.user?.country ?? "—"}</Text>
+            <Text style={styles.tontine}>{selected.tontine_name}</Text>
+            <Text style={styles.amount}>{formatXAF(selected.amount_expected)}</Text>
+            <Text style={styles.ref}>Réf. {selected.reference_code}</Text>
+            <DiasporaStatusBadge status={selected.status} />
+            <View style={styles.compare}>
+              <Text style={styles.compareLine}>Attendu : {formatXAF(selected.amount_expected)}</Text>
+              <Text style={styles.compareLine}>Déclaré : {selected.declared_amount ? formatXAF(selected.declared_amount) : "—"}</Text>
+              <Text style={styles.compareLine}>Méthode : {selected.payment_method ?? "—"}</Text>
+              <Text style={styles.compareLine}>Payeur : {selected.payer_name ?? "—"}</Text>
+            </View>
+            {selected.comment ? <Text style={styles.comment}>« {selected.comment} »</Text> : null}
+          </Card>
+          <Text style={styles.docsTitle}>Preuve de paiement</Text>
+          <DocPreview label="Justificatif" uri={selected.proof_url} />
+          {!selected.proof_url ? <Text style={styles.noProof}>Aucune preuve jointe</Text> : null}
+        </ScrollView>
+      </View>
     );
   }
 
   return (
-    <>
+    <View style={styles.listRoot}>
       <View style={styles.statsRow}>
         <StatPill label="En attente" value={stats.pending} color={Colors.warning} />
         <StatPill label="Aujourd'hui" value={stats.received_today} color={Colors.info} />
@@ -415,7 +480,12 @@ function AdminDiasporaContributions({ embedded }: { embedded?: boolean }) {
         ))}
       </ScrollView>
       {loading ? <ActivityIndicator style={{ marginTop: 40 }} color={Colors.primary} /> : (
-        <ScrollView contentContainerStyle={{ padding: Spacing.lg, gap: 10, paddingBottom: 80 }}>
+        <ScrollView
+          style={styles.listScroll}
+          contentContainerStyle={{ padding: Spacing.lg, gap: 10, paddingBottom: 100 }}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator
+        >
           {items.map((item) => (
             <TouchableOpacity key={item.id} onPress={() => openDetail(item.id)}>
               <Card>
@@ -433,7 +503,7 @@ function AdminDiasporaContributions({ embedded }: { embedded?: boolean }) {
           {!items.length ? <Text style={styles.empty}>Aucune demande pour ce filtre.</Text> : null}
         </ScrollView>
       )}
-    </>
+    </View>
   );
 }
 
@@ -447,12 +517,29 @@ function StatPill({ label, value, color }: { label: string; value: number; color
 }
 
 const styles = StyleSheet.create({
-  sectionTabs: { flexDirection: "row", gap: 8, paddingHorizontal: Spacing.lg, paddingTop: Spacing.md },
+  panelRoot: { flex: 1, minHeight: 0 },
+  panelRootEmbedded: { flex: 1, minHeight: 0 },
+  panelBody: { flex: 1, minHeight: 0 },
+  listRoot: { flex: 1, minHeight: 0 },
+  listScroll: { flex: 1, minHeight: 0 },
+  detailRoot: { flex: 1, minHeight: 0 },
+  detailTop: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.surface,
+    gap: 8,
+  },
+  detailScrollView: { flex: 1, minHeight: 0 },
+  actionsSticky: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  sectionTabs: { flexDirection: "row", gap: 8, paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, flexShrink: 0 },
   sectionTab: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: Radius.lg, backgroundColor: Colors.surfaceAlt },
   sectionTabActive: { backgroundColor: Colors.primaryLight },
   sectionTabText: { fontSize: 12, fontWeight: "800", color: Colors.textMuted },
   sectionTabTextActive: { color: Colors.primary },
-  statsRow: { flexDirection: "row", gap: 8, paddingHorizontal: Spacing.lg, paddingTop: Spacing.md },
+  statsRow: { flexDirection: "row", gap: 8, paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, flexShrink: 0 },
   pill: { flex: 1, padding: 10, borderRadius: Radius.lg, borderWidth: 1, backgroundColor: Colors.surface, alignItems: "center" },
   pillValue: { fontSize: 18, fontWeight: "900" },
   pillLabel: { fontSize: 10, color: Colors.textMuted, marginTop: 2 },
@@ -466,9 +553,15 @@ const styles = StyleSheet.create({
   itemName: { fontSize: 14, fontWeight: "800", color: Colors.text },
   itemTontine: { fontSize: 12, color: Colors.textMuted },
   itemAmount: { fontSize: 11, color: Colors.secondary, marginTop: 4, fontWeight: "700" },
-  detailScroll: { padding: Spacing.lg, paddingBottom: 80 },
-  back: { color: Colors.secondary, fontWeight: "700", marginBottom: 8 },
-  detailTitle: { fontSize: 20, fontWeight: "900", color: Colors.text, marginBottom: 12 },
+  detailScroll: { padding: Spacing.lg, paddingBottom: 120, gap: 12 },
+  back: { color: Colors.secondary, fontWeight: "700" },
+  detailTitle: { fontSize: 18, fontWeight: "900", color: Colors.text },
+  docsTitle: { fontSize: 13, fontWeight: "800", color: Colors.textMuted, marginTop: 4 },
+  docBlock: { backgroundColor: Colors.surface, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border, padding: 10, gap: 8 },
+  docHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  docLabel: { fontSize: 12, fontWeight: "800", color: Colors.text },
+  docOpenBtn: { flexDirection: "row", alignItems: "center", gap: 4 },
+  docOpenText: { fontSize: 12, fontWeight: "700", color: Colors.primary },
   member: { fontSize: 15, fontWeight: "800", color: Colors.text },
   meta: { fontSize: 12, color: Colors.textMuted, marginTop: 4 },
   tontine: { fontSize: 14, fontWeight: "700", color: Colors.text, marginTop: 12 },
@@ -477,9 +570,9 @@ const styles = StyleSheet.create({
   compare: { marginTop: 12, gap: 4 },
   compareLine: { fontSize: 13, color: Colors.text },
   comment: { fontSize: 12, fontStyle: "italic", color: Colors.textMuted, marginTop: 10 },
-  proofImg: { width: "100%", height: 220, marginTop: 12, borderRadius: Radius.lg, backgroundColor: Colors.surfaceAlt },
+  proofImg: { width: "100%", height: 180, borderRadius: Radius.md, backgroundColor: Colors.surfaceAlt },
   noProof: { color: Colors.danger, marginTop: 12, fontWeight: "700" },
-  actions: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 16 },
+  actions: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
   actionBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: Radius.lg },
   validateBtn: { backgroundColor: Colors.success },
   rejectBtn: { backgroundColor: Colors.danger },

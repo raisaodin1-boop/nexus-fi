@@ -927,7 +927,9 @@ export default function AdminConsole() {
       ) : tab === "compliance" ? (
         <AdminCompliancePanel embedded />
       ) : tab === "diaspora" ? (
-        <AdminDiasporaPanel embedded />
+        <View style={{ flex: 1, minHeight: 0 }}>
+          <AdminDiasporaPanel embedded />
+        </View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: Spacing.xl, gap: 16, paddingBottom: 100 }}>
           <View style={styles.broadcastCard}>
