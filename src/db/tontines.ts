@@ -220,6 +220,7 @@ export async function listPublicTontines(filters?: {
   let q = sb.from("tontines")
     .select("id, name, amount_per_cycle, frequency, max_members, language, country, description, created_at, owner_id, is_hodix_verified, display_member_count, tontine_members(count), tontine_contributions(amount)")
     .eq("is_public", true)
+    .eq("moderation_status", "approved")
     .order("created_at", { ascending: false })
     .limit(100);
   if (filters?.frequency) q = q.eq("frequency", filters.frequency);
@@ -390,7 +391,7 @@ export async function replyTontineJoinInfo(request_id: string, message: string) 
 export async function getPublicTontineProfile(id: string) {
   const sb = getSupabase();
   const [tontineRes, membersRes, contribsRes] = await Promise.all([
-    sb.from("tontines").select("*").eq("id", id).eq("is_public", true).single(),
+    sb.from("tontines").select("*").eq("id", id).eq("is_public", true).eq("moderation_status", "approved").single(),
     sb.from("tontine_members").select("user_id, role, joined_at, profiles(full_name, country)").eq("tontine_id", id).limit(20),
     sb.from("tontine_contributions").select("amount, cycle, created_at").eq("tontine_id", id).order("created_at", { ascending: false }).limit(200),
   ]);
@@ -444,6 +445,16 @@ const KYC_REQUIRED_THRESHOLD     = 50_000;
 const ESCROW_HOURS               = 72;
 const RESERVE_FUND_PCT           = 0.02;
 
+async function notifyPlatformAdmins(title: string, body: string, metadata: Record<string, unknown> = {}) {
+  const sb = getSupabase();
+  const { data: admins } = await sb.from("profiles").select("id").in("role", ["admin", "super_admin"]);
+  for (const a of admins ?? []) {
+    await sb.from("notifications").insert({
+      user_id: a.id, title, body, type: "info", metadata,
+    });
+  }
+}
+
 export async function createTontineSecure(body: Record<string, any>) {
   const { checkTontineCreationAllowed } = await import("@/src/db/subscriptions");
   await checkTontineCreationAllowed();
@@ -451,20 +462,66 @@ export async function createTontineSecure(body: Record<string, any>) {
   const me = await uid();
   const sb = getSupabase();
 
-  const { data: profile } = await sb.from("profiles").select("trust_flags, kyc_status, phone, role").eq("id", me).single();
-  if ((profile?.trust_flags ?? []).includes("blacklisted"))
+  const { data: profile } = await sb
+    .from("profiles")
+    .select("trust_flags, kyc_status, phone, role, device_fingerprint, created_at")
+    .eq("id", me)
+    .single();
+  const flags: string[] = profile?.trust_flags ?? [];
+  if (flags.includes("blacklisted") || flags.includes("fraud_confirmed")) {
+    const { emitFraudAlert } = await import("@/src/fraud-alerts");
+    emitFraudAlert({
+      userId: me,
+      alertType: "tontine_create_blocked_blacklist",
+      severity: "critical",
+      flags,
+    }).catch(() => {});
     throw { status: 403, detail: "Votre compte est suspendu pour fraude. Contactez le support." };
+  }
+
+  if (profile?.device_fingerprint) {
+    const { data: flaggedDevice } = await sb
+      .from("flagged_devices")
+      .select("id")
+      .eq("fingerprint", profile.device_fingerprint)
+      .maybeSingle();
+    if (flaggedDevice) {
+      const { emitFraudAlert } = await import("@/src/fraud-alerts");
+      emitFraudAlert({
+        userId: me,
+        alertType: "tontine_create_blocked_device",
+        severity: "critical",
+        flags: ["flagged_device"],
+      }).catch(() => {});
+      throw { status: 403, detail: "Appareil signalé pour activité frauduleuse." };
+    }
+    const { count: siblingCount } = await sb
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("device_fingerprint", profile.device_fingerprint)
+      .neq("id", me);
+    if ((siblingCount ?? 0) >= 1) {
+      const { emitFraudAlert } = await import("@/src/fraud-alerts");
+      emitFraudAlert({
+        userId: me,
+        alertType: "tontine_create_blocked_multi_account",
+        severity: "high",
+        flags: ["multi_account"],
+        metadata: { sibling_count: siblingCount },
+      }).catch(() => {});
+      throw { status: 403, detail: "Multi-comptes détectés sur cet appareil. Contactez le support." };
+    }
+  }
 
   const isAdmin = profile?.role === "admin" || profile?.role === "super_admin";
   const amountPerCycle = Number(body.amount_per_cycle ?? 0);
 
-  // Group = public on Découvrir for every member (current + future).
+  // Group = public on Découvrir (if moderation approved).
   // Only explicit « Personnelle » stays private / off-directory.
   const isPersonal = body.is_personal === true || body.is_public === false;
   const isPublic = !isPersonal;
 
   if (!isAdmin) {
-    // No Trust Score gate for public groups — Découvrir must list member-created tontines.
     if (amountPerCycle >= KYC_REQUIRED_THRESHOLD) {
       if ((profile?.kyc_status ?? null) !== "approved")
         throw { status: 403, detail: `Vérification d'identité (KYC) obligatoire pour les tontines supérieures à ${KYC_REQUIRED_THRESHOLD.toLocaleString()} XAF/cycle.` };
@@ -483,6 +540,7 @@ export async function createTontineSecure(body: Record<string, any>) {
     owner_id: me,
     current_cycle: 1,
     cycle_deadline: nextCycleDeadline(body.frequency ?? "monthly"),
+    moderation_status: "approved",
   };
   if (body.language) insertRow.language = body.language;
   if (body.country) insertRow.country = body.country;
@@ -493,10 +551,15 @@ export async function createTontineSecure(body: Record<string, any>) {
       .insert({ ...insertRow, invite_code: inviteCode() })
       .select().single();
     if (!error) { data = row; break; }
-    if (!isUniqueViolation(error) || attempt === 4) throwSb(error);
+    if (!isUniqueViolation(error) || attempt === 4) {
+      const msg = error?.message ?? "";
+      if (/suspendu pour fraude|Appareil signalé|Multi-comptes/i.test(msg)) {
+        throw { status: 403, detail: msg };
+      }
+      throwSb(error);
+    }
   }
 
-  const maxMembers = Number(body.max_members ?? 12);
   const memberRow: Record<string, any> = {
     tontine_id: data.id,
     user_id: me,
@@ -506,10 +569,39 @@ export async function createTontineSecure(body: Record<string, any>) {
   const { error: memErr } = await sb.from("tontine_members").insert(memberRow);
   if (memErr) throwSb(memErr);
 
+  if (data.moderation_status === "pending_review") {
+    notifyPlatformAdmins(
+      "Revue tontine requise",
+      `« ${data.name} » en attente — ${data.moderation_reason ?? "risque"}.`,
+      { action_url: "/admin?tab=tontines", tontine_id: data.id },
+    ).catch(() => {});
+  }
+
   invalidateCache("tontines");
   invalidateUserStatsCaches(me);
   const { checkReferralMilestones } = await import("./misc");
   checkReferralMilestones(me).catch(() => {});
+  return data;
+}
+
+export async function requestTontineVerifiedBadge(tontineId: string, message?: string) {
+  const { data, error } = await getSupabase().rpc("request_tontine_verified_badge", {
+    p_tontine_id: tontineId,
+    p_message: message ?? null,
+  });
+  if (error) throw { status: 400, detail: error.message };
+  return data;
+}
+
+export async function getMyTontineVerifiedRequest(tontineId: string) {
+  const me = await uid();
+  const { data, error } = await getSupabase()
+    .from("tontine_verified_requests")
+    .select("id, status, message, rejection_reason, created_at, reviewed_at")
+    .eq("tontine_id", tontineId)
+    .eq("requester_id", me)
+    .maybeSingle();
+  throwSb(error);
   return data;
 }
 
@@ -1006,6 +1098,45 @@ export async function rejectTontinePaymentClaim(claimId: string, reason: string)
     p_reason: reason,
   });
   if (error) throw { status: 400, detail: error.message };
+  return data;
+}
+
+const REPORT_BUCKET = "tontine-reports";
+
+export async function uploadTontineReportProof(base64: string, mime = "image/jpeg"): Promise<string> {
+  const me = await uid();
+  const ext = mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : mime.includes("pdf") ? "pdf" : "jpg";
+  const path = `${me}/${Date.now()}.${ext}`;
+  const data = base64ToUint8Array(base64);
+  const { error } = await getSupabase().storage.from(REPORT_BUCKET).upload(path, data, { contentType: mime, upsert: false });
+  if (error) throw { status: 500, detail: error.message };
+  return path;
+}
+
+export async function submitTontineReport(
+  tontineId: string,
+  payload: { reason_code: string; reason_detail: string; proof_paths: string[] },
+) {
+  const { data, error } = await getSupabase().rpc("submit_tontine_report", {
+    p_tontine_id: tontineId,
+    p_reason_code: payload.reason_code,
+    p_reason_detail: payload.reason_detail,
+    p_proof_paths: payload.proof_paths ?? [],
+  });
+  if (error) throw { status: 400, detail: error.message };
+  return data;
+}
+
+export async function getMyTontineReport(tontineId: string) {
+  const me = await uid();
+  const { data, error } = await getSupabase()
+    .from("tontine_reports")
+    .select("id, reason_code, status, created_at, reviewed_at")
+    .eq("tontine_id", tontineId)
+    .eq("reporter_id", me)
+    .in("status", ["open", "reviewing"])
+    .maybeSingle();
+  throwSb(error);
   return data;
 }
 

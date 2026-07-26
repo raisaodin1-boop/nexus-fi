@@ -91,6 +91,22 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "POST" && s[0] === "tontines" && s[1] === "request-join-info")             return (await db.requestTontineJoinInfo(body?.request_id, body?.message ?? "")) as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] === "my-join-request")               return (await db.getMyTontineJoinRequest(query.get("tontine_id") ?? "")) as T;
     if (method === "POST" && s[0] === "tontines" && s[1] === "reply-join-info")               return (await db.replyTontineJoinInfo(body?.request_id, body?.message ?? "")) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "request-verified")
+      return (await db.requestTontineVerifiedBadge(s[1], body?.message)) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "verified-request")
+      return (await db.getMyTontineVerifiedRequest(s[1])) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "report-proof" && s[3] === "upload")
+      return ({ path: await db.uploadTontineReportProof(body?.base64, body?.mime) }) as T;
+    if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "report")
+      return (await db.submitTontineReport(s[1], {
+        reason_code: body?.reason_code,
+        reason_detail: body?.reason_detail,
+        proof_paths: body?.proof_paths ?? [],
+      })) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "my-report")
+      return (await db.getMyTontineReport(s[1])) as T;
+    if (method === "GET"  && s[0] === "tontines" && s[1] && s[2] === "message-contacts")
+      return (await db.getTontineMessageContacts(s[1])) as T;
     if (method === "GET"  && s[0] === "tontines" && s[1] && !s[2])                            return (await db.getTontine(s[1])) as T;
     if (method === "POST" && s[0] === "tontines" && s[1] && s[2] === "contribute")
       return db.rejectDirectPaymentRedirect("tontine_contribution", { tontine_id: s[1] }) as T;
@@ -350,7 +366,17 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
       )) as T;
     if (method === "PATCH" && s[0] === "admin" && s[1] === "users" && s[2] === "role")          return (await db.adminUpdateUserRole(body?.user_id, body?.role)) as T;
     if (method === "POST"  && s[0] === "admin" && s[1] === "users" && s[2] === "deactivate")    return (await db.adminDeactivateUser(body?.user_id)) as T;
-    if (method === "GET"   && s[0] === "admin" && s[1] === "tontines")                          return (await db.adminListTontines(query.get("search") ?? "")) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "tontines" && s[2] === "verified-requests")
+      return (await db.adminListVerifiedRequests(query.get("status") ?? "pending")) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "tontines" && s[2] === "reports")
+      return (await db.adminListTontineReports(query.get("status") ?? "open")) as T;
+    if (method === "POST"  && s[0] === "admin" && s[1] === "tontines" && s[2] === "review")
+      return (await db.adminReviewTontineModeration(body?.tontine_id, !!body?.approve, body?.note)) as T;
+    if (method === "POST"  && s[0] === "admin" && s[1] === "tontines" && s[2] === "verified-review")
+      return (await db.adminReviewTontineVerified(body?.request_id, !!body?.approve, body?.note)) as T;
+    if (method === "POST"  && s[0] === "admin" && s[1] === "tontines" && s[2] === "report-review")
+      return (await db.adminReviewTontineReport(body?.report_id, body?.status, body?.note)) as T;
+    if (method === "GET"   && s[0] === "admin" && s[1] === "tontines" && !s[2])                 return (await db.adminListTontines(query.get("search") ?? "")) as T;
     if (method === "PATCH" && s[0] === "admin" && s[1] === "tontines" && s[2])                  return (await db.adminUpdateTontine(s[2], body)) as T;
     if (method === "DELETE"&& s[0] === "admin" && s[1] === "tontines" && s[2])                  return (await db.adminDeleteTontine(s[2])) as T;
     if (method === "GET"   && s[0] === "admin" && s[1] === "kyc" && s[2])                      return (await db.adminGetKycDetail(s[2])) as T;
@@ -397,6 +423,8 @@ async function route<T>(method: string, path: string, body?: any): Promise<T> {
     if (method === "GET"  && s[0] === "messages" && s[1] === "broadcast")                      return (await db.listMessages("broadcast")) as T;
     if (method === "GET"  && s[0] === "messages" && s[1] === "direct" && s[2])                 return (await db.listMessages("direct", s[2])) as T;
     if (method === "GET"  && s[0] === "messages" && s[1] === "tontine" && s[2])                 return (await db.listMessages("tontine", undefined, s[2])) as T;
+    if (method === "POST" && s[0] === "messages" && s[1] === "attachments" && s[2] === "upload")
+      return ({ path: await db.uploadMessageAttachment(body?.base64, body?.mime) }) as T;
     if (method === "POST" && s[0] === "messages" && s[1] === "thread" && s[2] === "read")       return (await db.markThreadRead(body?.thread_type, body?.peer_id, body?.tontine_id)) as T;
     if (method === "POST" && s[0] === "messages")                                               return (await db.sendMessage(body)) as T;
     if (method === "PATCH"&& s[0] === "messages" && s[1] && s[2] === "read")                   return (await db.markMessageRead(s[1])) as T;

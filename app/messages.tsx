@@ -2,8 +2,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
+  Image,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   StyleSheet,
   Text,
@@ -24,10 +27,11 @@ import {
   Plus,
   Search,
   X,
+  Paperclip,
 } from "lucide-react-native";
 
 import { Colors, Radius, Spacing } from "@/src/theme";
-import { api } from "@/src/api";
+import { api, ApiError } from "@/src/api";
 import { supabase } from "@/src/supabase";
 import { useAuth } from "@/src/auth-context";
 import { VerifiedName } from "@/src/verified-name";
@@ -43,6 +47,8 @@ interface Message {
   is_read: boolean;
   created_at: string;
   sender_name?: string;
+  attachment_paths?: string[];
+  attachment_urls?: string[];
 }
 
 interface ConversationItem {
@@ -83,6 +89,8 @@ export default function MessagesScreen() {
   const [activeThread, setActiveThread] = useState<ActiveThread | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
+  const [pendingAttachments, setPendingAttachments] = useState<{ path: string; preview?: string }[]>([]);
+  const [uploadingAttach, setUploadingAttach] = useState(false);
   const [loadingConv, setLoadingConv] = useState(true);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [sending, setSending] = useState(false);
@@ -183,19 +191,56 @@ export default function MessagesScreen() {
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
   }, [searchQuery, showCompose]);
 
+  const pickAttachment = async () => {
+    if (pendingAttachments.length >= 5) {
+      Alert.alert("Limite", "Maximum 5 images par message.");
+      return;
+    }
+    try {
+      setUploadingAttach(true);
+      const ImagePicker = await import("expo-image-picker");
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Permission", "Autorisez l'accès aux photos pour joindre une image.");
+        return;
+      }
+      const picked = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.75,
+        base64: true,
+      });
+      if (picked.canceled || !picked.assets?.[0]?.base64) return;
+      const asset = picked.assets[0];
+      const mime = asset.mimeType ?? "image/jpeg";
+      const up = await api.post<{ path: string }>("/messages/attachments/upload", {
+        base64: asset.base64,
+        mime,
+      });
+      setPendingAttachments((prev) => [...prev, { path: up.path, preview: asset.uri }]);
+    } catch (e) {
+      Alert.alert("Erreur", e instanceof ApiError ? e.detail : "Impossible d'ajouter l'image.");
+    } finally {
+      setUploadingAttach(false);
+    }
+  };
+
   const sendMsg = async () => {
-    if (!text.trim() || !activeThread) return;
+    if ((!text.trim() && pendingAttachments.length === 0) || !activeThread) return;
     setSending(true);
     const content = text.trim();
+    const attachments = pendingAttachments.map((a) => a.path);
     setText("");
+    setPendingAttachments([]);
     try {
-      const body: Record<string, string> = { content };
+      const body: Record<string, unknown> = { content, attachment_paths: attachments };
       if (activeThread.type === "tontine" && activeThread.id) body.tontine_id = activeThread.id;
       if (activeThread.type === "direct" && activeThread.peer_id) body.recipient_id = activeThread.peer_id;
       await api.post("/messages", body);
       await loadMessages(activeThread);
       loadConversations();
-    } catch {}
+    } catch (e) {
+      Alert.alert("Erreur", e instanceof ApiError ? e.detail : "Envoi impossible.");
+    }
     setSending(false);
   };
 
@@ -300,7 +345,14 @@ export default function MessagesScreen() {
                     {!mine && item.sender_name && !isBroadcast ? (
                       <Text style={styles.bubbleSender}>{item.sender_name}</Text>
                     ) : null}
-                    <Text style={[styles.bubbleText, (mine || isBroadcast) && styles.bubbleTextMe]}>{item.content}</Text>
+                    {item.content && item.content !== "[Pièce jointe]" ? (
+                      <Text style={[styles.bubbleText, (mine || isBroadcast) && styles.bubbleTextMe]}>{item.content}</Text>
+                    ) : null}
+                    {(item.attachment_urls ?? []).map((url, i) => (
+                      <TouchableOpacity key={`${item.id}-att-${i}`} onPress={() => Linking.openURL(url)} activeOpacity={0.85}>
+                        <Image source={{ uri: url }} style={styles.attachImg} resizeMode="cover" />
+                      </TouchableOpacity>
+                    ))}
                     <Text style={[styles.bubbleTime, (mine || isBroadcast) && styles.bubbleTimeMe]}>{formatTime(item.created_at)}</Text>
                   </View>
                 );
@@ -309,23 +361,48 @@ export default function MessagesScreen() {
           )}
 
           {canSend ? (
-            <View style={styles.inputRow}>
-              <TextInput
-                style={styles.msgInput}
-                value={text}
-                onChangeText={setText}
-                placeholder="Écrire un message…"
-                placeholderTextColor={Colors.textSubtle}
-                multiline
-                maxLength={1000}
-              />
-              <TouchableOpacity
-                style={[styles.sendBtn, (!text.trim() || sending) && styles.sendBtnDisabled]}
-                onPress={sendMsg}
-                disabled={!text.trim() || sending}
-              >
-                {sending ? <ActivityIndicator color="#fff" size="small" /> : <Send color="#fff" size={18} />}
-              </TouchableOpacity>
+            <View>
+              {pendingAttachments.length > 0 ? (
+                <View style={styles.pendingRow}>
+                  {pendingAttachments.map((a) => (
+                    <View key={a.path} style={styles.pendingChip}>
+                      {a.preview ? <Image source={{ uri: a.preview }} style={styles.pendingThumb} /> : null}
+                      <TouchableOpacity onPress={() => setPendingAttachments((p) => p.filter((x) => x.path !== a.path))}>
+                        <X size={14} color={Colors.danger} />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+              <View style={styles.inputRow}>
+                <TouchableOpacity
+                  style={styles.attachBtn}
+                  onPress={pickAttachment}
+                  disabled={uploadingAttach || pendingAttachments.length >= 5}
+                >
+                  {uploadingAttach ? (
+                    <ActivityIndicator color={Colors.primary} size="small" />
+                  ) : (
+                    <Paperclip color={Colors.primary} size={20} />
+                  )}
+                </TouchableOpacity>
+                <TextInput
+                  style={styles.msgInput}
+                  value={text}
+                  onChangeText={setText}
+                  placeholder="Message, preuve, réclamation…"
+                  placeholderTextColor={Colors.textSubtle}
+                  multiline
+                  maxLength={1000}
+                />
+                <TouchableOpacity
+                  style={[styles.sendBtn, ((!text.trim() && pendingAttachments.length === 0) || sending) && styles.sendBtnDisabled]}
+                  onPress={sendMsg}
+                  disabled={(!text.trim() && pendingAttachments.length === 0) || sending}
+                >
+                  {sending ? <ActivityIndicator color="#fff" size="small" /> : <Send color="#fff" size={18} />}
+                </TouchableOpacity>
+              </View>
             </View>
           ) : (
             <View style={styles.readOnlyBar}>
@@ -624,6 +701,42 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   sendBtnDisabled: { opacity: 0.4 },
+  attachBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.primaryLight,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  attachImg: {
+    width: 200,
+    height: 160,
+    borderRadius: 12,
+    marginTop: 6,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  pendingRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    backgroundColor: Colors.surface,
+  },
+  pendingChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: 10,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  pendingThumb: { width: 40, height: 40, borderRadius: 8 },
 
   readOnlyBar: {
     flexDirection: "row",

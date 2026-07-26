@@ -44,6 +44,7 @@ import {
   CommunityDocumentsPlaceholder,
   CommunityProjectsPlaceholder,
 } from "@/src/community-module-placeholders";
+import { TontineReportTrigger } from "@/src/tontine-report-sheet";
 
 /* ─── Types ─────────────────────────────────────────── */
 
@@ -125,6 +126,12 @@ interface TontineData {
     rotation_mode: string;
     status: string;
     cycle_deadline?: string | null;
+    is_public?: boolean;
+    is_personal?: boolean;
+    is_hodix_verified?: boolean;
+    moderation_status?: string;
+    moderation_reason?: string | null;
+    owner_id?: string;
   };
   is_admin: boolean;
   members: Member[];
@@ -544,6 +551,12 @@ export function TontineDetailView({ id }: { id: string }) {
     id: string; requester_name: string; message?: string | null; status?: string; owner_note?: string | null;
   }[]>([]);
   const [joinBusyId, setJoinBusyId] = useState<string | null>(null);
+  const [verifiedReq, setVerifiedReq] = useState<{ id: string; status: string } | null>(null);
+  const [verifiedBusy, setVerifiedBusy] = useState(false);
+  const [msgContacts, setMsgContacts] = useState<{
+    manager: { id: string; full_name: string } | null;
+    platform_admin: { id: string; full_name: string } | null;
+  } | null>(null);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -556,11 +569,19 @@ export function TontineDetailView({ id }: { id: string }) {
       setData(d);
       setDisbursements(Array.isArray(disbs) ? disbs : []);
       setModules(mods);
+      const contacts = await api.get<{
+        manager: { id: string; full_name: string } | null;
+        platform_admin: { id: string; full_name: string } | null;
+      }>(`/tontines/${id}/message-contacts`).catch(() => null);
+      setMsgContacts(contacts);
       if (d?.is_admin) {
         const jr = await api.get<typeof joinReqs>(`/tontines/join-requests?tontine_id=${id}`).catch(() => []);
         setJoinReqs(jr ?? []);
+        const vr = await api.get<{ id: string; status: string } | null>(`/tontines/${id}/verified-request`).catch(() => null);
+        setVerifiedReq(vr ?? null);
       } else {
         setJoinReqs([]);
+        setVerifiedReq(null);
       }
     } catch (e) {
       setData(null);
@@ -806,7 +827,7 @@ export function TontineDetailView({ id }: { id: string }) {
     modules.tontine ? { key: "cycle" as const, label: "Cycle" } : null,
     modules.tontine ? { key: "rotation" as const, label: "Rotation" } : null,
     modules.tontine ? { key: "history" as const, label: "Remises" } : null,
-    modules.members ? { key: "members" as const, label: "Membres" } : null,
+    { key: "members" as const, label: "Membres" },
     modules.treasury ? { key: "contributions" as const, label: "Cotisations" } : null,
   ].filter(Boolean) as { key: "cycle" | "rotation" | "history" | "members" | "contributions"; label: string }[];
 
@@ -993,6 +1014,23 @@ export function TontineDetailView({ id }: { id: string }) {
               </LinearGradient>
             </TouchableOpacity>
 
+            {tontine.moderation_status === "pending_review" ? (
+              <Card style={{ padding: 14, backgroundColor: "#FFFBEB", borderColor: "#FDE68A", marginBottom: 12 }}>
+                <Text style={{ color: "#92400E", fontWeight: "800", fontSize: 13 }}>En revue HODIX</Text>
+                <Text style={{ color: "#B45309", fontSize: 12, marginTop: 4 }}>
+                  {tontine.moderation_reason
+                    ?? "Cette tontine n’est pas encore visible sur Découvrir. Un admin HODIX la validera bientôt."}
+                </Text>
+              </Card>
+            ) : null}
+
+            {tontine.is_hodix_verified ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 4, marginBottom: 8 }}>
+                <Award size={16} color="#1D4ED8" />
+                <Text style={{ color: "#1D4ED8", fontWeight: "800", fontSize: 13 }}>Badge Vérifié HODIX</Text>
+              </View>
+            ) : null}
+
             {/* Security CTA */}
             <TouchableOpacity
               onPress={() => router.push(`/tontines/security?id=${id}` as any)}
@@ -1010,6 +1048,44 @@ export function TontineDetailView({ id }: { id: string }) {
                 <Text style={{ color: "#F59E0B", fontSize: 20, fontWeight: "300" }}>›</Text>
               </View>
             </TouchableOpacity>
+
+            {is_admin
+              && !tontine.is_hodix_verified
+              && tontine.is_public
+              && (tontine.moderation_status ?? "approved") === "approved"
+              && !tontine.is_personal ? (
+              <TouchableOpacity
+                disabled={verifiedBusy || verifiedReq?.status === "pending"}
+                onPress={async () => {
+                  setVerifiedBusy(true);
+                  try {
+                    await api.post(`/tontines/${id}/request-verified`, {});
+                    Alert.alert("Demande envoyée", "Un admin HODIX examinera votre demande de badge Vérifié.");
+                    await load();
+                  } catch (e) {
+                    Alert.alert("Erreur", e instanceof ApiError ? e.detail : "Demande impossible.");
+                  } finally {
+                    setVerifiedBusy(false);
+                  }
+                }}
+                style={{ marginBottom: 12, opacity: verifiedBusy || verifiedReq?.status === "pending" ? 0.6 : 1 }}
+                activeOpacity={0.85}
+                testID="tontine-request-verified"
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14,
+                  backgroundColor: "#EFF6FF", borderRadius: 14, borderWidth: 1, borderColor: "#BFDBFE" }}>
+                  <Award size={20} color="#1D4ED8" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: "#1E40AF", fontWeight: "800", fontSize: 13 }}>
+                      {verifiedReq?.status === "pending" ? "Badge Vérifié — en attente" : "Demander le badge Vérifié HODIX"}
+                    </Text>
+                    <Text style={{ color: "#3B82F6", fontSize: 11, marginTop: 1 }}>
+                      Crédibilité publique sur Découvrir (pas la création)
+                    </Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ) : null}
 
             {/* Admin: Record disbursement */}
             {is_admin && (
@@ -1053,42 +1129,108 @@ export function TontineDetailView({ id }: { id: string }) {
 
         {/* ── TAB: MEMBERS ── */}
         {activeTab === "members" && (
-          <View style={{ gap: 8 }}>
+          <View style={{ gap: 10 }}>
+            <Card style={{ padding: 14, gap: 10 }}>
+              <Text style={{ fontWeight: "800", fontSize: 13, color: Colors.text }}>Messagerie interne</Text>
+              <Text style={{ fontSize: 12, color: Colors.textMuted, lineHeight: 17 }}>
+                Contactez le gestionnaire ou l’admin HODIX pour une réclamation, un membre frauduleux ou une preuve de paiement (images acceptées).
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {msgContacts?.manager && msgContacts.manager.id !== user?.id ? (
+                  <TouchableOpacity
+                    style={styles.msgContactBtn}
+                    onPress={() => router.push({
+                      pathname: "/messages",
+                      params: { peer_id: msgContacts.manager!.id, peer_name: `Gestionnaire · ${msgContacts.manager!.full_name}` },
+                    } as any)}
+                  >
+                    <Crown size={14} color="#92400E" />
+                    <Text style={styles.msgContactText}>Gestionnaire</Text>
+                  </TouchableOpacity>
+                ) : null}
+                {msgContacts?.platform_admin ? (
+                  <TouchableOpacity
+                    style={[styles.msgContactBtn, { backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" }]}
+                    onPress={() => router.push({
+                      pathname: "/messages",
+                      params: { peer_id: msgContacts.platform_admin!.id, peer_name: "Admin HODIX" },
+                    } as any)}
+                  >
+                    <Shield size={14} color="#1D4ED8" />
+                    <Text style={[styles.msgContactText, { color: "#1D4ED8" }]}>Admin HODIX</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity
+                  style={[styles.msgContactBtn, { backgroundColor: Colors.primaryLight, borderColor: Colors.border }]}
+                  onPress={() => router.push({
+                    pathname: "/messages",
+                    params: { tontine_id: id, tontine_name: tontine.name },
+                  } as any)}
+                >
+                  <UsersIcon size={14} color={Colors.primary} />
+                  <Text style={[styles.msgContactText, { color: Colors.primary }]}>Groupe</Text>
+                </TouchableOpacity>
+              </View>
+            </Card>
+
+            <Text style={styles.sectionTitle}>
+              Membres ({members.filter((m) => m.status !== "exclu").length})
+            </Text>
+
             {members.length === 0 ? (
               <Card style={{ padding: 20 }}>
-                <Text style={styles.emptyText}>Aucun membre affiché. Les co-membres apparaissent ici une fois la tontine rejointe.</Text>
+                <Text style={styles.emptyText}>Aucun membre pour le moment.</Text>
               </Card>
             ) : null}
-            {members.map((m) => (
-              <Card key={m.id} style={styles.memberRow}>
-                <View style={styles.rotAvatar}>
-                  <Text style={styles.rotAvatarLetter}>{m.full_name?.[0]?.toUpperCase()}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    {m.role === "admin" ? <Crown color={Colors.accent} size={12} /> : <UsersIcon color={Colors.textSubtle} size={12} />}
-                    <VerifiedName name={m.full_name} kycVerified={m.kyc_verified} style={styles.rotName} />
-                    {m.status === "exclu" && (
-                      <View style={{ backgroundColor: "#FEE2E2", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2 }}>
-                        <Text style={{ color: "#EF4444", fontSize: 10, fontWeight: "700" }}>⛔ Exclu</Text>
+            {members
+              .filter((m) => m.status !== "exclu")
+              .map((m) => {
+                const isManager = m.role === "admin" || m.user_id === tontine.owner_id;
+                const isSelf = m.user_id === user?.id;
+                return (
+                  <Card key={m.id} style={styles.memberRow}>
+                    <View style={styles.rotAvatar}>
+                      <Text style={styles.rotAvatarLetter}>{m.full_name?.[0]?.toUpperCase()}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        {isManager ? <Crown color={Colors.accent} size={12} /> : <UsersIcon color={Colors.textSubtle} size={12} />}
+                        <VerifiedName name={m.full_name} kycVerified={m.kyc_verified} style={styles.rotName} />
+                        {isManager ? (
+                          <View style={{ backgroundColor: "#FEF3C7", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2 }}>
+                            <Text style={{ color: "#92400E", fontSize: 10, fontWeight: "800" }}>Gestionnaire</Text>
+                          </View>
+                        ) : null}
+                        {(m.status === "en_retard" || (m.cycles_late ?? 0) > 0) && (
+                          <View style={{ backgroundColor: "#FEF3C7", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2 }}>
+                            <Text style={{ color: "#D97706", fontSize: 10, fontWeight: "700" }}>⚠️ En retard</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.rotStatus}>
+                        Pos. #{m.rotation_position} · {m.cycles_paid ?? 0} cycle(s) payé(s)
+                        {m.has_received ? " · ✓ A reçu" : ""}
+                      </Text>
+                    </View>
+                    {!isSelf ? (
+                      <TouchableOpacity
+                        onPress={() => router.push({
+                          pathname: "/messages",
+                          params: { peer_id: m.user_id, peer_name: m.full_name },
+                        } as any)}
+                        style={{ padding: 8 }}
+                        hitSlop={8}
+                      >
+                        <MessageSquare size={18} color={Colors.primary} />
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={[styles.statusPill, { backgroundColor: `${statusColor(m.status)}20`, borderColor: statusColor(m.status) }]}>
+                        <Text style={[styles.statusText, { color: statusColor(m.status) }]}>{statusLabel(m.status)}</Text>
                       </View>
                     )}
-                    {(m.status === "en_retard" || (m.cycles_late ?? 0) > 0) && m.status !== "exclu" && (
-                      <View style={{ backgroundColor: "#FEF3C7", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2 }}>
-                        <Text style={{ color: "#D97706", fontSize: 10, fontWeight: "700" }}>⚠️ En retard</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={styles.rotStatus}>
-                    Pos. #{m.rotation_position} · {m.cycles_paid ?? 0} cycle(s) payé(s)
-                    {m.has_received ? " · ✓ A reçu" : ""}
-                  </Text>
-                </View>
-                <View style={[styles.statusPill, { backgroundColor: `${statusColor(m.status)}20`, borderColor: statusColor(m.status) }]}>
-                  <Text style={[styles.statusText, { color: statusColor(m.status) }]}>{statusLabel(m.status)}</Text>
-                </View>
-              </Card>
-            ))}
+                  </Card>
+                );
+              })}
           </View>
         )}
 
@@ -1114,6 +1256,12 @@ export function TontineDetailView({ id }: { id: string }) {
 
         {modules.projects ? <CommunityProjectsPlaceholder /> : null}
         {modules.documents ? <CommunityDocumentsPlaceholder /> : null}
+
+        <TontineReportTrigger
+          tontineId={id}
+          tontineName={tontine.name}
+          hidden={tontine.owner_id === user?.id}
+        />
       </ScrollView>
 
       {/* Disbursement modal */}
@@ -1163,6 +1311,18 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryLight, alignItems: "center", justifyContent: "center",
     marginRight: 6,
   },
+  msgContactBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 12,
+    backgroundColor: "#FEF3C7",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  msgContactText: { fontSize: 12, fontWeight: "800", color: "#92400E" },
 
   // Tabs
   tabsRow: {

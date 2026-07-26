@@ -18,8 +18,23 @@ export interface MessageRow {
   content: string;
   is_read: boolean;
   created_at: string;
+  attachment_paths?: string[];
+  attachment_urls?: string[];
   sender_name?: string;
   recipient_name?: string | null;
+}
+
+const ATTACH_BUCKET = "message-attachments";
+
+async function signedAttachmentUrls(paths: string[] | null | undefined): Promise<string[]> {
+  const list = (paths ?? []).filter(Boolean).slice(0, 5);
+  if (!list.length) return [];
+  const urls: string[] = [];
+  for (const path of list) {
+    const { data } = await getSupabase().storage.from(ATTACH_BUCKET).createSignedUrl(path, 3600);
+    if (data?.signedUrl) urls.push(data.signedUrl);
+  }
+  return urls;
 }
 
 export interface ConversationItem {
@@ -64,10 +79,15 @@ async function profileNameMap(ids: string[]): Promise<Record<string, string>> {
 async function enrichMessages(rows: Record<string, unknown>[]): Promise<MessageRow[]> {
   const ids = rows.flatMap((m) => [m.sender_id, m.recipient_id].filter(Boolean) as string[]);
   const names = await profileNameMap(ids);
-  return rows.map((m) => ({
-    ...(m as unknown as MessageRow),
-    sender_name: names[String(m.sender_id)] ?? "—",
-    recipient_name: m.recipient_id ? (names[String(m.recipient_id)] ?? "—") : null,
+  return Promise.all(rows.map(async (m) => {
+    const paths = (m.attachment_paths as string[] | undefined) ?? [];
+    return {
+      ...(m as unknown as MessageRow),
+      attachment_paths: paths,
+      attachment_urls: await signedAttachmentUrls(paths),
+      sender_name: names[String(m.sender_id)] ?? "—",
+      recipient_name: m.recipient_id ? (names[String(m.recipient_id)] ?? "—") : null,
+    };
   }));
 }
 
@@ -181,15 +201,51 @@ export async function listMessages(
   return [];
 }
 
+function base64ToUint8Array(base64: string): Uint8Array {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  const clean = base64.replace(/^data:[^;]+;base64,/, "").replace(/[^A-Za-z0-9+/]/g, "");
+  const len = clean.length;
+  const bytes = new Uint8Array(Math.floor((len * 3) / 4));
+  let idx = 0;
+  for (let i = 0; i < len; i += 4) {
+    const a = chars.indexOf(clean[i]);
+    const b = chars.indexOf(clean[i + 1]);
+    const c = chars.indexOf(clean[i + 2]);
+    const d = chars.indexOf(clean[i + 3]);
+    bytes[idx++] = (a << 2) | (b >> 4);
+    if (c !== -1) bytes[idx++] = ((b & 0xf) << 4) | (c >> 2);
+    if (d !== -1) bytes[idx++] = ((c & 0x3) << 6) | d;
+  }
+  return bytes.slice(0, idx);
+}
+
+export async function uploadMessageAttachment(base64: string, mime = "image/jpeg"): Promise<string> {
+  const me = await uid();
+  const ext = mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : mime.includes("pdf") ? "pdf" : "jpg";
+  const path = `${me}/${Date.now()}.${ext}`;
+  const { error } = await getSupabase().storage.from(ATTACH_BUCKET).upload(path, base64ToUint8Array(base64), {
+    contentType: mime,
+    upsert: false,
+  });
+  if (error) throw { status: 500, detail: error.message };
+  return path;
+}
+
 export async function sendMessage(body: {
   recipient_id?: string;
   tontine_id?: string;
   content: string;
   message_type?: MessageType;
+  attachment_paths?: string[];
 }) {
   const me = await uid();
-  const content = body.content.trim();
+  const attachments = (body.attachment_paths ?? []).filter(Boolean).slice(0, 5);
+  let content = (body.content ?? "").trim();
+  if (!content && attachments.length) content = "[Pièce jointe]";
   if (!content) throw { status: 400, detail: "Message vide" };
+  if (attachments.some((p) => !p.startsWith(`${me}/`))) {
+    throw { status: 400, detail: "Pièce jointe invalide." };
+  }
 
   let messageType: MessageType = body.message_type ?? "direct";
   if (body.tontine_id) messageType = "tontine";
@@ -201,20 +257,25 @@ export async function sendMessage(body: {
     tontine_id: body.tontine_id ?? null,
     message_type: messageType,
     content,
+    attachment_paths: attachments,
     is_read: false,
   };
 
   const { data, error } = await getSupabase().from("messages").insert(row).select().single();
   throwSb(error);
 
+  const preview = attachments.length && content === "[Pièce jointe]"
+    ? "📷 Image jointe"
+    : `${content.slice(0, 80)}${content.length > 80 ? "…" : ""}`;
+
   if (messageType === "direct" && body.recipient_id && body.recipient_id !== me) {
     const { data: sender } = await getSupabase().from("profiles").select("full_name").eq("id", me).single();
     notifyUser({
       user_id: body.recipient_id,
       title: "Nouveau message",
-      body: `${sender?.full_name ?? "Un membre"} : ${content.slice(0, 80)}${content.length > 80 ? "…" : ""}`,
+      body: `${sender?.full_name ?? "Un membre"} : ${preview}`,
       type: "info",
-      metadata: { action_url: "/messages" },
+      metadata: { action_url: `/messages?peer_id=${body.recipient_id}` },
     }).catch(() => {});
   }
 
@@ -229,14 +290,37 @@ export async function sendMessage(body: {
       notifyUser({
         user_id: m.user_id,
         title: "Message tontine",
-        body: `${sender?.full_name ?? "Un membre"} : ${content.slice(0, 60)}…`,
+        body: `${sender?.full_name ?? "Un membre"} : ${preview}`,
         type: "info",
         metadata: { action_url: `/messages?tontine_id=${body.tontine_id}` },
       }).catch(() => {});
     }
   }
 
-  return data;
+  const enriched = await enrichMessages([data as Record<string, unknown>]);
+  return enriched[0] ?? data;
+}
+
+export async function getTontineMessageContacts(tontineId: string) {
+  const { data, error } = await getSupabase().rpc("get_tontine_message_contacts", {
+    p_tontine_id: tontineId,
+  });
+  if (error) throw { status: 400, detail: error.message };
+  return data as {
+    tontine_id: string;
+    tontine_name: string;
+    manager: { id: string; full_name: string } | null;
+    platform_admin: { id: string; full_name: string } | null;
+    members: {
+      user_id: string;
+      full_name: string;
+      role: string;
+      status: string;
+      rotation_position: number | null;
+      is_manager: boolean;
+      kyc_verified: boolean;
+    }[];
+  };
 }
 
 export async function markMessageRead(id: string) {

@@ -14,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Rect, Text as SvgText } from "react-native-svg";
 import { ChevronLeft, Clock, Globe, Shield, Star, Users } from "lucide-react-native";
 import { VerifiedBadge } from "@/src/fraud-badge";
+import { TontineReportTrigger } from "@/src/tontine-report-sheet";
 
 import { api, formatXAF, ApiError } from "@/src/api";
 import { Button, Card } from "@/src/ui";
@@ -408,6 +409,7 @@ export default function TontineProfile() {
           ) : null}
         </View>
 
+        <TontineReportTrigger tontineId={tontine.id} tontineName={tontine.name} />
         <View style={{ height: 32 }} />
       </ScrollView>
     </SafeAreaView>

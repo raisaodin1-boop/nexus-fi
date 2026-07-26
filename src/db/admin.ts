@@ -166,8 +166,8 @@ export async function adminDeactivateUser(userId: string) {
 export async function adminListTontines(search = "") {
   await requireAdmin();
   let q = getSupabase().from("tontines")
-    .select("id, name, amount_per_cycle, frequency, max_members, invite_code, created_at, owner_id")
-    .order("created_at", { ascending: false }).limit(100);
+    .select("id, name, amount_per_cycle, frequency, max_members, invite_code, created_at, owner_id, is_public, is_personal, is_hodix_verified, moderation_status, moderation_reason, status, auto_close_date")
+    .order("created_at", { ascending: false }).limit(150);
   if (search) q = q.ilike("name", `%${search}%`);
   const { data, error } = await q;
   if (error) return [];
@@ -187,16 +187,133 @@ export async function adminListTontines(search = "") {
     for (const o of owners ?? []) ownerNames[o.id] = o.full_name ?? "—";
   } catch {}
 
-  const statusMap: Record<string, { status: string; auto_close_date: string | null }> = {};
-  try {
-    const { data: sd } = await getSupabase().from("tontines").select("id, status, auto_close_date");
-    if (sd) for (const t of sd) statusMap[t.id] = { status: t.status, auto_close_date: t.auto_close_date };
-  } catch {}
+  const modRank = (s: string) => (s === "pending_review" ? 0 : s === "suspended" ? 1 : s === "rejected" ? 2 : 3);
+  return tontines
+    .map((t: any) => ({
+      ...t,
+      status: t.status ?? "active",
+      auto_close_date: t.auto_close_date ?? null,
+      moderation_status: t.moderation_status ?? "approved",
+      moderation_reason: t.moderation_reason ?? null,
+      is_hodix_verified: Boolean(t.is_hodix_verified),
+      owner_name: ownerNames[t.owner_id] ?? "—",
+      members_count: memberCounts[t.id] ?? 0,
+    }))
+    .sort((a: any, b: any) => {
+      const r = modRank(a.moderation_status) - modRank(b.moderation_status);
+      if (r !== 0) return r;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+}
 
-  return tontines.map((t: any) => ({
-    ...t, status: statusMap[t.id]?.status ?? "active", auto_close_date: statusMap[t.id]?.auto_close_date ?? null,
-    owner_name: ownerNames[t.owner_id] ?? "—", members_count: memberCounts[t.id] ?? 0,
+export async function adminReviewTontineModeration(tontineId: string, approve: boolean, note?: string) {
+  await requireAdmin();
+  const { data, error } = await getSupabase().rpc("admin_review_tontine_moderation", {
+    p_tontine_id: tontineId,
+    p_approve: approve,
+    p_note: note ?? null,
+  });
+  if (error) throw { status: 400, detail: error.message };
+  return data;
+}
+
+export async function adminListVerifiedRequests(status = "pending") {
+  await requireAdmin();
+  let q = getSupabase()
+    .from("tontine_verified_requests")
+    .select("id, tontine_id, requester_id, status, message, rejection_reason, created_at, reviewed_at, tontines(id, name, amount_per_cycle, is_hodix_verified, moderation_status)")
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (status && status !== "all") q = q.eq("status", status);
+  const { data, error } = await q;
+  if (error) return [];
+  const rows = data ?? [];
+  const requesterIds = [...new Set(rows.map((r: any) => r.requester_id))];
+  const names: Record<string, string> = {};
+  if (requesterIds.length) {
+    const { data: profiles } = await getSupabase().from("profiles").select("id, full_name").in("id", requesterIds);
+    for (const p of profiles ?? []) names[p.id] = p.full_name ?? "—";
+  }
+  return rows.map((r: any) => ({
+    id: r.id,
+    tontine_id: r.tontine_id,
+    tontine_name: r.tontines?.name ?? "—",
+    amount_per_cycle: r.tontines?.amount_per_cycle ?? null,
+    requester_id: r.requester_id,
+    requester_name: names[r.requester_id] ?? "—",
+    status: r.status,
+    message: r.message,
+    rejection_reason: r.rejection_reason,
+    created_at: r.created_at,
+    reviewed_at: r.reviewed_at,
   }));
+}
+
+export async function adminReviewTontineVerified(requestId: string, approve: boolean, note?: string) {
+  await requireAdmin();
+  const { data, error } = await getSupabase().rpc("admin_review_tontine_verified", {
+    p_request_id: requestId,
+    p_approve: approve,
+    p_note: note ?? null,
+  });
+  if (error) throw { status: 400, detail: error.message };
+  return data;
+}
+
+export async function adminListTontineReports(status = "open") {
+  await requireAdmin();
+  let q = getSupabase()
+    .from("tontine_reports")
+    .select("id, tontine_id, reporter_id, reason_code, reason_detail, proof_paths, status, admin_note, created_at, reviewed_at, tontines(id, name, owner_id, amount_per_cycle)")
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (status && status !== "all") q = q.eq("status", status);
+  const { data, error } = await q;
+  if (error) return [];
+  const rows = data ?? [];
+  const userIds = [...new Set(rows.flatMap((r: any) => [r.reporter_id, r.tontines?.owner_id].filter(Boolean)))];
+  const names: Record<string, string> = {};
+  if (userIds.length) {
+    const { data: profiles } = await getSupabase().from("profiles").select("id, full_name").in("id", userIds);
+    for (const p of profiles ?? []) names[p.id] = p.full_name ?? "—";
+  }
+  const withUrls = await Promise.all(rows.map(async (r: any) => {
+    const paths: string[] = r.proof_paths ?? [];
+    const proof_urls: string[] = [];
+    for (const path of paths.slice(0, 5)) {
+      const { data: signed } = await getSupabase().storage.from("tontine-reports").createSignedUrl(path, 3600);
+      if (signed?.signedUrl) proof_urls.push(signed.signedUrl);
+    }
+    return {
+      id: r.id,
+      tontine_id: r.tontine_id,
+      tontine_name: r.tontines?.name ?? "—",
+      amount_per_cycle: r.tontines?.amount_per_cycle ?? null,
+      owner_name: names[r.tontines?.owner_id] ?? "—",
+      reporter_id: r.reporter_id,
+      reporter_name: names[r.reporter_id] ?? "—",
+      reason_code: r.reason_code,
+      reason_detail: r.reason_detail,
+      proof_paths: paths,
+      proof_urls,
+      status: r.status,
+      admin_note: r.admin_note,
+      created_at: r.created_at,
+      reviewed_at: r.reviewed_at,
+    };
+  }));
+  return withUrls;
+}
+
+export async function adminReviewTontineReport(reportId: string, status: string, note?: string) {
+  await requireAdmin();
+  const { data, error } = await getSupabase().rpc("admin_review_tontine_report", {
+    p_report_id: reportId,
+    p_status: status,
+    p_note: note ?? null,
+  });
+  if (error) throw { status: 400, detail: error.message };
+  return data;
 }
 
 export async function adminUpdateTontine(id: string, updates: { status?: string; auto_close_date?: string | null }) {

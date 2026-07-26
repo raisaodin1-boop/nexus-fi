@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -71,7 +72,41 @@ interface PromoRequest {
   created_at: string;
 }
 interface AdminTontine {
-  id: string; name: string; invite_code: string; status: string; members_count: number; created_at: string;
+  id: string;
+  name: string;
+  invite_code: string;
+  status: string;
+  members_count: number;
+  created_at: string;
+  amount_per_cycle?: number;
+  owner_name?: string;
+  is_public?: boolean;
+  is_personal?: boolean;
+  is_hodix_verified?: boolean;
+  moderation_status?: string;
+  moderation_reason?: string;
+}
+interface VerifiedBadgeRequest {
+  id: string;
+  tontine_id: string;
+  tontine_name: string;
+  amount_per_cycle?: number | null;
+  requester_name: string;
+  status: string;
+  message?: string | null;
+  created_at: string;
+}
+interface TontineReportRow {
+  id: string;
+  tontine_id: string;
+  tontine_name: string;
+  owner_name: string;
+  reporter_name: string;
+  reason_code: string;
+  reason_detail: string;
+  proof_urls?: string[];
+  status: string;
+  created_at: string;
 }
 interface AdminUsersPage {
   items: AdminUser[];
@@ -164,6 +199,9 @@ export default function AdminConsole() {
   const [kyc, setKyc] = useState<KycEntry[]>([]);
   const [promos, setPromos] = useState<PromoRequest[]>([]);
   const [tontines, setTontines] = useState<AdminTontine[]>([]);
+  const [verifiedReqs, setVerifiedReqs] = useState<VerifiedBadgeRequest[]>([]);
+  const [tontineReports, setTontineReports] = useState<TontineReportRow[]>([]);
+  const [modBusyId, setModBusyId] = useState<string | null>(null);
   const [broadcastTitle, setBroadcastTitle] = useState("");
   const [broadcastBody, setBroadcastBody] = useState("");
   const [broadcasting, setBroadcasting] = useState(false);
@@ -227,17 +265,21 @@ export default function AdminConsole() {
     const safe = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch { return null; }
     };
-    const [statsData, kycData, promosData, tontinesData, complianceStats] = await Promise.all([
+    const [statsData, kycData, promosData, tontinesData, verifiedData, reportsData, complianceStats] = await Promise.all([
       safe(() => api.get<AdminStats>("/admin/stats")),
       safe(() => api.get<KycEntry[]>("/admin/kyc")),
       safe(() => api.get<PromoRequest[]>("/admin/promotion-requests")),
       safe(() => api.get<AdminTontine[]>("/admin/tontines")),
+      safe(() => api.get<VerifiedBadgeRequest[]>("/admin/tontines/verified-requests?status=pending")),
+      safe(() => api.get<TontineReportRow[]>("/admin/tontines/reports?status=open")),
       safe(() => api.get<{ open_fraud_alerts: number }>("/admin/compliance/stats")),
     ]);
     if (statsData) setAdminStats(statsData);
     if (kycData) setKyc(kycData);
     if (promosData) setPromos(promosData);
     if (tontinesData) setTontines(tontinesData);
+    if (verifiedData) setVerifiedReqs(verifiedData);
+    if (reportsData) setTontineReports(reportsData);
     if (complianceStats) setOpenFraudAlerts(complianceStats.open_fraud_alerts);
     setLoading(false);
   }, []);
@@ -317,6 +359,45 @@ export default function AdminConsole() {
       setBroadcastTitle(""); setBroadcastBody("");
     } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
     finally { setBroadcasting(false); }
+  };
+
+  const handleModerationReview = async (tontineId: string, approve: boolean) => {
+    setModBusyId(tontineId);
+    try {
+      await api.post("/admin/tontines/review", { tontine_id: tontineId, approve });
+      show(approve ? "Tontine publiée sur Découvrir" : "Tontine refusée", "success");
+      await load();
+    } catch (e) {
+      show(e instanceof ApiError ? e.detail : "Erreur revue", "error");
+    } finally {
+      setModBusyId(null);
+    }
+  };
+
+  const handleVerifiedReview = async (requestId: string, approve: boolean) => {
+    setModBusyId(requestId);
+    try {
+      await api.post("/admin/tontines/verified-review", { request_id: requestId, approve });
+      show(approve ? "Badge Vérifié accordé" : "Badge refusé", "success");
+      await load();
+    } catch (e) {
+      show(e instanceof ApiError ? e.detail : "Erreur badge", "error");
+    } finally {
+      setModBusyId(null);
+    }
+  };
+
+  const handleReportReview = async (reportId: string, status: "resolved" | "dismissed") => {
+    setModBusyId(reportId);
+    try {
+      await api.post("/admin/tontines/report-review", { report_id: reportId, status });
+      show(status === "resolved" ? "Signalement traité" : "Signalement classé", "success");
+      await load();
+    } catch (e) {
+      show(e instanceof ApiError ? e.detail : "Erreur signalement", "error");
+    } finally {
+      setModBusyId(null);
+    }
   };
 
   const handleAdminReply = async () => {
@@ -599,27 +680,159 @@ export default function AdminConsole() {
           data={tontines}
           keyExtractor={(t) => t.id}
           contentContainerStyle={{ paddingHorizontal: Spacing.xl, paddingBottom: 100, gap: 10 }}
+          ListHeaderComponent={
+            <View style={{ gap: 12, marginBottom: 8 }}>
+              {tontineReports.length > 0 ? (
+                <View style={{ gap: 8 }}>
+                  <Text style={{ fontWeight: "800", fontSize: 14, color: Colors.text }}>
+                    Signalements ({tontineReports.length})
+                  </Text>
+                  {tontineReports.map((rep) => (
+                    <View key={rep.id} style={[styles.userCard, { flexDirection: "column", alignItems: "stretch", gap: 8 }]}>
+                      <TouchableOpacity onPress={() => router.push(`/tontines/${rep.tontine_id}` as any)}>
+                        <Text style={styles.userName} numberOfLines={1}>{rep.tontine_name}</Text>
+                        <Text style={styles.userEmail}>
+                          {rep.reason_code} · par {rep.reporter_name} · owner {rep.owner_name}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: Colors.text, marginTop: 4 }} numberOfLines={4}>
+                          {rep.reason_detail}
+                        </Text>
+                      </TouchableOpacity>
+                      {(rep.proof_urls ?? []).length > 0 ? (
+                        <View style={{ gap: 4 }}>
+                          {(rep.proof_urls ?? []).map((url, i) => (
+                            <TouchableOpacity key={`${rep.id}-p-${i}`} onPress={() => Linking.openURL(url)}>
+                              <Text style={{ fontSize: 11, color: Colors.primary, fontWeight: "700" }}>
+                                Voir preuve {i + 1}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      ) : null}
+                      <View style={{ flexDirection: "row", gap: 8 }}>
+                        <TouchableOpacity
+                          style={{ flex: 1, backgroundColor: "#059669", borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: modBusyId === rep.id ? 0.5 : 1 }}
+                          disabled={!!modBusyId}
+                          onPress={() => handleReportReview(rep.id, "resolved")}
+                        >
+                          <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>Traité</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={{ flex: 1, backgroundColor: "#FEE2E2", borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: modBusyId === rep.id ? 0.5 : 1 }}
+                          disabled={!!modBusyId}
+                          onPress={() => handleReportReview(rep.id, "dismissed")}
+                        >
+                          <Text style={{ color: "#991B1B", fontWeight: "800", fontSize: 13 }}>Classer</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+              {verifiedReqs.length > 0 ? (
+                <View style={{ gap: 8 }}>
+                  <Text style={{ fontWeight: "800", fontSize: 14, color: Colors.text }}>
+                    Badge Vérifié HODIX ({verifiedReqs.length})
+                  </Text>
+                  {verifiedReqs.map((vr) => (
+                    <View key={vr.id} style={[styles.userCard, { flexDirection: "column", alignItems: "stretch", gap: 10 }]}>
+                      <TouchableOpacity onPress={() => router.push(`/tontines/${vr.tontine_id}` as any)} activeOpacity={0.8}>
+                        <Text style={styles.userName} numberOfLines={1}>{vr.tontine_name}</Text>
+                        <Text style={styles.userEmail}>
+                          Demande de {vr.requester_name}
+                          {vr.amount_per_cycle != null ? ` · ${Number(vr.amount_per_cycle).toLocaleString("fr-FR")} XAF` : ""}
+                        </Text>
+                        {vr.message ? <Text style={{ fontSize: 12, color: Colors.textMuted, marginTop: 4 }}>{vr.message}</Text> : null}
+                      </TouchableOpacity>
+                      <View style={{ flexDirection: "row", gap: 8 }}>
+                        <TouchableOpacity
+                          style={{ flex: 1, backgroundColor: "#059669", borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: modBusyId === vr.id ? 0.5 : 1 }}
+                          disabled={!!modBusyId}
+                          onPress={() => handleVerifiedReview(vr.id, true)}
+                        >
+                          <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>Accorder</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={{ flex: 1, backgroundColor: "#FEE2E2", borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: modBusyId === vr.id ? 0.5 : 1 }}
+                          disabled={!!modBusyId}
+                          onPress={() => handleVerifiedReview(vr.id, false)}
+                        >
+                          <Text style={{ color: "#991B1B", fontWeight: "800", fontSize: 13 }}>Refuser</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+              <Text style={{ fontWeight: "800", fontSize: 14, color: Colors.text }}>
+                Tontines
+                {tontines.filter((t) => t.moderation_status === "pending_review").length
+                  ? ` · ${tontines.filter((t) => t.moderation_status === "pending_review").length} en revue`
+                  : ""}
+              </Text>
+            </View>
+          }
           renderItem={({ item: t }) => {
-            const statusConf = t.status === "active"
+            const mod = t.moderation_status ?? "approved";
+            const modConf = mod === "pending_review"
+              ? { label: "Revue risque", bg: "#FEF3C7", color: "#92400E" }
+              : mod === "rejected"
+              ? { label: "Refusée", bg: "#FEE2E2", color: "#991B1B" }
+              : mod === "suspended"
+              ? { label: "Suspendue", bg: "#FEE2E2", color: "#991B1B" }
+              : t.is_hodix_verified
+              ? { label: "Vérifié HODIX", bg: "#DBEAFE", color: "#1D4ED8" }
+              : t.status === "active"
               ? { label: "Active", bg: "#D1FAE5", color: "#065F46" }
-              : t.status === "completed"
-              ? { label: "Terminée", bg: "#DBEAFE", color: "#1D4ED8" }
               : { label: t.status, bg: "#F3F4F6", color: "#6B7280" };
             return (
-              <TouchableOpacity style={styles.userCard} onPress={() => router.push(`/tontines/${t.id}` as any)} activeOpacity={0.8}>
-                <View style={styles.userCardLeft}>
-                  <Avatar name={t.name} size={44} bg="#10B981" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.userName} numberOfLines={1}>{t.name}</Text>
-                    <Text style={styles.userEmail}>Code : <Text style={{ fontWeight: "800", color: Colors.primary }}>{t.invite_code}</Text></Text>
-                    <View style={{ flexDirection: "row", gap: 6, marginTop: 4, alignItems: "center" }}>
-                      <StatusBadge config={statusConf} />
-                      <Text style={{ fontSize: 11, color: Colors.textMuted, fontWeight: "600" }}>{t.members_count} membre(s)</Text>
+              <View style={[styles.userCard, { flexDirection: "column", alignItems: "stretch", gap: 8 }]}>
+                <TouchableOpacity
+                  style={{ flexDirection: "row", alignItems: "center" }}
+                  onPress={() => router.push(`/tontines/${t.id}` as any)}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.userCardLeft}>
+                    <Avatar name={t.name} size={44} bg="#10B981" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.userName} numberOfLines={1}>{t.name}</Text>
+                      <Text style={styles.userEmail}>
+                        {t.owner_name ?? "—"}
+                        {t.amount_per_cycle != null ? ` · ${Number(t.amount_per_cycle).toLocaleString("fr-FR")} XAF` : ""}
+                        {" · "}{t.members_count} membre(s)
+                      </Text>
+                      <View style={{ flexDirection: "row", gap: 6, marginTop: 4, alignItems: "center", flexWrap: "wrap" }}>
+                        <StatusBadge config={modConf} />
+                        {t.is_personal ? (
+                          <Text style={{ fontSize: 11, color: Colors.textMuted, fontWeight: "600" }}>Personnelle</Text>
+                        ) : null}
+                      </View>
+                      {t.moderation_reason ? (
+                        <Text style={{ fontSize: 11, color: "#92400E", marginTop: 4 }} numberOfLines={2}>{t.moderation_reason}</Text>
+                      ) : null}
                     </View>
                   </View>
-                </View>
-                <ChevronRight color={Colors.textMuted} size={18} />
-              </TouchableOpacity>
+                  <ChevronRight color={Colors.textMuted} size={18} />
+                </TouchableOpacity>
+                {mod === "pending_review" ? (
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: "#059669", borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: modBusyId === t.id ? 0.5 : 1 }}
+                      disabled={!!modBusyId}
+                      onPress={() => handleModerationReview(t.id, true)}
+                    >
+                      <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>Publier Découvrir</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: "#FEE2E2", borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: modBusyId === t.id ? 0.5 : 1 }}
+                      disabled={!!modBusyId}
+                      onPress={() => handleModerationReview(t.id, false)}
+                    >
+                      <Text style={{ color: "#991B1B", fontWeight: "800", fontSize: 13 }}>Refuser</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+              </View>
             );
           }}
           ListEmptyComponent={<Text style={styles.empty}>Aucune tontine</Text>}
