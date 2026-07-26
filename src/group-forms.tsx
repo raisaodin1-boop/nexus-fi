@@ -163,7 +163,7 @@ export function GroupCreateForm({ title, subtitle, endpoint, showContribution, s
               />
               <Text style={styles.label}>Type de tontine</Text>
               <Text style={{ color: Colors.textMuted, fontSize: 12, marginBottom: 8 }}>
-                Les tontines de groupe apparaissent automatiquement sur Découvrir. Réservez « Personnelle » aux cercles privés.
+                Groupe = visible pour tous sur Découvrir dès la création. Personnelle = privée (code uniquement).
               </Text>
               <View style={styles.visibilityRow}>
                 <TouchableOpacity

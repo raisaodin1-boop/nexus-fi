@@ -256,7 +256,11 @@ export async function listPublicTontines(filters?: {
       compliance_rate: complianceRate, reliability_score: reliability, created_at: t.created_at,
     };
   });
+  // Newest first so member-created groups appear immediately on Découvrir
   return mapped.sort((a, b) => {
+    const ta = new Date(a.created_at ?? 0).getTime();
+    const tb = new Date(b.created_at ?? 0).getTime();
+    if (tb !== ta) return tb - ta;
     const v = Number(b.is_hodix_verified) - Number(a.is_hodix_verified);
     if (v !== 0) return v;
     return (b.members_count ?? 0) - (a.members_count ?? 0);
@@ -436,9 +440,6 @@ export async function contributeTontine(_id: string, _amount: number) {
 
 /* ── Security-aware operations ──────────────────────────────── */
 
-const TRUST_SCORE_PUBLIC_TONTINE = 300;
-const TRUST_SCORE_HIGH_VALUE     = 600;
-const HIGH_VALUE_THRESHOLD       = 100_000;
 const KYC_REQUIRED_THRESHOLD     = 50_000;
 const ESCROW_HOURS               = 72;
 const RESERVE_FUND_PCT           = 0.02;
@@ -450,26 +451,20 @@ export async function createTontineSecure(body: Record<string, any>) {
   const me = await uid();
   const sb = getSupabase();
 
-  const { data: profile } = await sb.from("profiles").select("trust_flags, kyc_status, phone").eq("id", me).single();
+  const { data: profile } = await sb.from("profiles").select("trust_flags, kyc_status, phone, role").eq("id", me).single();
   if ((profile?.trust_flags ?? []).includes("blacklisted"))
     throw { status: 403, detail: "Votre compte est suspendu pour fraude. Contactez le support." };
 
-  const { data: profileData } = await sb.from("profiles").select("role").eq("id", me).single();
-  const isAdmin = profileData?.role === "admin" || profileData?.role === "super_admin";
+  const isAdmin = profile?.role === "admin" || profile?.role === "super_admin";
   const amountPerCycle = Number(body.amount_per_cycle ?? 0);
 
-  // Group tontines are public on Découvrir; only personal stays private.
+  // Group = public on Découvrir for every member (current + future).
+  // Only explicit « Personnelle » stays private / off-directory.
   const isPersonal = body.is_personal === true || body.is_public === false;
   const isPublic = !isPersonal;
 
   if (!isAdmin) {
-    if (isPublic) {
-      const tsRes = await sb.from("identity_scores").select("score").eq("user_id", me).maybeSingle();
-      const score = tsRes?.data?.score ?? 0;
-      const required = amountPerCycle >= HIGH_VALUE_THRESHOLD ? TRUST_SCORE_HIGH_VALUE : TRUST_SCORE_PUBLIC_TONTINE;
-      if (score < required)
-        throw { status: 403, detail: `Trust Score insuffisant pour une tontine de groupe (requis: ${required}, votre score: ${score}). Choisissez « Personnelle » pour rester privée, ou augmentez votre score.` };
-    }
+    // No Trust Score gate for public groups — Découvrir must list member-created tontines.
     if (amountPerCycle >= KYC_REQUIRED_THRESHOLD) {
       if ((profile?.kyc_status ?? null) !== "approved")
         throw { status: 403, detail: `Vérification d'identité (KYC) obligatoire pour les tontines supérieures à ${KYC_REQUIRED_THRESHOLD.toLocaleString()} XAF/cycle.` };
