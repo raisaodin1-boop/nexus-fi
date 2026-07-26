@@ -314,25 +314,50 @@ export async function adminGetDiasporaEnrollment(id: string) {
 
 export async function adminApproveDiasporaEnrollment(enrollmentId: string, note?: string) {
   await requireAdmin();
+  if (!enrollmentId) throw { status: 400, detail: "Dossier requis." };
   const { data, error } = await getSupabase().rpc("approve_diaspora_enrollment", {
     p_enrollment_id: enrollmentId,
     p_internal_note: note ?? null,
   });
   throwSb(error);
 
-  const { data: row } = await getSupabase().from("diaspora_enrollments").select("user_id, country_of_residence").eq("id", enrollmentId).single();
+  const { data: row } = await getSupabase().from("diaspora_enrollments").select("user_id, country_of_residence").eq("id", enrollmentId).maybeSingle();
   if (row?.user_id) {
     invalidateCache(`diaspora-access-${row.user_id}`);
-    await notifyUser({
-      user_id: row.user_id,
-      title: "Mode Diaspora activé",
-      body: `Votre inscription Diaspora est validée. Bienvenue depuis ${row.country_of_residence ?? "l'étranger"} !`,
-      type: "success",
-      metadata: { action_url: "/(tabs)" },
-    });
+    // RPC already inserts the member notification; keep a best-effort client fallback.
+    try {
+      const { count } = await getSupabase()
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", row.user_id)
+        .eq("title", "Mode Diaspora activé")
+        .gte("created_at", new Date(Date.now() - 60_000).toISOString());
+      if (!count) {
+        await notifyUser({
+          user_id: row.user_id,
+          title: "Mode Diaspora activé",
+          body: `Votre inscription Diaspora est validée. Bienvenue depuis ${row.country_of_residence ?? "l'étranger"} !`,
+          type: "success",
+          metadata: { action_url: "/(tabs)", enrollment_id: enrollmentId },
+        });
+      }
+    } catch { /* notification must not block approval */ }
   }
+
+  // Dismiss the reviewing admin's pending Diaspora alert so the badge clears.
+  try {
+    const me = await uid();
+    await getSupabase()
+      .from("notifications")
+      .update({ is_read: true })
+      .eq("user_id", me)
+      .eq("is_read", false)
+      .eq("title", "Nouvelle inscription Diaspora");
+    invalidateCache(`notifs-${me}`);
+  } catch { /* best-effort */ }
+
   invalidateCache("diaspora");
-  return data;
+  return data ?? { detail: "Inscription Diaspora approuvée" };
 }
 
 export async function adminRejectDiasporaEnrollment(enrollmentId: string, reason: string, note?: string) {

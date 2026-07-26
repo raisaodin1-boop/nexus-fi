@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import {
-  ActivityIndicator, Alert, Image, Linking, ScrollView,
+  ActivityIndicator, Alert, Image, Linking, Platform, ScrollView,
   StyleSheet, Text, TouchableOpacity, View,
 } from "react-native";
 import { useFocusEffect } from "expo-router";
@@ -12,6 +12,21 @@ import { Card } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { useToast } from "@/src/toast";
 import { DiasporaStatusBadge } from "@/src/diaspora-ui";
+
+/** react-native-web Alert.alert is a no-op — use window.confirm on web. */
+function confirmAction(title: string, message: string): Promise<boolean> {
+  if (Platform.OS === "web") {
+    return Promise.resolve(
+      typeof window !== "undefined" && window.confirm(`${title}\n\n${message}`),
+    );
+  }
+  return new Promise((resolve) => {
+    Alert.alert(title, message, [
+      { text: "Annuler", style: "cancel", onPress: () => resolve(false) },
+      { text: "Confirmer", onPress: () => resolve(true) },
+    ]);
+  });
+}
 
 type AdminItem = DiasporaRequest & {
   user?: { full_name?: string; email?: string; country?: string; kyc_status?: string };
@@ -95,6 +110,8 @@ function AdminDiasporaEnrollments() {
   const [filter, setFilter] = useState("pending_review");
   const [selected, setSelected] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [choicePicker, setChoicePicker] = useState<null | { kind: "reject" | "info"; options: string[] }>(null);
   const [stats, setStats] = useState({ pending: 0, needs_info: 0, approved: 0, rejected: 0 });
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -131,70 +148,74 @@ function AdminDiasporaEnrollments() {
 
   const openDetail = async (id: string) => {
     try {
+      setChoicePicker(null);
       setSelected(await api.get<any>(`/admin/diaspora/enrollments/${id}`));
     } catch (e) {
       show(e instanceof ApiError ? e.detail : "Erreur chargement dossier", "error");
     }
   };
 
-  const approve = () => {
-    if (!selected) return;
-    Alert.alert("Approuver l'inscription Diaspora", "Activer le mode Diaspora pour ce membre ?", [
-      { text: "Annuler", style: "cancel" },
-      { text: "Approuver", onPress: async () => {
-        try {
-          await api.post("/admin/diaspora/enrollment-approve", { enrollment_id: selected.id });
-          show("Inscription approuvée", "success");
-          setSelected(null);
-          load();
-        } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
-      }},
-    ]);
+  const approve = async () => {
+    if (!selected || busy) return;
+    const ok = await confirmAction(
+      "Approuver l'inscription Diaspora",
+      "Activer le mode Diaspora pour ce membre ? Une notification lui sera envoyée.",
+    );
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await api.post("/admin/diaspora/enrollment-approve", { enrollment_id: selected.id });
+      show("Inscription approuvée — mode Diaspora activé", "success");
+      setSelected(null);
+      setChoicePicker(null);
+      await load();
+    } catch (e) {
+      show(e instanceof ApiError ? e.detail : "Erreur validation", "error");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const reject = () => {
-    if (!selected) return;
-    Alert.alert("Rejeter l'inscription", "Choisissez un motif", [
-      ...ENROLL_REJECT.map((reason) => ({
-        text: reason,
-        onPress: async () => {
-          try {
-            await api.post("/admin/diaspora/enrollment-reject", { enrollment_id: selected.id, reason });
-            show("Inscription rejetée", "success");
-            setSelected(null);
-            load();
-          } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
-        },
-      })),
-      { text: "Annuler", style: "cancel" },
-    ]);
+    if (!selected || busy) return;
+    setChoicePicker({ kind: "reject", options: ENROLL_REJECT });
   };
 
   const requestInfo = () => {
-    if (!selected) return;
-    const messages = [
-      "Merci de renvoyer une photo plus lisible de votre pièce d'identité.",
-      "Preuve de résidence à l'étranger manquante ou insuffisante.",
-      "Selfie non conforme — visage bien visible, fond neutre.",
-      "Coordonnées incomplètes — vérifiez adresse et téléphone.",
-    ];
-    Alert.alert("Demander des informations", "Choisissez le message envoyé au membre", [
-      ...messages.map((message) => ({
-        text: message.length > 42 ? `${message.slice(0, 42)}…` : message,
-        onPress: async () => {
-          try {
-            await api.post("/admin/diaspora/enrollment-needs-info", {
-              enrollment_id: selected.id,
-              message,
-            });
-            show("Demande envoyée au membre", "success");
-            setSelected(null);
-            load();
-          } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
-        },
-      })),
-      { text: "Annuler", style: "cancel" as const },
-    ]);
+    if (!selected || busy) return;
+    setChoicePicker({
+      kind: "info",
+      options: [
+        "Merci de renvoyer une photo plus lisible de votre pièce d'identité.",
+        "Preuve de résidence à l'étranger manquante ou insuffisante.",
+        "Selfie non conforme — visage bien visible, fond neutre.",
+        "Coordonnées incomplètes — vérifiez adresse et téléphone.",
+      ],
+    });
+  };
+
+  const runChoice = async (value: string) => {
+    if (!selected || busy || !choicePicker) return;
+    setBusy(true);
+    try {
+      if (choicePicker.kind === "reject") {
+        await api.post("/admin/diaspora/enrollment-reject", { enrollment_id: selected.id, reason: value });
+        show("Inscription rejetée", "success");
+      } else {
+        await api.post("/admin/diaspora/enrollment-needs-info", {
+          enrollment_id: selected.id,
+          message: value,
+        });
+        show("Demande envoyée au membre", "success");
+      }
+      setSelected(null);
+      setChoicePicker(null);
+      await load();
+    } catch (e) {
+      show(e instanceof ApiError ? e.detail : "Erreur", "error");
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (selected) {
@@ -206,16 +227,49 @@ function AdminDiasporaEnrollments() {
           </TouchableOpacity>
           <Text style={styles.detailTitle}>Inscription Diaspora</Text>
           <View style={styles.actionsSticky}>
-            <TouchableOpacity style={[styles.actionBtn, styles.validateBtn]} onPress={approve}>
-              <CheckCircle color="#fff" size={16} /><Text style={styles.actionText}>Activer</Text>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.validateBtn, busy && styles.actionDisabled]}
+              onPress={approve}
+              disabled={busy}
+            >
+              {busy ? <ActivityIndicator color="#fff" size="small" /> : <CheckCircle color="#fff" size={16} />}
+              <Text style={styles.actionText}>Activer</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: Colors.warning }]} onPress={requestInfo}>
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: Colors.warning }, busy && styles.actionDisabled]}
+              onPress={requestInfo}
+              disabled={busy}
+            >
               <MessageSquare color="#fff" size={16} /><Text style={styles.actionText}>Infos</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={reject}>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.rejectBtn, busy && styles.actionDisabled]}
+              onPress={reject}
+              disabled={busy}
+            >
               <XCircle color="#fff" size={16} /><Text style={styles.actionText}>Rejeter</Text>
             </TouchableOpacity>
           </View>
+          {choicePicker ? (
+            <View style={styles.choiceBox}>
+              <Text style={styles.choiceTitle}>
+                {choicePicker.kind === "reject" ? "Motif du rejet" : "Message au membre"}
+              </Text>
+              {choicePicker.options.map((opt) => (
+                <TouchableOpacity
+                  key={opt}
+                  style={styles.choiceBtn}
+                  onPress={() => runChoice(opt)}
+                  disabled={busy}
+                >
+                  <Text style={styles.choiceBtnText}>{opt}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity onPress={() => setChoicePicker(null)} disabled={busy}>
+                <Text style={styles.choiceCancel}>Annuler</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
         </View>
 
         <ScrollView
@@ -326,6 +380,8 @@ function AdminDiasporaContributions({ embedded }: { embedded?: boolean }) {
   const [filter, setFilter] = useState("under_review");
   const [selected, setSelected] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [choicePicker, setChoicePicker] = useState<null | { kind: "reject"; options: string[] }>(null);
   const [stats, setStats] = useState({ pending: 0, received_today: 0, validated_total: 0 });
 
   const load = useCallback(async () => {
@@ -348,6 +404,7 @@ function AdminDiasporaContributions({ embedded }: { embedded?: boolean }) {
 
   const openDetail = async (id: string) => {
     try {
+      setChoicePicker(null);
       const d = await api.get<any>(`/admin/diaspora/requests/${id}`);
       setSelected(d);
     } catch {
@@ -356,43 +413,42 @@ function AdminDiasporaContributions({ embedded }: { embedded?: boolean }) {
   };
 
   const validate = async () => {
-    if (!selected) return;
-    Alert.alert("Valider la cotisation", "Confirmer la validation manuelle ?", [
-      { text: "Annuler", style: "cancel" },
-      {
-        text: "Valider",
-        onPress: async () => {
-          try {
-            await api.post("/admin/diaspora/validate", { request_id: selected.id });
-            show("Cotisation validée", "success");
-            setSelected(null);
-            load();
-          } catch (e) {
-            show(e instanceof ApiError ? e.detail : "Erreur", "error");
-          }
-        },
-      },
-    ]);
+    if (!selected || busy) return;
+    const ok = await confirmAction("Valider la cotisation", "Confirmer la validation manuelle ?");
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await api.post("/admin/diaspora/validate", { request_id: selected.id });
+      show("Cotisation validée", "success");
+      setSelected(null);
+      setChoicePicker(null);
+      await load();
+    } catch (e) {
+      show(e instanceof ApiError ? e.detail : "Erreur", "error");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const reject = () => {
-    if (!selected) return;
-    Alert.alert("Motif du rejet", "Choisissez un motif", [
-      ...REJECT_REASONS.map((reason) => ({
-        text: reason,
-        onPress: async () => {
-          try {
-            await api.post("/admin/diaspora/reject", { request_id: selected.id, reason });
-            show("Cotisation rejetée", "success");
-            setSelected(null);
-            load();
-          } catch (e) {
-            show(e instanceof ApiError ? e.detail : "Erreur", "error");
-          }
-        },
-      })),
-      { text: "Annuler", style: "cancel" },
-    ]);
+    if (!selected || busy) return;
+    setChoicePicker({ kind: "reject", options: REJECT_REASONS });
+  };
+
+  const runChoice = async (reason: string) => {
+    if (!selected || busy) return;
+    setBusy(true);
+    try {
+      await api.post("/admin/diaspora/reject", { request_id: selected.id, reason });
+      show("Cotisation rejetée", "success");
+      setSelected(null);
+      setChoicePicker(null);
+      await load();
+    } catch (e) {
+      show(e instanceof ApiError ? e.detail : "Erreur", "error");
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (selected) {
@@ -404,35 +460,70 @@ function AdminDiasporaContributions({ embedded }: { embedded?: boolean }) {
           </TouchableOpacity>
           <Text style={styles.detailTitle}>Validation Diaspora</Text>
           <View style={styles.actionsSticky}>
-            <TouchableOpacity style={[styles.actionBtn, styles.validateBtn]} onPress={validate}>
-              <CheckCircle color="#fff" size={16} /><Text style={styles.actionText}>Valider</Text>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.validateBtn, busy && styles.actionDisabled]}
+              onPress={validate}
+              disabled={busy}
+            >
+              {busy ? <ActivityIndicator color="#fff" size="small" /> : <CheckCircle color="#fff" size={16} />}
+              <Text style={styles.actionText}>Valider</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={reject}>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.rejectBtn, busy && styles.actionDisabled]}
+              onPress={reject}
+              disabled={busy}
+            >
               <XCircle color="#fff" size={16} /><Text style={styles.actionText}>Rejeter</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionBtn, styles.warnBtn]} onPress={async () => {
+            <TouchableOpacity style={[styles.actionBtn, styles.warnBtn, busy && styles.actionDisabled]} onPress={async () => {
+              if (busy) return;
+              setBusy(true);
               try {
                 await api.post("/admin/diaspora/suspicious", { request_id: selected.id });
                 show("Marqué suspect", "success");
-                load();
+                await load();
               } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
-            }}>
+              finally { setBusy(false); }
+            }} disabled={busy}>
               <AlertTriangle color="#fff" size={16} /><Text style={styles.actionText}>Suspect</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionBtn, styles.infoBtn]} onPress={() => {
-              Alert.prompt?.("Demander des informations", "Message au membre", async (msg) => {
-                if (!msg?.trim()) return;
-                try {
-                  await api.post("/admin/diaspora/needs-info", { request_id: selected.id, message: msg });
-                  show("Demande envoyée", "success");
-                  setSelected(null);
-                  load();
-                } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
-              });
-            }}>
+            <TouchableOpacity style={[styles.actionBtn, styles.infoBtn, busy && styles.actionDisabled]} onPress={async () => {
+              if (busy) return;
+              const msg = Platform.OS === "web"
+                ? (typeof window !== "undefined" ? window.prompt("Message au membre") : null)
+                : await new Promise<string | null>((resolve) => {
+                    Alert.prompt?.(
+                      "Demander des informations",
+                      "Message au membre",
+                      (value) => resolve(value ?? null),
+                    ) ?? resolve(null);
+                  });
+              if (!msg?.trim()) return;
+              setBusy(true);
+              try {
+                await api.post("/admin/diaspora/needs-info", { request_id: selected.id, message: msg });
+                show("Demande envoyée", "success");
+                setSelected(null);
+                await load();
+              } catch (e) { show(e instanceof ApiError ? e.detail : "Erreur", "error"); }
+              finally { setBusy(false); }
+            }} disabled={busy}>
               <MessageSquare color="#fff" size={16} /><Text style={styles.actionText}>Infos</Text>
             </TouchableOpacity>
           </View>
+          {choicePicker ? (
+            <View style={styles.choiceBox}>
+              <Text style={styles.choiceTitle}>Motif du rejet</Text>
+              {choicePicker.options.map((opt) => (
+                <TouchableOpacity key={opt} style={styles.choiceBtn} onPress={() => runChoice(opt)} disabled={busy}>
+                  <Text style={styles.choiceBtnText}>{opt}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity onPress={() => setChoicePicker(null)} disabled={busy}>
+                <Text style={styles.choiceCancel}>Annuler</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
         </View>
 
         <ScrollView
@@ -534,6 +625,25 @@ const styles = StyleSheet.create({
   },
   detailScrollView: { flex: 1, minHeight: 0 },
   actionsSticky: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  actionDisabled: { opacity: 0.55 },
+  choiceBox: {
+    marginTop: 4,
+    padding: 10,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.surfaceAlt,
+    gap: 6,
+  },
+  choiceTitle: { fontSize: 12, fontWeight: "800", color: Colors.text, marginBottom: 2 },
+  choiceBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  choiceBtnText: { fontSize: 12, fontWeight: "600", color: Colors.text },
+  choiceCancel: { fontSize: 12, fontWeight: "700", color: Colors.textMuted, textAlign: "center", paddingVertical: 6 },
   sectionTabs: { flexDirection: "row", gap: 8, paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, flexShrink: 0 },
   sectionTab: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: Radius.lg, backgroundColor: Colors.surfaceAlt },
   sectionTabActive: { backgroundColor: Colors.primaryLight },

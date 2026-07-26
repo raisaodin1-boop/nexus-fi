@@ -205,6 +205,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [resetInactivityTimer]);
 
+  // Live profile sync (Diaspora approval, KYC, etc.) without logout/refresh.
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`profile-live-${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${user.id}` },
+        (payload) => {
+          const row = payload.new as Record<string, unknown> | null;
+          if (!row) return;
+          setUser((prev) => {
+            if (!prev || prev.id !== user.id) return prev;
+            return {
+              ...prev,
+              full_name: (row.full_name as string) || prev.full_name,
+              phone: (row.phone as string | null | undefined) ?? prev.phone,
+              country: (row.country as string | null | undefined) ?? prev.country,
+              city: (row.city as string | null | undefined) ?? prev.city,
+              occupation: (row.occupation as string | null | undefined) ?? prev.occupation,
+              photo_url: (row.photo_url as string | null | undefined) ?? prev.photo_url,
+              avatar_kind: (row.avatar_kind as string | null | undefined) ?? prev.avatar_kind,
+              kyc_status: (row.kyc_status as string | null | undefined) ?? prev.kyc_status,
+              trust_score: typeof row.trust_score === "number" ? row.trust_score : prev.trust_score,
+              diaspora_status: (row.diaspora_status as string | null | undefined) ?? prev.diaspora_status,
+              diaspora_country: (row.diaspora_country as string | null | undefined) ?? prev.diaspora_country,
+              diaspora_currency: (row.diaspora_currency as string | null | undefined) ?? prev.diaspora_currency,
+            };
+          });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
   const login = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email: normalizeEmail(email), password });
     if (error) {
