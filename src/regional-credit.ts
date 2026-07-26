@@ -87,6 +87,7 @@ export function toReferenceXaf(amount: number, currency: Currency, rates?: { rat
   if (!rates) {
     const approx: Partial<Record<Currency, number>> = {
       NGN: 0.37, GHS: 38.7, KES: 4.65, ZAR: 32.3, USD: 600, EUR: 655.957,
+      GBP: 780, CHF: 690, CAD: 440,
     };
     return amount * (approx[currency] ?? 1);
   }

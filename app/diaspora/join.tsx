@@ -4,15 +4,20 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ArrowLeft, CheckCircle } from "lucide-react-native";
 
-import { api, ApiError, formatXAF } from "@/src/api";
+import { api, ApiError } from "@/src/api";
 import { Button, Card, Field } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { useToast } from "@/src/toast";
 import { DiasporaManualBanner } from "@/src/diaspora-ui";
+import { useAuth } from "@/src/auth-context";
+import { DiasporaAmount } from "@/src/diaspora-amount";
+import type { Currency } from "@/src/exchange-rates";
 
 export default function DiasporaJoinScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ code?: string }>();
+  const { user } = useAuth();
+  const displayCur = (user?.diaspora_currency ?? "EUR") as Currency;
   const { show } = useToast();
   const [code, setCode] = useState(params.code?.toUpperCase() ?? "");
   const [preview, setPreview] = useState<any>(null);
@@ -70,10 +75,13 @@ export default function DiasporaJoinScreen() {
         {t ? (
           <Card>
             <Text style={styles.tName}>{t.name}</Text>
-            <InfoRow label="Cotisation" value={`${Number(t.amount_per_cycle ?? 0).toLocaleString("fr-FR")} ${t.currency ?? "XAF"}`} />
+            <View style={{ marginBottom: 10 }}>
+              <Text style={{ fontSize: 12, color: Colors.textMuted, fontWeight: "700" }}>Cotisation</Text>
+              <DiasporaAmount amountXaf={Number(t.amount_per_cycle ?? 0)} currency={displayCur} size="md" />
+            </View>
             <InfoRow label="Fréquence" value={freqLabel[t.frequency] ?? t.frequency ?? "—"} />
             <InfoRow label="Membres" value={String(preview.members?.length ?? "—")} />
-            <InfoRow label="Devise" value={t.currency ?? "XAF"} />
+            <InfoRow label="Devise tontine" value={t.currency ?? "XAF"} />
             {preview.reliability_score != null ? (
               <InfoRow label="Régularité du groupe" value={`${preview.reliability_score}%`} />
             ) : null}

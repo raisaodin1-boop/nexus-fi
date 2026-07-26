@@ -6,7 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { ArrowLeft, ChevronRight, Globe, HeartHandshake, List, MapPin, PlusCircle, Shield, Upload } from "lucide-react-native";
 
 import { useAuth } from "@/src/auth-context";
-import { api, formatXAF } from "@/src/api";
+import { api } from "@/src/api";
 import type { DiasporaHome } from "@/src/db/diaspora";
 import { Button, Card, SkeletonCard } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
@@ -17,6 +17,8 @@ import {
 import { DIASPORA_DISCLAIMER } from "@/src/diaspora-config";
 import { isDiasporaMember } from "@/src/diaspora-enrollment-config";
 import { CURRENCY_META, type Currency } from "@/src/exchange-rates";
+import { DiasporaAmount, formatDiasporaPrimary, useDiasporaRates } from "@/src/diaspora-amount";
+import { formatXAFAmount } from "@/src/exchange-rates";
 import { TrustGauge } from "@/src/trust-gauge";
 import { trustLevelFromScore } from "@/src/identity-progression";
 import { DiasporaGuardSpinner } from "@/src/use-diaspora-guard";
@@ -57,6 +59,7 @@ export function DiasporaMemberDashboard({ embeddedInTabs, skipGuard }: Props) {
 
   const canLoad = skipGuard || isDiasporaMember(user);
   useLiveDashboardSync(canLoad ? user?.id : undefined, { mode: "diaspora", reload: load });
+  const rates = useDiasporaRates();
 
   useFocusEffect(useCallback(() => {
     if (!canLoad) setAccessDenied(true);
@@ -72,6 +75,7 @@ export function DiasporaMemberDashboard({ embeddedInTabs, skipGuard }: Props) {
   const cur = (home?.display_currency ?? profileCur) as Currency;
   const curMeta = CURRENCY_META[cur];
   const residence = home?.country_of_residence ?? profileCountry;
+  const cotisePrimary = formatDiasporaPrimary(home?.total_validated_12m ?? 0, cur, rates);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
@@ -134,7 +138,11 @@ export function DiasporaMemberDashboard({ embeddedInTabs, skipGuard }: Props) {
 
             <View style={styles.statsRow}>
               <StatBox label="Tontines actives" value={String(home?.active_tontines ?? 0)} />
-              <StatBox label="Cotisé (12 mois)" value={formatXAF(home?.total_validated_12m ?? 0)} />
+              <StatBox
+                label="Cotisé (12 mois)"
+                value={rates || cur === "XAF" ? cotisePrimary : "…"}
+                sub={cur !== "XAF" ? `≈ ${formatXAFAmount(home?.total_validated_12m ?? 0)}` : undefined}
+              />
               <StatBox label={`Devise (${cur})`} value={curMeta?.symbol ?? cur} />
             </View>
 
@@ -142,7 +150,7 @@ export function DiasporaMemberDashboard({ embeddedInTabs, skipGuard }: Props) {
               <Card style={{ marginBottom: Spacing.md }}>
                 <Text style={styles.sectionLabel}>Prochaine cotisation</Text>
                 <Text style={styles.tontineName}>{next.tontine_name}</Text>
-                <Text style={styles.amount}>{formatXAF(next.amount_expected)}</Text>
+                <DiasporaAmount amountXaf={next.amount_expected} currency={cur} size="lg" />
                 {next.due_date ? (
                   <Text style={styles.due}>
                     Échéance : {new Date(next.due_date).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
@@ -196,10 +204,11 @@ export function DiasporaMemberDashboard({ embeddedInTabs, skipGuard }: Props) {
   );
 }
 
-function StatBox({ label, value }: { label: string; value: string }) {
+function StatBox({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <View style={styles.statBox}>
-      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statValue} numberOfLines={2}>{value}</Text>
+      {sub ? <Text style={styles.statSub}>{sub}</Text> : null}
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
@@ -232,9 +241,9 @@ const styles = StyleSheet.create({
   statsRow: { flexDirection: "row", gap: 8, marginBottom: Spacing.md },
   statBox: { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: 12, borderWidth: 1, borderColor: Colors.borderLight },
   statValue: { fontSize: 14, fontWeight: "900", color: Colors.text },
+  statSub: { fontSize: 9, color: Colors.textMuted, fontWeight: "600", marginTop: 2 },
   statLabel: { fontSize: 10, color: Colors.textMuted, marginTop: 4 },
   tontineName: { fontSize: 16, fontWeight: "800", color: Colors.text },
-  amount: { fontSize: 28, fontWeight: "900", color: Colors.primary, marginVertical: 4 },
   due: { fontSize: 13, color: Colors.textMuted, marginBottom: 8 },
   ref: { fontSize: 12, color: Colors.secondary, fontWeight: "700", marginTop: 8 },
   pendingNote: { fontSize: 11, color: Colors.warning, marginTop: 10, lineHeight: 16, fontWeight: "600" },

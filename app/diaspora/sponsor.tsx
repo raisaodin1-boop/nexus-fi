@@ -5,19 +5,24 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ArrowLeft, HeartHandshake } from "lucide-react-native";
 import { TouchableOpacity } from "react-native";
 
-import { api, ApiError, formatXAF } from "@/src/api";
+import { api, ApiError } from "@/src/api";
 import type { DiasporaRequest } from "@/src/db/diaspora";
 import { openPaymentScreen } from "@/src/payment-nav";
 import { Button, Card, Field } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { useToast } from "@/src/toast";
 import { useDiasporaGuard, DiasporaGuardSpinner } from "@/src/use-diaspora-guard";
+import { useAuth } from "@/src/auth-context";
+import { DiasporaAmount } from "@/src/diaspora-amount";
+import type { Currency } from "@/src/exchange-rates";
 
 type SponsorRes = DiasporaRequest & { beneficiary_name?: string };
 
 export default function DiasporaSponsorScreen() {
   const router = useRouter();
   const { checking } = useDiasporaGuard();
+  const { user } = useAuth();
+  const displayCur = (user?.diaspora_currency ?? "EUR") as Currency;
   const { show } = useToast();
   const [inviteCode, setInviteCode] = useState("");
   const [phone, setPhone] = useState("");
@@ -99,9 +104,12 @@ export default function DiasporaSponsorScreen() {
             placeholder="frère, sœur, parent…"
           />
           {preview ? (
-            <Text style={styles.preview}>
-              {preview.beneficiary_name} · {preview.tontine_name} · {formatXAF(preview.amount_expected)}
-            </Text>
+            <View style={styles.preview}>
+              <Text style={{ fontWeight: "800", color: Colors.text }}>
+                {preview.beneficiary_name} · {preview.tontine_name}
+              </Text>
+              <DiasporaAmount amountXaf={preview.amount_expected} currency={displayCur} size="md" />
+            </View>
           ) : null}
           <Button
             label={busy ? "Préparation…" : "Payer la cotisation"}
@@ -125,5 +133,5 @@ const styles = StyleSheet.create({
   iconRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   cardTitle: { fontSize: 16, fontWeight: "700", color: Colors.text },
   hint: { fontSize: 13, color: Colors.textMuted, lineHeight: 19 },
-  preview: { fontSize: 13, fontWeight: "600", color: Colors.primary },
+  preview: { gap: 4, paddingVertical: 4 },
 });

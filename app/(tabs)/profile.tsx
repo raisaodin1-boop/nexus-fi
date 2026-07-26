@@ -186,27 +186,23 @@ export default function ProfileScreen() {
           text: "Photo réelle",
           onPress: async () => {
             try {
-              const { launchImageLibraryAsync, MediaTypeOptions } = await import("expo-image-picker");
-              const res = await launchImageLibraryAsync({
-                mediaTypes: MediaTypeOptions.Images,
-                base64: true,
-                quality: 0.75,
-                allowsEditing: true,
-                aspect: [1, 1],
-                exif: true,
-              });
-              if (res.canceled || !res.assets[0]?.base64) return;
-              const asset = res.assets[0];
+              const { pickMedia, pickMediaErrorMessage } = await import("@/src/pick-media");
+              const picked = await pickMedia({ quality: 0.75, allowsEditing: true });
+              if (!picked) return;
               await api.post("/users/me/photo", {
-                base64: asset.base64,
-                mime: asset.mimeType ?? "image/jpeg",
-                fileName: asset.fileName ?? null,
-                exif: asset.exif ?? null,
+                base64: picked.base64,
+                mime: picked.mime || "image/jpeg",
+                fileName: picked.fileName ?? null,
+                exif: null,
               });
               await refresh();
               Alert.alert("Photo enregistrée", "Votre photo réelle renforce votre crédibilité et votre Trust Score.");
             } catch (e) {
-              Alert.alert("Photo refusée", e instanceof ApiError ? e.detail : AI_PHOTO_REJECT_MESSAGE);
+              const { pickMediaErrorMessage } = await import("@/src/pick-media");
+              Alert.alert(
+                "Photo refusée",
+                e instanceof ApiError ? e.detail : pickMediaErrorMessage(e, AI_PHOTO_REJECT_MESSAGE),
+              );
             }
           },
         },

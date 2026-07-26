@@ -18,15 +18,10 @@ import {
   diasporaCurrencyForCountry,
 } from "@/src/diaspora-enrollment-config";
 import { DiasporaManualBanner } from "@/src/diaspora-ui";
-
-async function pickImage(): Promise<string | null> {
-  const { launchImageLibraryAsync, MediaTypeOptions } = await import("expo-image-picker");
-  const res = await launchImageLibraryAsync({ mediaTypes: MediaTypeOptions.Images, base64: true, quality: 0.8 });
-  if (!res.canceled && res.assets[0]?.base64) return res.assets[0].base64;
-  return null;
-}
+import { pickMedia, pickMediaErrorMessage, type PickedMedia } from "@/src/pick-media";
 
 type DocSlot = "id_front" | "id_back" | "selfie" | "proof_abroad";
+type DocFile = PickedMedia;
 
 const DOC_LABELS: Record<DocSlot, { title: string; hint: string }> = {
   id_front: { title: "Passeport ou carte d'identité (recto)", hint: "Document de votre pays de résidence" },
@@ -77,7 +72,7 @@ export default function DiasporaEnrollScreen() {
   const [idDocType, setIdDocType] = useState<"passport" | "foreign_id" | "residence_permit">("passport");
   const [declaredAbroad, setDeclaredAbroad] = useState(false);
 
-  const [docs, setDocs] = useState<Partial<Record<DocSlot, string>>>({});
+  const [docs, setDocs] = useState<Partial<Record<DocSlot, DocFile>>>({});
 
   useEffect(() => {
     api.get<{ status: string }>("/diaspora/access").then((a) => {
@@ -88,16 +83,23 @@ export default function DiasporaEnrollScreen() {
 
   const pickDoc = async (slot: DocSlot) => {
     try {
-      const b64 = await pickImage();
-      if (b64) setDocs((d) => ({ ...d, [slot]: b64 }));
-    } catch {
-      show("Impossible d'accéder à la galerie", "error");
+      const picked = await pickMedia({
+        quality: 0.8,
+        allowPdf: slot === "proof_abroad" || slot === "id_front" || slot === "id_back",
+      });
+      if (picked) setDocs((d) => ({ ...d, [slot]: picked }));
+    } catch (e) {
+      show(pickMediaErrorMessage(e), "error");
     }
   };
 
-  const uploadDoc = async (slot: DocSlot, base64: string) => {
+  const uploadDoc = async (slot: DocSlot, file: DocFile) => {
     const kind = slot === "proof_abroad" ? "proof_abroad" : slot;
-    return api.post<string>("/diaspora/enrollment-upload", { kind, base64, mime: "image/jpeg" });
+    return api.post<string>("/diaspora/enrollment-upload", {
+      kind,
+      base64: file.base64,
+      mime: file.mime || "image/jpeg",
+    });
   };
 
   const submit = async () => {
@@ -155,7 +157,9 @@ export default function DiasporaEnrollScreen() {
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <DiasporaManualBanner />
         <Text style={styles.intro}>
-          Identité complète obligatoire. Votre dossier sera analysé manuellement avant l'accès au mode Diaspora.
+          Identité complète obligatoire — mêmes exigences que les membres locaux (profil, documents authentiques).
+          Votre dossier sera analysé manuellement avant l&apos;accès au mode Diaspora. Les montants s&apos;affichent
+          dans la devise de votre pays, avec l&apos;équivalent FCFA.
         </Text>
 
         <View style={styles.steps}>

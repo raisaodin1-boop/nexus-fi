@@ -72,28 +72,20 @@ export default function CompleteProfile() {
 
   const pickRealPhoto = async () => {
     try {
-      const { launchImageLibraryAsync, MediaTypeOptions } = await import("expo-image-picker");
-      const res = await launchImageLibraryAsync({
-        mediaTypes: MediaTypeOptions.Images,
-        base64: true,
-        quality: 0.75,
-        allowsEditing: true,
-        aspect: [1, 1],
-        exif: true,
-      });
-      if (res.canceled || !res.assets[0]?.base64) return;
-      const asset = res.assets[0];
-      const b64 = asset.base64 as string;
-      setPhotoBase64(b64);
-      setPhotoPreview(asset.uri);
-      setPhotoMime(asset.mimeType ?? "image/jpeg");
-      setPhotoFileName(asset.fileName ? String(asset.fileName) : null);
-      setPhotoExif(asset.exif ? (asset.exif as Record<string, unknown>) : null);
+      const { pickMedia, pickMediaErrorMessage } = await import("@/src/pick-media");
+      const picked = await pickMedia({ quality: 0.75, allowsEditing: true });
+      if (!picked) return;
+      setPhotoBase64(picked.base64);
+      setPhotoPreview(`data:${picked.mime};base64,${picked.base64}`);
+      setPhotoMime(picked.mime || "image/jpeg");
+      setPhotoFileName(picked.fileName ? String(picked.fileName) : null);
+      setPhotoExif(null);
       setGenericId(null);
       setRealConfirmed(false);
       setError(null);
-    } catch {
-      Alert.alert("Erreur", "Impossible d'accéder à la galerie.");
+    } catch (e) {
+      const { pickMediaErrorMessage: errMsg } = await import("@/src/pick-media");
+      Alert.alert("Erreur", errMsg(e));
     }
   };
 

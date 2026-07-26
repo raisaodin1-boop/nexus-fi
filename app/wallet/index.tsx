@@ -22,7 +22,7 @@ import { formatAmount, type Currency, type Rates } from "@/src/exchange-rates";
 import type { WalletBalance, WalletTx } from "@/src/wallet-db";
 import { getTxMeta, txStatusLabel } from "@/src/wallet-tx-meta";
 
-const CURRENCIES: Currency[] = ["XAF", "EUR", "USD"];
+const CURRENCIES: Currency[] = ["XAF", "EUR", "USD", "GBP", "CAD", "CHF"];
 
 function currencyBalance(wallet: WalletBalance, cur: Currency) {
   if (cur === "XAF") return wallet.balance_xaf;

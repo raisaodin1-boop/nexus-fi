@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ArrowLeft, Building2, Smartphone } from "lucide-react-native";
 
-import { api, ApiError, formatXAF } from "@/src/api";
+import { api, ApiError } from "@/src/api";
 import type { DiasporaRequest } from "@/src/db/diaspora";
 import { Button, Card, Field } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
@@ -16,7 +16,8 @@ import {
 import {
   DIASPORA_BANK, DIASPORA_BRAND, DIASPORA_MOMO,
 } from "@/src/diaspora-config";
-import { convert, getRates, type Currency } from "@/src/exchange-rates";
+import { convert, formatAmount, formatXAFAmount, getRates, type Currency } from "@/src/exchange-rates";
+import { DiasporaAmount } from "@/src/diaspora-amount";
 
 type Method = "mtn_momo" | "orange_money" | "bank_transfer";
 
@@ -34,10 +35,15 @@ export default function DiasporaPayScreen() {
   const [payerName, setPayerName] = useState("");
   const [payerPhone, setPayerPhone] = useState("");
   const [payerRelation, setPayerRelation] = useState("");
-  const [transferCurrency, setTransferCurrency] = useState<Currency>("EUR");
+  const displayCur = (user?.diaspora_currency ?? "EUR") as Currency;
+  const [transferCurrency, setTransferCurrency] = useState<Currency>(displayCur);
   const [indicativeEur, setIndicativeEur] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
+
+  useEffect(() => {
+    setTransferCurrency(displayCur);
+  }, [displayCur]);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -110,7 +116,7 @@ export default function DiasporaPayScreen() {
         <Card>
           <Text style={styles.label}>Tontine</Text>
           <Text style={styles.value}>{req.tontine_name}</Text>
-          <Text style={styles.amount}>{formatXAF(req.amount_expected)}</Text>
+          <DiasporaAmount amountXaf={req.amount_expected} currency={displayCur} size="lg" />
           {req.due_date ? (
             <Text style={styles.meta}>Échéance : {new Date(req.due_date).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}</Text>
           ) : null}
@@ -149,7 +155,12 @@ export default function DiasporaPayScreen() {
             <Text style={styles.blockTitle}>{momo.operator}</Text>
             <CopyRow label="Titulaire" value={`${DIASPORA_BRAND} — ${momo.holder}`} />
             <CopyRow label="Numéro de collecte" value={momo.number} />
-            <CopyRow label="Montant exact" value={`${req.amount_expected.toLocaleString("fr-FR")} ${req.currency}`} />
+            <CopyRow label="Montant exact (MoMo)" value={formatXAFAmount(req.amount_expected)} />
+            <Text style={styles.meta}>
+              Équivalent indicatif : {indicativeEur != null
+                ? `~${formatAmount(indicativeEur, displayCur)}`
+                : "…"} ({displayCur})
+            </Text>
             <CopyRow label="Référence obligatoire" value={req.reference_code} />
             <Text style={styles.warn}>
               Vérifiez le numéro, le montant et la référence. HODIX ne vous demandera jamais votre PIN, mot de passe ou code OTP.
@@ -164,18 +175,24 @@ export default function DiasporaPayScreen() {
             <CopyRow label="IBAN" value={DIASPORA_BANK.iban} />
             <CopyRow label="BIC/SWIFT" value={DIASPORA_BANK.swift} />
             <CopyRow label="Référence obligatoire" value={req.reference_code} />
-            <CopyRow label="Montant attendu (XAF)" value={`${req.amount_expected.toLocaleString("fr-FR")} XAF`} />
+            <CopyRow label="Montant attendu" value={formatXAFAmount(req.amount_expected)} />
             <View style={styles.calc}>
-              <Text style={styles.calcTitle}>Calculateur indicatif (non garanti)</Text>
+              <Text style={styles.calcTitle}>Équivalent dans votre devise (indicatif)</Text>
               <View style={styles.opRow}>
-                {(["EUR", "USD"] as Currency[]).map((c) => (
+                {([displayCur, "EUR", "USD", "GBP", "CAD", "CHF"] as Currency[])
+                  .filter((c, i, arr) => arr.indexOf(c) === i)
+                  .map((c) => (
                   <TouchableOpacity key={c} style={[styles.opBtn, transferCurrency === c && styles.opActive]} onPress={() => setTransferCurrency(c)}>
                     <Text style={styles.opText}>{c}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
               {indicativeEur != null ? (
-                <Text style={styles.calcValue}>Montant indicatif : ~{indicativeEur.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {transferCurrency}</Text>
+                <Text style={styles.calcValue}>
+                  ≈ {formatAmount(indicativeEur, transferCurrency)}
+                  {"\n"}
+                  <Text style={styles.calcNote}>Base : {formatXAFAmount(req.amount_expected)}</Text>
+                </Text>
               ) : null}
               <Text style={styles.calcNote}>Le montant exact sera confirmé lors de la validation par HODIX.</Text>
             </View>

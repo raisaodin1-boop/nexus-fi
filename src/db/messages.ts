@@ -91,12 +91,70 @@ async function enrichMessages(rows: Record<string, unknown>[]): Promise<MessageR
   }));
 }
 
+async function isPlatformAdmin(userId: string): Promise<boolean> {
+  const { data } = await getSupabase().from("profiles").select("role").eq("id", userId).maybeSingle();
+  return ADMIN_ROLES.includes((data?.role ?? "") as (typeof ADMIN_ROLES)[number]);
+}
+
+/** Member → admin HODIX or shared-tontine manager only (managers/admins may DM members). */
+export async function canDirectMessage(senderId: string, recipientId: string): Promise<boolean> {
+  if (!senderId || !recipientId || senderId === recipientId) return false;
+  const { data, error } = await getSupabase().rpc("can_direct_message", {
+    p_sender: senderId,
+    p_recipient: recipientId,
+  });
+  if (error) {
+    // Fallback if RPC not yet applied: deny member↔member, allow admin either side.
+    const [senderAdmin, recipientAdmin] = await Promise.all([
+      isPlatformAdmin(senderId),
+      isPlatformAdmin(recipientId),
+    ]);
+    if (senderAdmin || recipientAdmin) return true;
+    const sb = getSupabase();
+    const { data: myMemberships } = await sb
+      .from("tontine_members")
+      .select("tontine_id, role")
+      .eq("user_id", senderId)
+      .neq("status", "exclu");
+    const tontineIds = (myMemberships ?? []).map((m) => m.tontine_id).filter(Boolean);
+    if (!tontineIds.length) return false;
+    const { data: tontines } = await sb.from("tontines").select("id, owner_id").in("id", tontineIds);
+    const { data: peerMemberships } = await sb
+      .from("tontine_members")
+      .select("tontine_id, role, user_id")
+      .eq("user_id", recipientId)
+      .in("tontine_id", tontineIds)
+      .neq("status", "exclu");
+    for (const pm of peerMemberships ?? []) {
+      const t = (tontines ?? []).find((x) => x.id === pm.tontine_id);
+      const sm = (myMemberships ?? []).find((x) => x.tontine_id === pm.tontine_id);
+      if (!t || !sm) continue;
+      if (t.owner_id === senderId || t.owner_id === recipientId || sm.role === "admin" || pm.role === "admin") {
+        return true;
+      }
+    }
+    return false;
+  }
+  return !!data;
+}
+
+async function assertCanDirectMessage(senderId: string, recipientId: string) {
+  const ok = await canDirectMessage(senderId, recipientId);
+  if (!ok) {
+    throw {
+      status: 403,
+      detail: "Les messages privés sont réservés à l'administration HODIX et aux gestionnaires de tontine. Pas de messagerie entre membres.",
+    };
+  }
+}
+
 export async function searchMessageRecipients(query: string): Promise<RecipientSuggestion[]> {
   const me = await uid();
   const term = query.trim();
   if (!term) return [];
 
   const sb = getSupabase();
+  const meIsAdmin = await isPlatformAdmin(me);
   const adminHint = /^adm/i.test(term) || /\badmin/i.test(term);
 
   let q = sb
@@ -105,11 +163,16 @@ export async function searchMessageRecipients(query: string): Promise<RecipientS
     .neq("id", me)
     .neq("role", "suspended")
     .order("full_name", { ascending: true })
-    .limit(15);
+    .limit(meIsAdmin ? 15 : 40);
 
-  if (adminHint) {
-    q = q.in("role", [...ADMIN_ROLES]);
-    if (term.length > 3) q = q.ilike("full_name", `%${term}%`);
+  if (adminHint || !meIsAdmin) {
+    // Non-admins: always prefer admins in the candidate pool; filter below.
+    if (adminHint) {
+      q = q.in("role", [...ADMIN_ROLES]);
+      if (term.length > 3) q = q.ilike("full_name", `%${term}%`);
+    } else {
+      q = q.or(`full_name.ilike.%${term}%,phone.ilike.%${term}%`);
+    }
   } else {
     q = q.or(`full_name.ilike.%${term}%,phone.ilike.%${term}%`);
   }
@@ -117,14 +180,25 @@ export async function searchMessageRecipients(query: string): Promise<RecipientS
   const { data, error } = await q;
   throwSb(error);
 
-  return (data ?? []).map((p) => ({
-    id: p.id,
-    full_name: p.full_name ?? "—",
-    kyc_verified: isKycVerified(p.kyc_status),
-    role: p.role ?? "member",
-    is_admin: ADMIN_ROLES.includes(p.role as (typeof ADMIN_ROLES)[number]),
-    subtitle: ADMIN_ROLES.includes(p.role as (typeof ADMIN_ROLES)[number]) ? "Administration HODIX" : "Membre",
-  }));
+  const candidates = data ?? [];
+  const allowed: RecipientSuggestion[] = [];
+  for (const p of candidates) {
+    if (!meIsAdmin) {
+      const ok = await canDirectMessage(me, p.id);
+      if (!ok) continue;
+    }
+    const isAdmin = ADMIN_ROLES.includes(p.role as (typeof ADMIN_ROLES)[number]);
+    allowed.push({
+      id: p.id,
+      full_name: p.full_name ?? "—",
+      kyc_verified: isKycVerified(p.kyc_status),
+      role: p.role ?? "member",
+      is_admin: isAdmin,
+      subtitle: isAdmin ? "Administration HODIX" : "Gestionnaire de tontine",
+    });
+    if (allowed.length >= 15) break;
+  }
+  return allowed;
 }
 
 export async function listMessages(
@@ -250,6 +324,13 @@ export async function sendMessage(body: {
   let messageType: MessageType = body.message_type ?? "direct";
   if (body.tontine_id) messageType = "tontine";
   if (messageType === "broadcast") await requireAdmin();
+
+  if (messageType === "direct") {
+    if (!body.recipient_id) {
+      throw { status: 400, detail: "Destinataire requis pour un message privé." };
+    }
+    await assertCanDirectMessage(me, body.recipient_id);
+  }
 
   const row = {
     sender_id: me,
@@ -430,15 +511,17 @@ export async function listConversations(): Promise<{ items: ConversationItem[] }
 
   const peerIds = [...threadMap.keys()].map((k) => k.replace("direct:", ""));
   const names = await profileNameMap(peerIds);
+  const meIsAdmin = await isPlatformAdmin(me);
 
   for (const [key, meta] of threadMap) {
     const peerId = key.replace("direct:", "");
+    if (!meIsAdmin && !(await canDirectMessage(me, peerId))) continue;
     items.push({
       id: key,
       type: "direct",
       peer_id: peerId,
-      name: names[peerId] ?? "Membre",
-      subtitle: meta.is_admin ? "Administration" : "Message privé",
+      name: names[peerId] ?? (meta.is_admin ? "Admin HODIX" : "Gestionnaire"),
+      subtitle: meta.is_admin ? "Administration HODIX" : "Gestionnaire de tontine",
       last_message: meta.last,
       last_at: meta.last_at,
       unread_count: meta.unread,

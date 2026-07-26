@@ -43,15 +43,8 @@ const DOC_LABELS: Record<DocSlot, { title: string; hint: string }> = {
 const KYC_DRAFT_KEY = "hodix_kyc_draft_id_front";
 
 async function pickImage(): Promise<string | null> {
-  const { launchImageLibraryAsync, MediaTypeOptions } = await import("expo-image-picker");
-  const res = await launchImageLibraryAsync({
-    mediaTypes: MediaTypeOptions.Images,
-    base64: true,
-    quality: 0.75,
-    allowsEditing: true,
-  });
-  if (!res.canceled && res.assets[0]?.base64) return res.assets[0].base64;
-  return null;
+  const { pickImageBase64 } = await import("@/src/pick-media");
+  return pickImageBase64({ quality: 0.75, allowsEditing: true });
 }
 
 export default function KycScreen() {
@@ -88,8 +81,9 @@ export default function KycScreen() {
     try {
       const b64 = await pickImage();
       if (b64) setDocs((d) => ({ ...d, [slot]: b64 }));
-    } catch {
-      show("Impossible d'accéder à la galerie", "error");
+    } catch (e) {
+      const { pickMediaErrorMessage } = await import("@/src/pick-media");
+      show(pickMediaErrorMessage(e), "error");
     }
   };
 

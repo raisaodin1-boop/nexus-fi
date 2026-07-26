@@ -5,7 +5,7 @@
  * All other rates fetched from ExchangeRate-API (free, USD base, no key required).
  */
 
-export type Currency = "XAF" | "XOF" | "NGN" | "GHS" | "KES" | "ZAR" | "USD" | "EUR";
+export type Currency = "XAF" | "XOF" | "NGN" | "GHS" | "KES" | "ZAR" | "USD" | "EUR" | "GBP" | "CHF" | "CAD";
 
 export const CURRENCY_META: Record<Currency, { name: string; symbol: string; flag: string; decimals: number }> = {
   XAF: { name: "Franc CFA (CEMAC)", symbol: "FCFA", flag: "🇨🇲", decimals: 0 },
@@ -16,9 +16,12 @@ export const CURRENCY_META: Record<Currency, { name: string; symbol: string; fla
   ZAR: { name: "Rand sud-africain", symbol: "R", flag: "🇿🇦", decimals: 2 },
   USD: { name: "Dollar américain", symbol: "$", flag: "🇺🇸", decimals: 2 },
   EUR: { name: "Euro", symbol: "€", flag: "🇪🇺", decimals: 2 },
+  GBP: { name: "Livre sterling", symbol: "£", flag: "🇬🇧", decimals: 2 },
+  CHF: { name: "Franc suisse", symbol: "CHF", flag: "🇨🇭", decimals: 2 },
+  CAD: { name: "Dollar canadien", symbol: "CA$", flag: "🇨🇦", decimals: 2 },
 };
 
-export const ALL_CURRENCIES: Currency[] = ["XAF", "XOF", "NGN", "GHS", "KES", "ZAR", "USD", "EUR"];
+export const ALL_CURRENCIES: Currency[] = ["XAF", "XOF", "NGN", "GHS", "KES", "ZAR", "USD", "EUR", "GBP", "CHF", "CAD"];
 
 // USD-based rates (1 USD = N units of currency)
 export interface Rates {
@@ -40,6 +43,9 @@ const TTL_MS = 5 * 60 * 1000;
 const FALLBACK_USD: Record<Currency, number> = {
   USD: 1,
   EUR: 0.915,
+  GBP: 0.78,
+  CHF: 0.88,
+  CAD: 1.37,
   XAF: XAF_PER_EUR * 0.915,
   XOF: XAF_PER_EUR * 0.915,
   NGN: 1620,
@@ -60,6 +66,9 @@ export async function getRates(): Promise<Rates> {
     const rates: Record<Currency, number> = {
       USD: 1,
       EUR: r.EUR ?? FALLBACK_USD.EUR,
+      GBP: r.GBP ?? FALLBACK_USD.GBP,
+      CHF: r.CHF ?? FALLBACK_USD.CHF,
+      CAD: r.CAD ?? FALLBACK_USD.CAD,
       XAF: XAF_PER_EUR * (r.EUR ?? FALLBACK_USD.EUR),
       XOF: XAF_PER_EUR * (r.EUR ?? FALLBACK_USD.EUR),
       NGN: r.NGN ?? FALLBACK_USD.NGN,

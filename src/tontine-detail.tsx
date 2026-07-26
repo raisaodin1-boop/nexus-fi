@@ -1210,7 +1210,7 @@ export function TontineDetailView({ id }: { id: string }) {
             <Card style={{ padding: 14, gap: 10 }}>
               <Text style={{ fontWeight: "800", fontSize: 13, color: Colors.text }}>Messagerie interne</Text>
               <Text style={{ fontSize: 12, color: Colors.textMuted, lineHeight: 17 }}>
-                Contactez le gestionnaire ou l’admin HODIX pour une réclamation, un membre frauduleux ou une preuve de paiement (images acceptées).
+                Messages privés réservés au gestionnaire et à l’admin HODIX (pas entre membres). Utilisez le chat de groupe pour discuter avec tous.
               </Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                 {msgContacts?.manager && msgContacts.manager.id !== user?.id ? (
@@ -1264,6 +1264,10 @@ export function TontineDetailView({ id }: { id: string }) {
               .map((m) => {
                 const isManager = m.role === "admin" || m.user_id === tontine.owner_id;
                 const isSelf = m.user_id === user?.id;
+                const iAmTontineManager = !!is_admin || user?.id === tontine.owner_id;
+                const iAmPlatformAdmin = user?.role === "admin" || user?.role === "super_admin";
+                // Members may only DM the manager; managers/admins may DM members. No member↔member.
+                const canDm = !isSelf && (iAmPlatformAdmin || iAmTontineManager || isManager);
                 return (
                   <Card key={m.id} style={styles.memberRow}>
                     <View style={styles.rotAvatar}>
@@ -1289,11 +1293,14 @@ export function TontineDetailView({ id }: { id: string }) {
                         {m.has_received ? " · ✓ A reçu" : ""}
                       </Text>
                     </View>
-                    {!isSelf ? (
+                    {canDm ? (
                       <TouchableOpacity
                         onPress={() => router.push({
                           pathname: "/messages",
-                          params: { peer_id: m.user_id, peer_name: m.full_name },
+                          params: {
+                            peer_id: m.user_id,
+                            peer_name: isManager ? `Gestionnaire · ${m.full_name}` : m.full_name,
+                          },
                         } as any)}
                         style={{ padding: 8 }}
                         hitSlop={8}

@@ -5,10 +5,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowLeft, CheckCircle2, Share2 } from "lucide-react-native";
 
-import { api, formatXAF } from "@/src/api";
+import { api } from "@/src/api";
 import { Button, Card } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { formatDateTime } from "@/app/receipt";
+import { useAuth } from "@/src/auth-context";
+import { DiasporaAmount } from "@/src/diaspora-amount";
+import type { Currency } from "@/src/exchange-rates";
+import { formatXAFAmount } from "@/src/exchange-rates";
 
 interface Receipt {
   receipt_id: string;
@@ -26,6 +30,8 @@ interface Receipt {
 export default function DiasporaReceiptScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { user } = useAuth();
+  const displayCur = (user?.diaspora_currency ?? "EUR") as Currency;
   const [receipt, setReceipt] = useState<Receipt | null>(null);
 
   const load = useCallback(async () => {
@@ -78,7 +84,15 @@ export default function DiasporaReceiptScreen() {
           <Text style={styles.receiptId}>{receipt.receipt_id}</Text>
           <Detail label="Membre" value={receipt.member_name} />
           <Detail label="Tontine" value={receipt.tontine_name} />
-          <Detail label="Montant" value={formatXAF(receipt.amount)} />
+          <View style={{ marginBottom: 10 }}>
+            <Text style={{ fontSize: 12, color: Colors.textMuted, fontWeight: "700" }}>Montant</Text>
+            <DiasporaAmount amountXaf={receipt.amount} currency={displayCur} size="md" />
+            {receipt.currency && receipt.currency !== "XAF" ? (
+              <Text style={{ fontSize: 11, color: Colors.textSubtle, marginTop: 2 }}>
+                Validé : {formatXAFAmount(receipt.amount)} ({receipt.currency})
+              </Text>
+            ) : null}
+          </View>
           <Detail label="Méthode" value={receipt.payment_method} />
           <Detail label="Référence" value={receipt.reference} />
           {receipt.validated_at ? (

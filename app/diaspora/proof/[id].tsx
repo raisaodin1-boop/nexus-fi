@@ -4,7 +4,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ArrowLeft, Camera, FileUp, MessageCircle } from "lucide-react-native";
 
-import { api, ApiError, formatXAF } from "@/src/api";
+import { api, ApiError } from "@/src/api";
+import { formatXAFAmount } from "@/src/exchange-rates";
 import type { DiasporaRequest } from "@/src/db/diaspora";
 import { Button, Card, Field } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
@@ -12,15 +13,9 @@ import { useToast } from "@/src/toast";
 import { useAuth } from "@/src/auth-context";
 import { buildDiasporaWhatsAppUrl, maskPhone } from "@/src/diaspora-config";
 import { DiasporaManualBanner } from "@/src/diaspora-ui";
-
-async function pickImage(): Promise<{ base64: string; mime: string } | null> {
-  const { launchImageLibraryAsync, MediaTypeOptions } = await import("expo-image-picker");
-  const res = await launchImageLibraryAsync({ mediaTypes: MediaTypeOptions.Images, base64: true, quality: 0.75 });
-  if (!res.canceled && res.assets[0]?.base64) {
-    return { base64: res.assets[0].base64, mime: "image/jpeg" };
-  }
-  return null;
-}
+import { pickMedia, pickMediaErrorMessage } from "@/src/pick-media";
+import { DiasporaAmount } from "@/src/diaspora-amount";
+import type { Currency } from "@/src/exchange-rates";
 
 export default function DiasporaProofScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -59,16 +54,22 @@ export default function DiasporaProofScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  const uploadProof = async () => {
-    const picked = await pickImage();
-    if (!picked) return;
+  const uploadProof = async (allowPdf = false) => {
     try {
-      const path = await api.post<string>("/diaspora/proof-upload", { base64: picked.base64, mime: picked.mime });
+      const picked = await pickMedia({ quality: 0.75, allowPdf });
+      if (!picked) return;
+      const path = await api.post<string>("/diaspora/proof-upload", {
+        base64: picked.base64,
+        mime: picked.mime,
+      });
       setProofPath(path);
-      setProofLabel("Capture / photo ajoutée");
+      setProofLabel(picked.mime.includes("pdf") ? "PDF ajouté" : "Capture / photo ajoutée");
       show("Fichier téléversé", "success");
     } catch (e) {
-      show(e instanceof ApiError ? e.detail : "Échec du téléversement", "error");
+      show(
+        e instanceof ApiError ? e.detail : pickMediaErrorMessage(e, "Échec du téléversement"),
+        "error",
+      );
     }
   };
 
@@ -103,7 +104,7 @@ export default function DiasporaProofScreen() {
     const url = buildDiasporaWhatsAppUrl({
       reference: req.reference_code,
       tontine: req.tontine_name ?? "Tontine",
-      amount: formatXAF(req.amount_expected),
+      amount: formatXAFAmount(req.amount_expected),
       method: req.payment_method ?? "—",
       userName: user?.full_name ?? "Membre",
     });
@@ -134,16 +135,25 @@ export default function DiasporaProofScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <DiasporaManualBanner />
-        {req ? <Text style={styles.ref}>Réf. {req.reference_code} · {req.tontine_name}</Text> : null}
+        {req ? (
+          <View style={{ gap: 4 }}>
+            <Text style={styles.ref}>Réf. {req.reference_code} · {req.tontine_name}</Text>
+            <DiasporaAmount
+              amountXaf={req.amount_expected}
+              currency={(user?.diaspora_currency as Currency) || "EUR"}
+              size="md"
+            />
+          </View>
+        ) : null}
 
         <Card>
           <Text style={styles.section}>Pièce jointe (obligatoire)</Text>
           <View style={styles.uploadRow}>
-            <TouchableOpacity style={styles.uploadBtn} onPress={uploadProof}>
+            <TouchableOpacity style={styles.uploadBtn} onPress={() => uploadProof(false)}>
               <Camera color={Colors.primary} size={20} />
               <Text style={styles.uploadText}>Photo / capture</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.uploadBtn} onPress={uploadProof}>
+            <TouchableOpacity style={styles.uploadBtn} onPress={() => uploadProof(true)}>
               <FileUp color={Colors.primary} size={20} />
               <Text style={styles.uploadText}>Galerie / PDF</Text>
             </TouchableOpacity>

@@ -442,20 +442,22 @@ export default function MessagesScreen() {
               style={styles.searchInput}
               value={searchQuery}
               onChangeText={setSearchQuery}
-              placeholder="Tapez un nom (ex: adm pour les admins)…"
+              placeholder="Admin HODIX ou gestionnaire de tontine…"
               placeholderTextColor={Colors.textSubtle}
               autoFocus
             />
             {searching ? <ActivityIndicator color={Colors.primary} size="small" /> : null}
           </View>
-          <Text style={styles.searchHint}>Astuce : tapez « adm » pour voir les administrateurs</Text>
+          <Text style={styles.searchHint}>
+            Messages privés uniquement vers l’admin HODIX ou un gestionnaire de tontine — pas entre membres.
+          </Text>
           <FlatList
             data={suggestions}
             keyExtractor={(s) => s.id}
             keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
               searchQuery.trim().length > 0 && !searching ? (
-                <Text style={styles.noResults}>Aucun membre trouvé</Text>
+                <Text style={styles.noResults}>Aucun destinataire autorisé trouvé</Text>
               ) : null
             }
             renderItem={({ item }) => (

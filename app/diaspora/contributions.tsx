@@ -4,12 +4,15 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ArrowLeft } from "lucide-react-native";
 
-import { api, formatXAF } from "@/src/api";
+import { api } from "@/src/api";
 import type { DiasporaRequest } from "@/src/db/diaspora";
 import { Card } from "@/src/ui";
 import { Colors, Radius, Spacing } from "@/src/theme";
 import { DiasporaStatusBadge } from "@/src/diaspora-ui";
 import { useDiasporaGuard, DiasporaGuardSpinner } from "@/src/use-diaspora-guard";
+import { useAuth } from "@/src/auth-context";
+import { DiasporaAmount } from "@/src/diaspora-amount";
+import type { Currency } from "@/src/exchange-rates";
 
 const FILTERS = [
   { key: "all", label: "Toutes" },
@@ -22,6 +25,8 @@ const FILTERS = [
 export default function DiasporaContributionsScreen() {
   const router = useRouter();
   const { checking } = useDiasporaGuard();
+  const { user } = useAuth();
+  const displayCur = (user?.diaspora_currency ?? "EUR") as Currency;
   const [items, setItems] = useState<DiasporaRequest[]>([]);
   const [filter, setFilter] = useState("all");
 
@@ -70,7 +75,7 @@ export default function DiasporaContributionsScreen() {
             <View style={styles.row}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{item.tontine_name ?? "Tontine"}</Text>
-                <Text style={styles.amount}>{formatXAF(item.amount_expected)}</Text>
+                <DiasporaAmount amountXaf={item.amount_expected} currency={displayCur} size="md" />
                 <Text style={styles.meta}>{item.reference_code}</Text>
                 {item.due_date ? (
                   <Text style={styles.meta}>Échéance {new Date(item.due_date).toLocaleDateString("fr-FR")}</Text>
@@ -119,7 +124,6 @@ const styles = StyleSheet.create({
   empty: { textAlign: "center", color: Colors.textMuted, marginTop: 40 },
   row: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
   name: { fontSize: 15, fontWeight: "800", color: Colors.text },
-  amount: { fontSize: 18, fontWeight: "900", color: Colors.primary, marginTop: 2 },
   meta: { fontSize: 11, color: Colors.textMuted, marginTop: 2 },
   btnRow: { flexDirection: "row", gap: 8, marginTop: 12, flexWrap: "wrap" },
   btn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border },
